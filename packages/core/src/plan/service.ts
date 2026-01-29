@@ -32,7 +32,7 @@ export class PlanService {
     });
 
     // 1. Build Context
-    const queries = [goal]; 
+    const queries = [goal];
     let contextPack;
     let candidates: Snippet[] = [];
 
@@ -46,14 +46,17 @@ export class PlanService {
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId: ctx.runId,
-        payload: { 
+        payload: {
           fileCount: snapshot.files.length,
-          durationMs: Date.now() - scanStart
+          durationMs: Date.now() - scanStart,
         },
       });
 
       // 1b. Derive File Matches (Naive heuristic)
-      const goalKeywords = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const goalKeywords = goal
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
       const fileMatches: SearchMatch[] = [];
 
       for (const file of snapshot.files) {
@@ -61,15 +64,15 @@ export class PlanService {
         // Check if filename contains a keyword
         for (const keyword of goalKeywords) {
           if (fileName.includes(keyword)) {
-             fileMatches.push({
-               path: file.path,
-               line: 1,
-               column: 1,
-               matchText: 'FILENAME_MATCH', 
-               lineText: '', 
-               score: 100, // High priority for filename matches
-             });
-             break; 
+            fileMatches.push({
+              path: file.path,
+              line: 1,
+              column: 1,
+              matchText: 'FILENAME_MATCH',
+              lineText: '',
+              score: 100, // High priority for filename matches
+            });
+            break;
           }
         }
       }
@@ -80,7 +83,7 @@ export class PlanService {
       const searchResults = await searchService.search({
         query: goal,
         cwd: repoRoot,
-        maxMatchesPerFile: 5, 
+        maxMatchesPerFile: 5,
       });
 
       await this.eventBus.emit({
@@ -88,10 +91,10 @@ export class PlanService {
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId: ctx.runId,
-        payload: { 
+        payload: {
           query: goal,
           matches: searchResults.matches.length,
-          durationMs: Date.now() - searchStart
+          durationMs: Date.now() - searchStart,
         },
       });
 
@@ -105,9 +108,9 @@ export class PlanService {
 
       // 1e. Pack Context
       const packer = new SimpleContextPacker();
-      const signals: ContextSignal[] = []; 
+      const signals: ContextSignal[] = [];
       const options = {
-        tokenBudget: 10000, 
+        tokenBudget: 10000,
       };
 
       contextPack = packer.pack(goal, signals, candidates, options);
@@ -117,9 +120,9 @@ export class PlanService {
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId: ctx.runId,
-        payload: { 
+        payload: {
           fileCount: contextPack.items.length,
-          tokenEstimate: contextPack.estimatedTokens
+          tokenEstimate: contextPack.estimatedTokens,
         },
       });
 
@@ -155,7 +158,6 @@ export class PlanService {
       }
 
       await fs.writeFile(path.join(artifactsDir, 'context_pack.txt'), readableReport);
-
     } catch (err) {
       // Don't fail planning if context fails, just log it
       console.error('Context generation failed:', err);
@@ -168,7 +170,7 @@ Return ONLY a JSON object with a "steps" property containing an array of strings
 Each step should be a concise instruction.`;
 
     let userPrompt = `Goal: ${goal}`;
-    
+
     // Inject context if available
     if (contextPack && contextPack.items.length > 0) {
       userPrompt += `\n\nContext:\n`;

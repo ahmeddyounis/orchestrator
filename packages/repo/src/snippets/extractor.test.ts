@@ -55,8 +55,22 @@ describe('SnippetExtractor', () => {
     await fs.writeFile(filePath, content);
 
     const matches: SearchMatch[] = [
-      { path: 'test.txt', line: 10, column: 1, matchText: 'Line 10', lineText: 'Line 10', score: 1 },
-      { path: 'test.txt', line: 12, column: 1, matchText: 'Line 12', lineText: 'Line 12', score: 1 },
+      {
+        path: 'test.txt',
+        line: 10,
+        column: 1,
+        matchText: 'Line 10',
+        lineText: 'Line 10',
+        score: 1,
+      },
+      {
+        path: 'test.txt',
+        line: 12,
+        column: 1,
+        matchText: 'Line 12',
+        lineText: 'Line 12',
+        score: 1,
+      },
     ];
 
     const snippets = await extractor.extractSnippets(matches, {

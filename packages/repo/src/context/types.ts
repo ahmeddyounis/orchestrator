@@ -33,6 +33,6 @@ export interface ContextPacker {
     goal: string,
     signals: ContextSignal[],
     candidateSnippets: Snippet[],
-    options: ContextPackerOptions
+    options: ContextPackerOptions,
   ): ContextPack;
 }

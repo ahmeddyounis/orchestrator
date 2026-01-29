@@ -12,14 +12,9 @@ interface Window {
 export class SnippetExtractor {
   async extractSnippets(
     matches: SearchMatch[],
-    options: ExtractSnippetsOptions
+    options: ExtractSnippetsOptions,
   ): Promise<Snippet[]> {
-    const {
-      cwd,
-      windowSize = 15,
-      maxSnippetChars = 1000,
-      maxSnippetsPerFile = 5,
-    } = options;
+    const { cwd, windowSize = 15, maxSnippetChars = 1000, maxSnippetsPerFile = 5 } = options;
 
     const snippets: Snippet[] = [];
     const matchesByFile = new Map<string, SearchMatch[]>();

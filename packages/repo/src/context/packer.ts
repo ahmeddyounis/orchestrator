@@ -1,12 +1,18 @@
 import { Snippet } from '../snippets/types';
-import { ContextPacker, ContextPack, ContextPackerOptions, ContextSignal, ContextItem } from './types';
+import {
+  ContextPacker,
+  ContextPack,
+  ContextPackerOptions,
+  ContextSignal,
+  ContextItem,
+} from './types';
 
 export class SimpleContextPacker implements ContextPacker {
   pack(
     goal: string,
     signals: ContextSignal[],
     candidateSnippets: Snippet[],
-    options: ContextPackerOptions
+    options: ContextPackerOptions,
   ): ContextPack {
     const charsPerToken = options.charsPerToken || 4;
     const charBudget = options.tokenBudget * charsPerToken;
@@ -14,7 +20,7 @@ export class SimpleContextPacker implements ContextPacker {
     const maxItemsPerFile = options.maxItemsPerFile || Infinity;
 
     // 1. Adjust scores based on signals
-    const scoredCandidates = candidateSnippets.map(snippet => {
+    const scoredCandidates = candidateSnippets.map((snippet) => {
       let score = snippet.score;
       let reason = snippet.reason;
 
@@ -30,7 +36,7 @@ export class SimpleContextPacker implements ContextPacker {
     });
 
     // 2. Filter out items that are too big on their own
-    const candidates = scoredCandidates.filter(s => s.content.length <= charBudget);
+    const candidates = scoredCandidates.filter((s) => s.content.length <= charBudget);
 
     const selectedItems: ContextItem[] = [];
     const usedSnippetIndices = new Set<number>();
@@ -63,8 +69,8 @@ export class SimpleContextPacker implements ContextPacker {
 
       // Sort files by their *best* snippet's score
       const sortedFiles = Array.from(fileGroups.entries()).sort(([, aSnippets], [, bSnippets]) => {
-        const maxA = Math.max(...aSnippets.map(x => x.snippet.score));
-        const maxB = Math.max(...bSnippets.map(x => x.snippet.score));
+        const maxA = Math.max(...aSnippets.map((x) => x.snippet.score));
+        const maxB = Math.max(...bSnippets.map((x) => x.snippet.score));
         return maxB - maxA;
       });
 
@@ -73,8 +79,10 @@ export class SimpleContextPacker implements ContextPacker {
 
       for (const [, snippets] of topFiles) {
         // Pick best snippet from this file
-        const best = snippets.reduce((prev, curr) => (curr.snippet.score > prev.snippet.score ? curr : prev));
-        
+        const best = snippets.reduce((prev, curr) =>
+          curr.snippet.score > prev.snippet.score ? curr : prev,
+        );
+
         if (currentTotalChars + best.snippet.content.length <= charBudget) {
           addItem(best.snippet, best.index);
         }
@@ -115,11 +123,11 @@ export class SimpleContextPacker implements ContextPacker {
 
   private matchesSignal(snippet: Snippet, signal: ContextSignal): boolean {
     if (signal.type === 'file_change' || signal.type === 'package_focus') {
-        // Simple string containment for path
-        // Assuming signal.data is a string (filepath or package name)
-        if (typeof signal.data === 'string' && snippet.path.includes(signal.data)) {
-            return true;
-        }
+      // Simple string containment for path
+      // Assuming signal.data is a string (filepath or package name)
+      if (typeof signal.data === 'string' && snippet.path.includes(signal.data)) {
+        return true;
+      }
     }
     // TODO: Handle 'error' stack trace matching if structured data is provided
     return false;
