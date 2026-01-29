@@ -103,6 +103,9 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       // Consume initial prompt
       await pm.readUntilHeuristic(800, isPrompt);
 
+      // Reset output buffer to avoid including initial prompt in response
+      outputText = '';
+
       // Render prompt
       const prompt = req.messages
         .filter((m) => m.role === 'system' || m.role === 'user')
@@ -127,6 +130,15 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       if (timedOut) {
         throw new Error('Process timed out');
       }
+
+      // Strip trailing prompt marker
+      outputText = outputText.trim();
+      if (outputText.endsWith('>')) {
+          outputText = outputText.slice(0, -1).trim();
+      } else if (outputText.endsWith('$') || outputText.endsWith('#') || outputText.endsWith('%')) {
+          outputText = outputText.slice(0, -1).trim();
+      }
+
     } catch (e) {
       const err = e as Error;
       if (err.message && err.message.includes('timed out')) {

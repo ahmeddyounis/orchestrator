@@ -87,6 +87,20 @@ export class Orchestrator {
       payload: { taskId: runId, goal }
     });
 
+    // Initialize manifest
+    await writeManifest(artifacts.manifest, {
+      runId,
+      startedAt: new Date().toISOString(), 
+      command: `run ${goal}`,
+      repoRoot: this.repoRoot,
+      artifactsDir: artifacts.root,
+      tracePath: artifacts.trace,
+      summaryPath: artifacts.summary,
+      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+      patchPaths: [],
+      toolLogPaths: [],
+    });
+
     // 2. Build Minimal Context
     const scanner = new RepoScanner();
     const searchService = new SearchService();
@@ -325,6 +339,21 @@ END_DIFF
       timestamp: new Date().toISOString(),
       runId,
       payload: { taskId: runId, goal }
+    });
+
+    // Initialize manifest
+    await writeManifest(artifacts.manifest, {
+      runId,
+      startedAt: new Date().toISOString(), 
+      command: `run ${goal}`,
+      repoRoot: this.repoRoot,
+      artifactsDir: artifacts.root,
+      tracePath: artifacts.trace,
+      summaryPath: artifacts.summary,
+      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+      patchPaths: [],
+      contextPaths: [],
+      toolLogPaths: [],
     });
 
     const plannerId = this.config.defaults?.planner || 'openai';

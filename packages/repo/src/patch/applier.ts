@@ -157,7 +157,7 @@ export class PatchApplier {
 
   private execGitApply(repoRoot: string, diffText: string, dryRun: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
-      const args = ['apply', '--whitespace=nowarn'];
+      const args = ['apply', '--whitespace=nowarn', '--ignore-space-change', '--ignore-whitespace'];
       if (dryRun) {
         args.push('--check'); // --check is effectively a dry-run for apply
       }
