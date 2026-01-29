@@ -35,6 +35,9 @@ export function registerRunCommand(program: Command) {
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
     .option('--allow-large-diff', 'Allow large diffs without confirmation')
+    .option('--no-tools', 'Force tools disabled')
+    .option('--yes', 'Auto-approve confirmations except denylist')
+    .option('--non-interactive', 'Deny by default if confirmation required')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -56,6 +59,13 @@ export function registerRunCommand(program: Command) {
             patch: options.allowLargeDiff
               ? { maxFilesChanged: Infinity, maxLinesChanged: Infinity, allowBinary: false }
               : undefined,
+            execution: {
+              tools: {
+                enabled: options.tools === false ? false : undefined,
+                autoApprove: options.yes,
+                interactive: options.nonInteractive ? false : undefined,
+              } as any,
+            } as any,
           },
         });
 

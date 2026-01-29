@@ -45,6 +45,8 @@ export const ToolPolicySchema = z.object({
   allowNetwork: z.boolean().default(false),
   timeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(1_024_1024),
+  autoApprove: z.boolean().default(false),
+  interactive: z.boolean().default(true),
 });
 
 export const ConfigSchema = z.object({

@@ -10,10 +10,7 @@ import {
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-
-export interface EventBus {
-  emit(event: OrchestratorEvent): Promise<void> | void;
-}
+import { EventBus } from '../registry';
 
 class ObservableSafeCommandRunner extends SafeCommandRunner {
   constructor(

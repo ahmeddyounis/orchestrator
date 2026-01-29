@@ -56,7 +56,8 @@ describe('ToolManager', () => {
   beforeEach(() => {
     mockEventBus = { emit: vi.fn() };
     mockUi = { confirm: vi.fn().mockResolvedValue(true) };
-    toolManager = new ToolManager(mockEventBus, manifestPath);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    toolManager = new ToolManager(mockEventBus as any, manifestPath);
 
     vi.clearAllMocks();
     
@@ -95,7 +96,8 @@ describe('ToolManager', () => {
       mockChild.emit('close', 0);
     }, 10);
 
-    await toolManager.runTool(req, policy, mockUi, ctx);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await toolManager.runTool(req, policy, mockUi as any, ctx);
 
     // Verify events
     expect(mockEventBus.emit).toHaveBeenCalledTimes(4); // Requested, Approved, Started, Finished
@@ -126,7 +128,8 @@ describe('ToolManager', () => {
     };
      const ctx = { runId: 'run-1' };
      
-     await expect(toolManager.runTool(req, policy, mockUi, ctx)).rejects.toThrow();
+     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
      
      expect(mockEventBus.emit).toHaveBeenCalledWith(expect.objectContaining({
          type: 'ToolRunRequested'

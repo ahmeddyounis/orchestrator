@@ -16,6 +16,8 @@ export interface ToolPolicy {
   allowNetwork: boolean;
   maxOutputBytes: number;
   timeoutMs: number;
+  autoApprove?: boolean;
+  interactive?: boolean;
 }
 
 export interface ToolRunRequest {

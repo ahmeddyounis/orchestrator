@@ -50,7 +50,21 @@ export class SafeCommandRunner {
       needsConfirmation = true;
     }
 
+    // Auto-approve overrides confirmation needs (except denylist which is already checked)
+    // Corresponds to --yes flag
+    if (policy.autoApprove) {
+      needsConfirmation = false;
+    }
+
     if (needsConfirmation) {
+      // Check for non-interactive mode
+      // Corresponds to --non-interactive flag
+      if (policy.interactive === false) {
+        throw new ConfirmationDeniedError(
+          `Command execution denied in non-interactive mode: ${req.command}`,
+        );
+      }
+
       const confirmed = await ui.confirm(
         `Execute command: ${req.command}`,
         `Reason: ${req.reason}\nCWD: ${req.cwd || ctx.cwd || process.cwd()}`,
