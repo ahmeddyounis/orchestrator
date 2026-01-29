@@ -5,6 +5,7 @@ import {
   CostTracker,
   PatchStore,
   ToolRunTracker,
+  parseBudget,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
@@ -20,15 +21,18 @@ import path from 'path';
 import * as fs from 'fs/promises';
 import { OutputRenderer } from '../output/renderer';
 
-function parseBudgets(value: string, previous: Record<string, number>): Record<string, number> {
-  const [key, val] = value.split('=');
-  if (key && val) {
-    const num = parseFloat(val);
-    if (!isNaN(num)) {
-      previous[key] = num;
+function parseBudgetFlag(value: string, previous: unknown) {
+  try {
+    const parsed = parseBudget(value);
+    const prevObj = typeof previous === 'object' && previous !== null ? previous : {};
+    return { ...prevObj, ...parsed };
+  } catch (e: unknown) {
+    // commander catches errors thrown here and exits 2 (invalid argument)
+    if (e instanceof Error) {
+      throw new Error(e.message);
     }
+    throw new Error(String(e));
   }
-  return previous;
 }
 
 export function registerRunCommand(program: Command) {
@@ -36,7 +40,13 @@ export function registerRunCommand(program: Command) {
     .command('run')
     .argument('<goal>', 'The goal to run')
     .description('Run an agentic task to achieve a goal')
-    .option('--budget <key=value>', 'Set budget overrides (e.g. gpt4=100)', parseBudgets, {})
+    .option('--think <level>', 'Think level: L0, L1, or auto', 'auto')
+    .option(
+      '--budget <limits>',
+      'Set budget limits (e.g. cost=5,iter=6,tool=10,time=20m)',
+      parseBudgetFlag,
+      {},
+    )
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
@@ -54,10 +64,21 @@ export function registerRunCommand(program: Command) {
       try {
         const repoRoot = await findRepoRoot();
 
+        // Validate think level
+        let thinkLevel = options.think;
+        if (thinkLevel === 'auto') {
+          thinkLevel = 'L1';
+        }
+        if (thinkLevel !== 'L0' && thinkLevel !== 'L1') {
+          renderer.error(`Invalid think level "${options.think}". Must be L0, L1, or auto.`);
+          process.exit(2);
+        }
+
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
-            budgets: options.budget,
+            thinkLevel,
+            budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
             defaults: {
               planner: options.planner,
               executor: options.executor,
@@ -71,8 +92,10 @@ export function registerRunCommand(program: Command) {
                 enabled: options.tools === false ? false : undefined,
                 autoApprove: options.yes,
                 interactive: options.nonInteractive ? false : undefined,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
               } as any,
               sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
           },
         });

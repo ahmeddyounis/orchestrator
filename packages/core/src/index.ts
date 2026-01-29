@@ -1,6 +1,7 @@
 export const name = '@orchestrator/core';
 export * from './registry';
 export * from './config/loader';
+export * from './config/budget';
 export * from './cost/tracker';
 export * from './plan/service';
 export * from './exec/service';

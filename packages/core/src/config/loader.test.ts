@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConfigLoader } from './loader';
-import fs from 'fs';
+import { DEFAULT_BUDGET } from './budget';
+import * as fs from 'fs';
 import path from 'path';
 import os from 'os';
 import yaml from 'js-yaml';
@@ -27,7 +28,11 @@ describe('ConfigLoader', () => {
   describe('load', () => {
     it('should load default config when no files exist', () => {
       const config = ConfigLoader.load({ cwd: mockCwd });
-      expect(config).toEqual({ configVersion: 1 });
+      expect(config).toEqual({
+        configVersion: 1,
+        thinkLevel: 'L1',
+        budget: DEFAULT_BUDGET,
+      });
     });
 
     it('should load user config', () => {

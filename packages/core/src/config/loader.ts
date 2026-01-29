@@ -3,6 +3,7 @@ import path from 'path';
 import yaml from 'js-yaml';
 import { Config, ConfigSchema } from '@orchestrator/shared';
 import os from 'os';
+import { DEFAULT_BUDGET } from './budget';
 
 export interface ConfigOptions {
   configPath?: string; // CLI override
@@ -108,6 +109,8 @@ export class ConfigLoader {
     // Defaults
     const defaults: Partial<Config> = {
       configVersion: 1,
+      thinkLevel: 'L1',
+      budget: DEFAULT_BUDGET,
     };
     mergedConfig = this.mergeConfigs(defaults as Record<string, unknown>, mergedConfig);
 

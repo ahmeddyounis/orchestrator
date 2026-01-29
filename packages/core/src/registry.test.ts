@@ -28,6 +28,7 @@ describe('ProviderRegistry', () => {
   it('registers and retrieves adapters', () => {
     const config: Config = {
       configVersion: 1,
+      thinkLevel: 'L1',
       providers: {
         'my-provider': { type: 'mock-type', model: 'gpt-4', api_key: 'secret' },
       },
@@ -42,13 +43,14 @@ describe('ProviderRegistry', () => {
   });
 
   it('throws for unknown provider', () => {
-    const registry = new ProviderRegistry({ configVersion: 1, providers: {} });
+    const registry = new ProviderRegistry({ configVersion: 1, thinkLevel: 'L1', providers: {} });
     expect(() => registry.getAdapter('non-existent')).toThrow("Provider 'non-existent' not found");
   });
 
   it('throws for unknown factory with exit code 2', () => {
     const config: Config = {
       configVersion: 1,
+      thinkLevel: 'L1',
       providers: {
         'my-provider': { type: 'unknown-type', model: 'gpt-4' },
       },
@@ -70,6 +72,7 @@ describe('ProviderRegistry', () => {
   it('throws for missing env var with exit code 2', () => {
     const config: Config = {
       configVersion: 1,
+      thinkLevel: 'L1',
       providers: {
         'my-provider': { type: 'mock-type', model: 'gpt-4', api_key_env: 'MISSING_ENV_VAR' },
       },
@@ -92,6 +95,7 @@ describe('ProviderRegistry', () => {
   it('resolves role providers and emits events', async () => {
     const config: Config = {
       configVersion: 1,
+      thinkLevel: 'L1',
       providers: {
         p1: { type: 'mock-type', model: 'm1' },
         p2: { type: 'mock-type', model: 'm1' },

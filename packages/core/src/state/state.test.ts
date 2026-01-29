@@ -9,6 +9,7 @@ import { BudgetExceededError } from './errors';
 
 const mockConfig: Config = {
   configVersion: 1,
+  thinkLevel: 'L1',
   providers: {
     mock: {
       type: 'mock',

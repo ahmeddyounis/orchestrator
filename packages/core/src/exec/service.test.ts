@@ -25,6 +25,7 @@ describe('ExecutionService', () => {
   const runId = 'test-run';
   const config: Config = {
     configVersion: 1,
+    thinkLevel: 'L1',
     patch: {
       maxFilesChanged: 5,
       maxLinesChanged: 100,

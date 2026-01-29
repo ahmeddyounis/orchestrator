@@ -48,8 +48,17 @@ export const ToolPolicySchema = z.object({
   interactive: z.boolean().default(true),
 });
 
+export const BudgetSchema = z.object({
+  cost: z.number().optional(),
+  iter: z.number().optional(),
+  tool: z.number().optional(),
+  time: z.number().optional(),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
+  thinkLevel: z.enum(['L0', 'L1']).default('L1'),
+  budget: BudgetSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaults: z
     .object({
