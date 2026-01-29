@@ -57,7 +57,7 @@ export const BudgetSchema = z.object({
 
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
-  thinkLevel: z.enum(['L0', 'L1']).default('L1'),
+  thinkLevel: z.enum(['L0', 'L1', 'L2']).default('L1'),
   budget: BudgetSchema.optional(),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaults: z

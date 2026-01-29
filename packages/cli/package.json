@@ -26,6 +26,7 @@
   "dependencies": {
     "@orchestrator/core": "workspace:*",
     "@orchestrator/repo": "workspace:*",
+    "@orchestrator/exec": "workspace:*",
     "@orchestrator/shared": "workspace:*",
     "@orchestrator/adapters": "workspace:*",
     "@types/inquirer": "^8.2.12",

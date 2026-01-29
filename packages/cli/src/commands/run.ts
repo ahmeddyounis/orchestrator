@@ -8,8 +8,9 @@ import {
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
-import { ProviderCapabilities, ProviderConfig } from '@orchestrator/shared';
+import { ProviderCapabilities, ProviderConfig, ToolPolicy } from '@orchestrator/shared';
 import { OutputRenderer } from '../output/renderer';
+import { ConsoleUI } from '../ui/console';
 
 function parseBudgetFlag(value: string, previous: unknown) {
   try {
@@ -29,7 +30,7 @@ export function registerRunCommand(program: Command) {
     .command('run')
     .argument('<goal>', 'The goal to run')
     .description('Run an agentic task to achieve a goal')
-    .option('--think <level>', 'Think level: L0, L1, or auto', 'auto')
+    .option('--think <level>', 'Think level: L0, L1, L2, or auto', 'auto')
     .option(
       '--budget <limits>',
       'Set budget limits (e.g. cost=5,iter=6,tool=10,time=20m)',
@@ -62,8 +63,8 @@ export function registerRunCommand(program: Command) {
         if (thinkLevel === 'auto') {
           thinkLevel = 'L1';
         }
-        if (thinkLevel !== 'L0' && thinkLevel !== 'L1') {
-          renderer.error(`Invalid think level "${options.think}". Must be L0, L1, or auto.`);
+        if (thinkLevel !== 'L0' && thinkLevel !== 'L1' && thinkLevel !== 'L2') {
+          renderer.error(`Invalid think level "${options.think}". Must be L0, L1, L2, or auto.`);
           process.exit(2);
         }
 
@@ -171,7 +172,28 @@ export function registerRunCommand(program: Command) {
         registry.registerFactory('mock', stubFactory);
         registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
 
-        const orchestrator = new Orchestrator({ config, git, registry, repoRoot });
+        const ui = new ConsoleUI();
+        const defaultToolPolicy: ToolPolicy = {
+          enabled: false,
+          requireConfirmation: true,
+          allowlistPrefixes: [],
+          denylistPatterns: [],
+          allowNetwork: false,
+          maxOutputBytes: 1024 * 1024,
+          timeoutMs: 600000,
+          autoApprove: false,
+          interactive: true,
+        };
+        const toolPolicy = config.execution?.tools || defaultToolPolicy;
+
+        const orchestrator = new Orchestrator({
+          config,
+          git,
+          registry,
+          repoRoot,
+          ui,
+          toolPolicy,
+        });
 
         const result = await orchestrator.run(goal, { thinkLevel, runId });
 

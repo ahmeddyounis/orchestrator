@@ -4,6 +4,7 @@ import {
   createRunDir,
   writeManifest,
   JsonlLogger,
+  ToolPolicy,
 } from '@orchestrator/shared';
 import {
   GitService,
@@ -17,6 +18,9 @@ import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
 import { ExecutionService } from './exec/service';
+import { UserInterface } from '@orchestrator/exec';
+import { VerificationRunner } from './verify/runner';
+import { VerificationProfile } from './verify/types';
 import path from 'path';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
@@ -30,6 +34,8 @@ export interface OrchestratorOptions {
   registry: ProviderRegistry;
   repoRoot: string;
   costTracker?: CostTracker;
+  toolPolicy?: ToolPolicy;
+  ui?: UserInterface;
 }
 
 export interface RunResult {
@@ -38,12 +44,18 @@ export interface RunResult {
   summary?: string;
   filesChanged?: string[];
   patchPaths?: string[];
-  stopReason?: 'success' | 'budget_exceeded' | 'repeated_failure' | 'invalid_output' | 'error';
+  stopReason?:
+    | 'success'
+    | 'budget_exceeded'
+    | 'repeated_failure'
+    | 'invalid_output'
+    | 'error'
+    | 'non_improving';
   recommendations?: string;
 }
 
 export interface RunOptions {
-  thinkLevel: 'L0' | 'L1';
+  thinkLevel: 'L0' | 'L1' | 'L2';
   runId?: string;
 }
 
@@ -53,6 +65,8 @@ export class Orchestrator {
   private registry: ProviderRegistry;
   private repoRoot: string;
   private costTracker?: CostTracker;
+  private toolPolicy?: ToolPolicy;
+  private ui?: UserInterface;
 
   constructor(options: OrchestratorOptions) {
     this.config = options.config;
@@ -60,12 +74,16 @@ export class Orchestrator {
     this.registry = options.registry;
     this.repoRoot = options.repoRoot;
     this.costTracker = options.costTracker;
+    this.toolPolicy = options.toolPolicy;
+    this.ui = options.ui;
   }
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
     const runId = options.runId || Date.now().toString();
     if (options.thinkLevel === 'L0') {
       return this.runL0(goal, runId);
+    } else if (options.thinkLevel === 'L2') {
+      return this.runL2(goal, runId);
     } else {
       return this.runL1(goal, runId);
     }
@@ -769,5 +787,324 @@ INSTRUCTIONS:
     }
 
     return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
+  }
+
+  async runL2(goal: string, runId: string): Promise<RunResult> {
+    // 1. Initial Plan & Execute (L1)
+    const l1Result = await this.runL1(goal, runId);
+
+    if (l1Result.stopReason === 'budget_exceeded') {
+      return l1Result;
+    }
+
+    // 2. Setup Verification
+    if (!this.ui || !this.toolPolicy) {
+      return {
+        ...l1Result,
+        summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
+      };
+    }
+
+    // Re-use run dir structure
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    const logger = new JsonlLogger(artifacts.trace);
+    const eventBus: EventBus = {
+      emit: async (e) => await logger.log(e),
+    };
+
+    const verificationRunner = new VerificationRunner(
+      this.toolPolicy,
+      this.ui,
+      eventBus,
+      this.repoRoot,
+    );
+
+    // Construct Profile
+    const profile: VerificationProfile = {
+      enabled: this.config.verification?.enabled ?? true,
+      mode: (this.config.verification?.mode as any) || 'auto',
+      steps: [],
+      auto: {
+        enableLint: this.config.verification?.auto?.enableLint ?? true,
+        enableTypecheck: this.config.verification?.auto?.enableTypecheck ?? true,
+        enableTests: this.config.verification?.auto?.enableTests ?? true,
+        testScope: (this.config.verification?.auto?.testScope as any) || 'targeted',
+        maxCommandsPerIteration: 5,
+      },
+    };
+
+    // 3. Initial Verification
+    let verification = await verificationRunner.run(
+      profile,
+      profile.mode,
+      { touchedFiles: l1Result.filesChanged },
+      { runId },
+    );
+
+    if (verification.passed) {
+      await eventBus.emit({
+        type: 'RunFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { status: 'success', summary: 'L2 Verified Success' },
+      });
+      return {
+        ...l1Result,
+        status: 'success',
+        summary: 'L2 Verified Success',
+      };
+    }
+
+    // 4. Repair Loop
+    const maxIterations = 5;
+    let iterations = 0;
+    let failureSignature = verification.failureSignature;
+    let consecutiveSameSignature = 0;
+
+    const patchPaths = l1Result.patchPaths || [];
+    const touchedFiles = new Set(l1Result.filesChanged);
+
+    const executorId = this.config.defaults?.executor || 'openai';
+    const executor = this.registry.getAdapter(executorId);
+
+    while (iterations < maxIterations) {
+      iterations++;
+
+      await eventBus.emit({
+        type: 'IterationStarted',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { iteration: iterations, goal },
+      } as any);
+
+      // Stop Conditions checks (Signature)
+      if (failureSignature && verification.failureSignature === failureSignature) {
+        consecutiveSameSignature++;
+        if (consecutiveSameSignature >= 2) {
+          // Non-improving -> Stop
+          await eventBus.emit({
+            type: 'RunStopped',
+            schemaVersion: 1,
+            timestamp: new Date().toISOString(),
+            runId,
+            payload: {
+              reason: 'non_improving',
+              details: 'Verification failure signature unchanged for 2 iterations',
+            },
+          });
+          return {
+            ...l1Result,
+            status: 'failure',
+            stopReason: 'non_improving',
+            summary: 'Verification failure signature unchanged for 2 iterations',
+            filesChanged: Array.from(touchedFiles),
+            patchPaths,
+          };
+        }
+      } else {
+        consecutiveSameSignature = 0;
+        failureSignature = verification.failureSignature;
+      }
+
+      // Generate Repair
+      const verificationSummary = `Verification Failed.\n${verification.summary}\nFailed Checks: ${verification.checks
+        .filter((c) => !c.passed)
+        .map((c) => c.name)
+        .join(', ')}\n`;
+
+      let errorDetails = '';
+      for (const check of verification.checks) {
+        if (!check.passed) {
+          if (check.stderrPath) {
+            try {
+              const errContent = await fs.readFile(check.stderrPath, 'utf8');
+              errorDetails += `\nCommand '${check.command}' failed:\n${errContent.slice(-2000)}\n`;
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+
+      const repairPrompt = `
+The previous attempt failed verification.
+Goal: ${goal}
+
+Verification Results:
+${verificationSummary}
+
+Error Details:
+${errorDetails}
+
+Please analyze the errors and produce a unified diff to fix them.
+Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
+`;
+
+      const response = await executor.generate(
+        {
+          messages: [
+            { role: 'system', content: 'You are an expert software engineer fixing code.' },
+            { role: 'user', content: repairPrompt },
+          ],
+        },
+        { runId, logger },
+      );
+
+      const outputText = response.text;
+
+      if (outputText) {
+        await fs.writeFile(
+          path.join(artifacts.root, `repair_iter_${iterations}_output.txt`),
+          outputText,
+        );
+      }
+
+      const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
+
+      if (!diffMatch) {
+        // Fail iteration (no diff)
+        await eventBus.emit({
+          type: 'RepairAttempted',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { iteration: iterations, patchPath: 'none (no-diff)' },
+        } as any);
+        continue;
+      }
+
+      const diffContent = diffMatch[1].trim();
+
+      // Apply Patch
+      const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+      const patchPath = await patchStore.saveSelected(100 + iterations, diffContent);
+      patchPaths.push(patchPath);
+
+      await eventBus.emit({
+        type: 'RepairAttempted',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { iteration: iterations, patchPath },
+      } as any);
+
+      const applier = new PatchApplier();
+      const applyResult = await applier.applyUnifiedDiff(this.repoRoot, diffContent, {
+        maxFilesChanged: 5,
+      });
+
+      if (applyResult.applied) {
+        applyResult.filesChanged?.forEach((f) => touchedFiles.add(f));
+        await eventBus.emit({
+          type: 'PatchApplied',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            description: `L2 Repair Iteration ${iterations}`,
+            filesChanged: applyResult.filesChanged || [],
+            success: true,
+          },
+        });
+      } else {
+        await eventBus.emit({
+          type: 'PatchApplyFailed',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            error: applyResult.error?.message || 'Unknown apply error',
+            details: applyResult.error,
+          },
+        });
+        // Continue loop to try again? Or verify existing state?
+        // If patch failed, verify result is likely same, so signature check will catch it.
+      }
+
+      // Verify again
+      verification = await verificationRunner.run(
+        profile,
+        profile.mode,
+        { touchedFiles: Array.from(touchedFiles) },
+        { runId },
+      );
+
+      await fs.writeFile(
+        path.join(artifacts.root, `verification_report_iter_${iterations}.json`),
+        JSON.stringify(verification, null, 2),
+      );
+
+      await fs.writeFile(
+        path.join(artifacts.root, `verification_summary_iter_${iterations}.txt`),
+        verification.summary,
+      );
+
+      if (verification.passed) {
+        await eventBus.emit({
+          type: 'IterationFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { iteration: iterations, result: 'success' },
+        } as any);
+
+        await eventBus.emit({
+          type: 'RunFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            status: 'success',
+            summary: `L2 Verified Success after ${iterations} iterations`,
+          },
+        });
+
+        // Save Summary
+        const finalResult: RunResult = {
+          status: 'success',
+          runId,
+          summary: `L2 Verified Success after ${iterations} iterations`,
+          filesChanged: Array.from(touchedFiles),
+          patchPaths,
+        };
+
+        await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
+
+        return finalResult;
+      }
+
+      await eventBus.emit({
+        type: 'IterationFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { iteration: iterations, result: 'failure' },
+      } as any);
+    }
+
+    // Budget exceeded
+    const failureSummary = `L2 failed to converge after ${iterations} iterations`;
+    await eventBus.emit({
+      type: 'RunFinished',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId,
+      payload: { status: 'failure', summary: failureSummary },
+    });
+
+    const finalResult: RunResult = {
+      status: 'failure',
+      runId,
+      summary: failureSummary,
+      filesChanged: Array.from(touchedFiles),
+      patchPaths,
+      stopReason: 'budget_exceeded',
+    };
+
+    await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
+
+    return finalResult;
   }
 }

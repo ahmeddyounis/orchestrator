@@ -80,6 +80,9 @@ importers:
       '@orchestrator/core':
         specifier: workspace:*
         version: link:../core
+      '@orchestrator/exec':
+        specifier: workspace:*
+        version: link:../exec
       '@orchestrator/repo':
         specifier: workspace:*
         version: link:../repo

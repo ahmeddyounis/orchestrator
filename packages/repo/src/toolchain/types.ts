@@ -17,6 +17,6 @@ export interface ToolchainProfile {
   commands: ToolchainCommands;
 }
 
-export interface ToolchainDetector {
+export interface IToolchainDetector {
   detect(rootPath: string): Promise<ToolchainProfile>;
 }

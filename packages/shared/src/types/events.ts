@@ -281,6 +281,45 @@ export interface StepFinished extends BaseEvent {
   };
 }
 
+export interface VerificationStarted extends BaseEvent {
+  type: 'VerificationStarted';
+  payload: {
+    mode: string;
+  };
+}
+
+export interface VerificationFinished extends BaseEvent {
+  type: 'VerificationFinished';
+  payload: {
+    passed: boolean;
+    failedChecks: string[];
+  };
+}
+
+export interface IterationStarted extends BaseEvent {
+  type: 'IterationStarted';
+  payload: {
+    iteration: number;
+    goal: string;
+  };
+}
+
+export interface IterationFinished extends BaseEvent {
+  type: 'IterationFinished';
+  payload: {
+    iteration: number;
+    result: 'success' | 'failure';
+  };
+}
+
+export interface RepairAttempted extends BaseEvent {
+  type: 'RepairAttempted';
+  payload: {
+    iteration: number;
+    patchPath: string;
+  };
+}
+
 export interface ToolchainDetected extends BaseEvent {
   type: 'ToolchainDetected';
   payload: {
@@ -335,4 +374,9 @@ export type OrchestratorEvent =
   | RollbackPerformed
   | ToolchainDetected
   | StepStarted
-  | StepFinished;
+  | StepFinished
+  | VerificationStarted
+  | VerificationFinished
+  | IterationStarted
+  | IterationFinished
+  | RepairAttempted;
