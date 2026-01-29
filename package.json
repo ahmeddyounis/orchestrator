@@ -1,0 +1,22 @@
+{
+  "name": "orchestrator-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@10.25.0",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "turbo run format"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "turbo": "^1.11.3",
+    "prettier": "^3.2.4"
+  }
+}

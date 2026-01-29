@@ -1,3 +1,9 @@
 /.t2
 /.plans
 /.logs
+node_modules
+dist
+.turbo
+coverage
+.DS_Store
+*.log.orchestrator
