@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { ConfigLoader, ProviderRegistry, CostTracker } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
+import { ClaudeCodeAdapter } from '@orchestrator/adapters';
 import {
   createRunDir,
   writeManifest,
@@ -99,6 +100,7 @@ export function registerRunCommand(program: Command) {
         registry.registerFactory('openai', stubFactory);
         registry.registerFactory('anthropic', stubFactory);
         registry.registerFactory('mock', stubFactory);
+        registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
 
         if (config.defaults?.planner && config.defaults?.executor && config.defaults?.reviewer) {
           await registry.resolveRoleProviders(

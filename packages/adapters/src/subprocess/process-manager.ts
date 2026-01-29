@@ -79,7 +79,7 @@ export class ProcessManager extends EventEmitter {
       this.pid = this.ptyProcess.pid;
 
       this.ptyProcess.onData((data) => this.handleOutput(data, 'stdout'));
-      this.ptyProcess.onExit((e) => this.handleExit(e.exitCode, e.signal));
+      this.ptyProcess.onExit((e) => this.handleExit(e.exitCode, e.signal ?? null));
     } else {
       this.childProcess = spawnChild(cmd, args, {
         cwd,
@@ -307,7 +307,7 @@ export class ProcessManager extends EventEmitter {
         // ignore if already dead
       }
     } else if (this.childProcess) {
-      this.childProcess.kill(signal);
+      this.childProcess.kill(signal as NodeJS.Signals);
     }
   }
 

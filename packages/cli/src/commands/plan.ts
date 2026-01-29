@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { ConfigLoader, ProviderRegistry, CostTracker, PlanService } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
 import { createRunDir, writeManifest, JsonlLogger, OrchestratorEvent } from '@orchestrator/shared';
-import { OpenAIAdapter, AnthropicAdapter } from '@orchestrator/adapters';
+import { OpenAIAdapter, AnthropicAdapter, ClaudeCodeAdapter } from '@orchestrator/adapters';
 import { OutputRenderer } from '../output/renderer';
 import * as fs from 'fs/promises';
 import path from 'path';
@@ -55,6 +55,7 @@ export function registerPlanCommand(program: Command) {
         // Register adapters
         registry.registerFactory('openai', (cfg) => new OpenAIAdapter(cfg));
         registry.registerFactory('anthropic', (cfg) => new AnthropicAdapter(cfg));
+        registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
 
         const eventBus = {
           emit: async (event: OrchestratorEvent) => {

@@ -8,6 +8,9 @@ export const ProviderConfigSchema = z
     api_key_env: z.string().optional(),
     api_key: z.string().optional(),
     command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    env: z.array(z.string()).optional(),
+    cwdMode: z.enum(['repoRoot', 'runDir']).optional(),
     pricing: z
       .object({
         inputPerMTokUsd: z.number().optional(),
