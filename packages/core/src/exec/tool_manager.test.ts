@@ -60,11 +60,13 @@ describe('ToolManager', () => {
     toolManager = new ToolManager(mockEventBus as any, manifestPath);
 
     vi.clearAllMocks();
-    
+
     // Mock fs.readFile for manifest
-    vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
-      toolLogPaths: []
-    }));
+    vi.mocked(fs.readFile).mockResolvedValue(
+      JSON.stringify({
+        toolLogPaths: [],
+      }),
+    );
   });
 
   afterEach(() => {
@@ -91,7 +93,7 @@ describe('ToolManager', () => {
     mockChild.stderr = new EventEmitter();
     mockChild.pid = 123;
     vi.mocked(spawn).mockReturnValue(mockChild);
-    
+
     setTimeout(() => {
       mockChild.emit('close', 0);
     }, 10);
@@ -101,44 +103,50 @@ describe('ToolManager', () => {
 
     // Verify events
     expect(mockEventBus.emit).toHaveBeenCalledTimes(4); // Requested, Approved, Started, Finished
-    
+
     const calls = mockEventBus.emit.mock.calls;
     expect(calls[0][0].type).toBe('ToolRunRequested');
     expect(calls[1][0].type).toBe('ToolRunApproved');
     expect(calls[2][0].type).toBe('ToolRunStarted');
     expect(calls[3][0].type).toBe('ToolRunFinished');
-    
+
     // Verify Manifest Update
     // We mocked fs.readFile to return empty log paths
     // We expect writeManifest to be called
     const { writeManifest } = await import('@orchestrator/shared');
     expect(writeManifest).toHaveBeenCalled();
   });
-  
+
   it('should emit ToolRunDenied when policy denied', async () => {
     const req: ToolRunRequest = { command: 'rm -rf /', reason: 'test', cwd: '/tmp' };
     const policy: ToolPolicy = {
-        enabled: true,
-        requireConfirmation: false,
-        allowlistPrefixes: [],
-        denylistPatterns: ['rm -rf'],
-        allowNetwork: false,
-        timeoutMs: 1000,
-        maxOutputBytes: 1024
+      enabled: true,
+      requireConfirmation: false,
+      allowlistPrefixes: [],
+      denylistPatterns: ['rm -rf'],
+      allowNetwork: false,
+      timeoutMs: 1000,
+      maxOutputBytes: 1024,
     };
-     const ctx = { runId: 'run-1' };
-     
-     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-     await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
-     
-     expect(mockEventBus.emit).toHaveBeenCalledWith(expect.objectContaining({
-         type: 'ToolRunRequested'
-     }));
-     expect(mockEventBus.emit).toHaveBeenCalledWith(expect.objectContaining({
-         type: 'ToolRunDenied'
-     }));
-     expect(mockEventBus.emit).not.toHaveBeenCalledWith(expect.objectContaining({
-         type: 'ToolRunStarted'
-     }));
+    const ctx = { runId: 'run-1' };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
+
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ToolRunRequested',
+      }),
+    );
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ToolRunDenied',
+      }),
+    );
+    expect(mockEventBus.emit).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ToolRunStarted',
+      }),
+    );
   });
 });

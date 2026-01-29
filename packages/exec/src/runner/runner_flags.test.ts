@@ -32,7 +32,9 @@ describe('SafeCommandRunner Flags', () => {
     const policy = { ...defaultPolicy, enabled: false };
     const req: ToolRunRequest = { command: 'ls', reason: 'test', cwd: '/tmp' };
 
-    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow('Tool execution is disabled');
+    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(
+      'Tool execution is disabled',
+    );
   });
 
   test('should skip confirmation when autoApprove is true', async () => {
@@ -41,9 +43,9 @@ describe('SafeCommandRunner Flags', () => {
 
     // Subclass and mock exec
     class MockRunner extends SafeCommandRunner {
-        protected async exec() {
-            return { exitCode: 0, durationMs: 0, stdoutPath: '', stderrPath: '', truncated: false };
-        }
+      protected async exec() {
+        return { exitCode: 0, durationMs: 0, stdoutPath: '', stderrPath: '', truncated: false };
+      }
     }
     const mockRunner = new MockRunner();
 
@@ -64,20 +66,20 @@ describe('SafeCommandRunner Flags', () => {
     const req: ToolRunRequest = { command: 'ls', reason: 'test', cwd: '/tmp' }; // Allowlisted
 
     class MockRunner extends SafeCommandRunner {
-        protected async exec() {
-            return { exitCode: 0, durationMs: 0, stdoutPath: '', stderrPath: '', truncated: false };
-        }
+      protected async exec() {
+        return { exitCode: 0, durationMs: 0, stdoutPath: '', stderrPath: '', truncated: false };
+      }
     }
     const mockRunner = new MockRunner();
 
     await mockRunner.run(req, policy, mockUi, ctx);
     expect(mockUi.confirm).not.toHaveBeenCalled();
   });
-  
-  test('should still deny denylisted commands even with autoApprove', async () => {
-      const policy = { ...defaultPolicy, autoApprove: true, denylistPatterns: ['rm'] };
-      const req: ToolRunRequest = { command: 'rm file', reason: 'test', cwd: '/tmp' };
 
-      await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(/denylist/);
+  test('should still deny denylisted commands even with autoApprove', async () => {
+    const policy = { ...defaultPolicy, autoApprove: true, denylistPatterns: ['rm'] };
+    const req: ToolRunRequest = { command: 'rm file', reason: 'test', cwd: '/tmp' };
+
+    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(/denylist/);
   });
 });

@@ -1,5 +1,11 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry, CostTracker, PatchStore, ToolRunTracker } from '@orchestrator/core';
+import {
+  ConfigLoader,
+  ProviderRegistry,
+  CostTracker,
+  PatchStore,
+  ToolRunTracker,
+} from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
 import {
@@ -207,7 +213,7 @@ export function registerRunCommand(program: Command) {
             }
           }
         } catch (err) {
-            console.error('Failed to save final diff:', err);
+          console.error('Failed to save final diff:', err);
         }
 
         renderer.render({
@@ -223,7 +229,6 @@ export function registerRunCommand(program: Command) {
           ],
         });
       } catch (err: unknown) {
-
         if (err instanceof Error) {
           renderer.error(err.message);
         } else {

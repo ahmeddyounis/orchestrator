@@ -13,7 +13,7 @@ describe('Patching and Git Workflow Integration', () => {
   const setupTempRepo = async () => {
     // Create temp dir
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-repo-test-'));
-    
+
     // Copy fixture to temp dir
     // Use fs.cp (available in Node 16.7+)
     const fixturePath = path.resolve(__dirname, '__fixtures__/patch-repo');
@@ -21,13 +21,16 @@ describe('Patching and Git Workflow Integration', () => {
 
     // Init git
     gitService = new GitService({ repoRoot: tempDir });
-    
+
     // Helper to run git commands
     const { spawn } = await import('child_process');
-    const runGit = (args: string[]) => new Promise<void>((resolve, reject) => {
+    const runGit = (args: string[]) =>
+      new Promise<void>((resolve, reject) => {
         const proc = spawn('git', args, { cwd: tempDir });
-        proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`git ${args.join(' ')} failed`)));
-    });
+        proc.on('close', (code) =>
+          code === 0 ? resolve() : reject(new Error(`git ${args.join(' ')} failed`)),
+        );
+      });
 
     await runGit(['init']);
     // Configure user for commit to work
@@ -55,10 +58,10 @@ describe('Patching and Git Workflow Integration', () => {
     expect(status).toBe('');
     const head = await gitService.getHeadSha();
     expect(head).toBeDefined();
-    
+
     const content = await fs.readFile(path.join(tempDir, 'packages/a/src/index.ts'), 'utf-8');
     expect(content).toBe("console.log('hello');\n");
-    
+
     const utilContent = await fs.readFile(path.join(tempDir, 'packages/b/src/util.ts'), 'utf-8');
     expect(utilContent).toBe("export const util = () => 'util';\n");
   });
@@ -98,11 +101,11 @@ index e69de29..363a325 100644
   it('supports branch creation and auto-commit via GitService', async () => {
     // Make a change
     await fs.writeFile(path.join(tempDir, 'newfile.txt'), 'content');
-    
-    // Create/Checkout branch - should fail if dirty? 
-    // Wait, createAndCheckoutBranch just does checkout -b or checkout. 
+
+    // Create/Checkout branch - should fail if dirty?
+    // Wait, createAndCheckoutBranch just does checkout -b or checkout.
     // It doesn't check for dirty unless we call ensureCleanWorkingTree.
-    
+
     await gitService.createAndCheckoutBranch('feature/test');
     const branch = await gitService.currentBranch();
     expect(branch).toBe('feature/test');
@@ -121,7 +124,7 @@ index e69de29..363a325 100644
 
     // 2. Make some changes (modify and add)
     await fs.writeFile(path.join(tempDir, 'packages/a/src/index.ts'), "console.log('modified');\n");
-    await fs.writeFile(path.join(tempDir, 'garbage.txt'), "trash");
+    await fs.writeFile(path.join(tempDir, 'garbage.txt'), 'trash');
 
     // 3. Rollback
     await gitService.rollbackToCheckpoint(initialHead);
@@ -129,16 +132,19 @@ index e69de29..363a325 100644
     // 4. Verify
     const content = await fs.readFile(path.join(tempDir, 'packages/a/src/index.ts'), 'utf-8');
     expect(content).toBe("console.log('hello');\n");
-    
-    const garbageExists = await fs.stat(path.join(tempDir, 'garbage.txt')).then(() => true).catch(() => false);
+
+    const garbageExists = await fs
+      .stat(path.join(tempDir, 'garbage.txt'))
+      .then(() => true)
+      .catch(() => false);
     expect(garbageExists).toBe(false);
   });
 
   it('fails apply and ensures rollback (integration logic)', async () => {
     // This test simulates the Orchestrator's logic: Checkpoint -> Apply -> Verify -> Rollback if fail.
     // Here we just test that if we apply a bad patch (that partially applies or fails), we can recover.
-    // Git apply is atomic usually? 
-    // "git apply --reject" or without "--atomic" might leave mess. 
+    // Git apply is atomic usually?
+    // "git apply --reject" or without "--atomic" might leave mess.
     // PatchApplier uses "git apply". By default it is NOT atomic for multiple files unless --index or --3way is used or -atomic is passed?
     // Actually git apply is all-or-nothing by default for the files involved unless --reject is used.
     // Let's verify this behavior or simulate a case where we manually messed up.
@@ -147,7 +153,7 @@ index e69de29..363a325 100644
 
     // Make a change that conflicts with the patch we are about to apply
     await fs.writeFile(path.join(tempDir, 'packages/a/src/index.ts'), "console.log('conflict');\n");
-    
+
     // Create a patch that expects "console.log('hello');"
     const diff = `diff --git a/packages/a/src/index.ts b/packages/a/src/index.ts
 index e69de29..363a325 100644
@@ -157,7 +163,7 @@ index e69de29..363a325 100644
 -console.log('hello');
 +console.log('world');
 `;
-    
+
     // Apply should fail
     const result = await patchApplier.applyUnifiedDiff(tempDir, diff);
     expect(result.applied).toBe(false);
@@ -178,7 +184,7 @@ index e69de29..363a325 100644
     // Then apply failed.
     // Then rollback.
     // Rollback resets hard to HEAD. So 'conflict' change should be gone.
-    
+
     content = await fs.readFile(path.join(tempDir, 'packages/a/src/index.ts'), 'utf-8');
     expect(content).toBe("console.log('hello');\n");
   });

@@ -14,7 +14,7 @@ export class ToolRunTracker {
     if (event.type === 'ToolRunRequested') {
       this.runs.set(event.payload.toolRunId, {
         toolRunId: event.payload.toolRunId,
-        command: event.payload.command
+        command: event.payload.command,
       });
     } else if (event.type === 'ToolRunFinished') {
       const run = this.runs.get(event.payload.toolRunId);
@@ -26,7 +26,8 @@ export class ToolRunTracker {
   }
 
   getSummary(): ToolRunSummaryItem[] {
-    return Array.from(this.runs.values())
-      .filter(r => r.exitCode !== undefined && r.command !== undefined) as ToolRunSummaryItem[];
+    return Array.from(this.runs.values()).filter(
+      (r) => r.exitCode !== undefined && r.command !== undefined,
+    ) as ToolRunSummaryItem[];
   }
 }

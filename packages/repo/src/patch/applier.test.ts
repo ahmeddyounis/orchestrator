@@ -151,7 +151,7 @@ describe('PatchApplier', () => {
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
     expect(result.error?.type).toBe('execution');
-    
+
     const details = result.error?.details as {
       kind: PatchErrorKind;
       errors: PatchApplyErrorDetail[];
@@ -159,10 +159,10 @@ describe('PatchApplier', () => {
     expect(details.kind).toBe('HUNK_FAILED');
     expect(details.errors).toHaveLength(1);
     expect(details.errors[0]).toMatchObject({
-        kind: 'HUNK_FAILED',
-        file: 'test.txt',
-        line: 1,
-        suggestion: expect.any(String),
+      kind: 'HUNK_FAILED',
+      file: 'test.txt',
+      line: 1,
+      suggestion: expect.any(String),
     });
   });
 
@@ -182,7 +182,7 @@ describe('PatchApplier', () => {
 
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
-    
+
     const details = result.error?.details as {
       kind: PatchErrorKind;
       errors: PatchApplyErrorDetail[];
@@ -191,15 +191,15 @@ describe('PatchApplier', () => {
     // or sometimes simply fails. Let's verify.
     expect(details.kind).toBe('FILE_NOT_FOUND');
     expect(details.errors[0]).toMatchObject({
-        kind: 'FILE_NOT_FOUND',
-        file: 'missing.txt'
+      kind: 'FILE_NOT_FOUND',
+      file: 'missing.txt',
     });
   });
 
   it('reports specific error when file already exists', async () => {
     const filePath = path.join(tmpDir, 'existing.txt');
     await fs.writeFile(filePath, 'Existing Content\n');
-    await run('git', ['add', 'existing.txt'], tmpDir); // Track it so git knows it exists? 
+    await run('git', ['add', 'existing.txt'], tmpDir); // Track it so git knows it exists?
     // Actually if it's untracked, git apply might still complain if it tries to overwrite?
     // "git apply" checks working tree.
 
@@ -218,15 +218,15 @@ describe('PatchApplier', () => {
 
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
-    
+
     const details = result.error?.details as {
       kind: PatchErrorKind;
       errors: PatchApplyErrorDetail[];
     };
     expect(details.kind).toBe('ALREADY_EXISTS');
     expect(details.errors[0]).toMatchObject({
-        kind: 'ALREADY_EXISTS',
-        file: 'existing.txt'
+      kind: 'ALREADY_EXISTS',
+      file: 'existing.txt',
     });
   });
 });

@@ -65,10 +65,14 @@ describe('ExecutionService', () => {
     const result = await service.applyPatch('diff...', 'Fix bug');
 
     expect(result).toBe(true);
-    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(repoRoot, 'diff...', expect.objectContaining({
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(
+      repoRoot,
+      'diff...',
+      expect.objectContaining({
         maxFilesChanged: 5,
         maxLinesTouched: 100,
-    }));
+      }),
+    );
     expect(mockGit.createCheckpoint).toHaveBeenCalledWith('After: Fix bug');
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -84,10 +88,10 @@ describe('ExecutionService', () => {
       applied: false,
       error: { type: 'limit', message: 'Too many files' },
     });
-    
+
     // Confirmation returns true
     mockConfirmationProvider.confirm.mockResolvedValue(true);
-    
+
     // Second call succeeds
     mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
       applied: true,
@@ -101,14 +105,24 @@ describe('ExecutionService', () => {
     expect(result).toBe(true);
     expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
     // First call with defaults
-    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(1, repoRoot, 'diff...', expect.objectContaining({
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(
+      1,
+      repoRoot,
+      'diff...',
+      expect.objectContaining({
         maxFilesChanged: 5,
-    }));
+      }),
+    );
     // Second call with Infinity
-    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(2, repoRoot, 'diff...', expect.objectContaining({
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(
+      2,
+      repoRoot,
+      'diff...',
+      expect.objectContaining({
         maxFilesChanged: Infinity,
         maxLinesTouched: Infinity,
-    }));
+      }),
+    );
   });
 
   it('should trigger confirmation and fail if denied', async () => {
@@ -117,7 +131,7 @@ describe('ExecutionService', () => {
       applied: false,
       error: { type: 'limit', message: 'Too many files' },
     });
-    
+
     // Confirmation returns false
     mockConfirmationProvider.confirm.mockResolvedValue(false);
 
@@ -126,10 +140,12 @@ describe('ExecutionService', () => {
     expect(result).toBe(false);
     expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
     expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledTimes(1); // No retry
-    expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
         type: 'PatchApplyFailed',
-        payload: expect.objectContaining({ error: 'Patch rejected by user (limit exceeded)' })
-    }));
+        payload: expect.objectContaining({ error: 'Patch rejected by user (limit exceeded)' }),
+      }),
+    );
   });
 
   it('should rollback to HEAD on patch failure', async () => {

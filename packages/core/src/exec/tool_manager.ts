@@ -1,11 +1,17 @@
-import { SafeCommandRunner, RunnerContext, UserInterface, SandboxProvider, NoneSandboxProvider } from '@orchestrator/exec';
+import {
+  SafeCommandRunner,
+  RunnerContext,
+  UserInterface,
+  SandboxProvider,
+  NoneSandboxProvider,
+} from '@orchestrator/exec';
 import {
   ToolRunRequest,
   ToolPolicy,
   ToolRunResult,
   Manifest,
   writeManifest,
-  OrchestratorEvent
+  OrchestratorEvent,
 } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -16,7 +22,7 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
   constructor(
     private eventBus: EventBus,
     private runId: string,
-    private toolRunId: string
+    private toolRunId: string,
   ) {
     super();
   }
@@ -25,7 +31,7 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
     req: ToolRunRequest,
     policy: ToolPolicy,
     ui: UserInterface,
-    ctx: RunnerContext
+    ctx: RunnerContext,
   ): Promise<ToolRunResult> {
     await this.eventBus.emit({
       type: 'ToolRunRequested',
@@ -36,8 +42,8 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
         toolRunId: this.toolRunId,
         command: req.command,
         classification: req.classification || 'unknown',
-        reason: req.reason
-      }
+        reason: req.reason,
+      },
     });
 
     try {
@@ -54,8 +60,8 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
           payload: {
             toolRunId: this.toolRunId,
             command: req.command,
-            reason: error.message
-          }
+            reason: error.message,
+          },
         });
       }
       throw err;
@@ -76,8 +82,8 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
       runId: this.runId,
       payload: {
         toolRunId: this.toolRunId,
-        command: req.command
-      }
+        command: req.command,
+      },
     });
 
     await this.eventBus.emit({
@@ -86,8 +92,8 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
       timestamp: new Date().toISOString(),
       runId: this.runId,
       payload: {
-        toolRunId: this.toolRunId
-      }
+        toolRunId: this.toolRunId,
+      },
     });
 
     const result = await super.exec(req, policy, stdoutPath, stderrPath);
@@ -103,8 +109,8 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
         durationMs: result.durationMs,
         stdoutPath: result.stdoutPath,
         stderrPath: result.stderrPath,
-        truncated: result.truncated
-      }
+        truncated: result.truncated,
+      },
     });
 
     return result;
@@ -155,7 +161,7 @@ export class ToolManager {
     try {
       const content = await fs.readFile(this.manifestPath, 'utf-8');
       const manifest: Manifest = JSON.parse(content);
-      
+
       let changed = false;
       if (!manifest.toolLogPaths) {
         manifest.toolLogPaths = [];
@@ -163,32 +169,32 @@ export class ToolManager {
       }
 
       for (const p of newLogPaths) {
-         // Try to make relative to artifacts root (where manifest is)
-         // Assuming manifestPath is in artifacts root.
-         // But SafeCommandRunner writes to absolute paths.
-         // Manifest expects paths.
-         // The spec says: "Ensure paths stored as relative-to-runDir when possible."
-         
-         // manifestPath is usually .../manifest.json
-         // runDir is path.dirname(manifestPath)
-         const runDir = path.dirname(this.manifestPath);
-         let storedPath = p;
-         if (p.startsWith(runDir)) {
-           storedPath = path.relative(runDir, p);
-         }
+        // Try to make relative to artifacts root (where manifest is)
+        // Assuming manifestPath is in artifacts root.
+        // But SafeCommandRunner writes to absolute paths.
+        // Manifest expects paths.
+        // The spec says: "Ensure paths stored as relative-to-runDir when possible."
 
-         if (!manifest.toolLogPaths.includes(storedPath)) {
-           manifest.toolLogPaths.push(storedPath);
-           changed = true;
-         }
+        // manifestPath is usually .../manifest.json
+        // runDir is path.dirname(manifestPath)
+        const runDir = path.dirname(this.manifestPath);
+        let storedPath = p;
+        if (p.startsWith(runDir)) {
+          storedPath = path.relative(runDir, p);
+        }
+
+        if (!manifest.toolLogPaths.includes(storedPath)) {
+          manifest.toolLogPaths.push(storedPath);
+          changed = true;
+        }
       }
 
       if (changed) {
         await writeManifest(this.manifestPath, manifest);
       }
     } catch (err) {
-       console.error(`Failed to update manifest at ${this.manifestPath}:`, err);
-       // Non-fatal, but logged
+      console.error(`Failed to update manifest at ${this.manifestPath}:`, err);
+      // Non-fatal, but logged
     }
   }
 }

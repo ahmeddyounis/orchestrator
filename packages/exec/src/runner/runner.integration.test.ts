@@ -11,7 +11,7 @@ describe('SafeCommandRunner Integration', () => {
   const mockUi: UserInterface = {
     confirm: async () => true, // Always confirm for these tests if asked
   };
-  
+
   // Use a unique run ID for this test suite to avoid conflicts
   const testRunId = `integration-test-${randomUUID()}`;
   const mockCtx: RunnerContext = {
@@ -86,7 +86,7 @@ describe('SafeCommandRunner Integration', () => {
 
     // Run for 3 seconds
     const req: ToolRunRequest = {
-      command: 'node -e \'setTimeout(() => {}, 3000)\'',
+      command: "node -e 'setTimeout(() => {}, 3000)'",
       reason: 'Integration test timeout',
       cwd: process.cwd(),
     };

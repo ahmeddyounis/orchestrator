@@ -22,7 +22,12 @@ export interface FileEditPatch {
 
 export type PatchCandidate = UnifiedDiffPatch | FileEditPatch;
 
-export type PatchErrorKind = 'HUNK_FAILED' | 'FILE_NOT_FOUND' | 'ALREADY_EXISTS' | 'WHITESPACE' | 'UNKNOWN';
+export type PatchErrorKind =
+  | 'HUNK_FAILED'
+  | 'FILE_NOT_FOUND'
+  | 'ALREADY_EXISTS'
+  | 'WHITESPACE'
+  | 'UNKNOWN';
 
 export interface PatchApplyErrorDetail {
   file?: string;
@@ -35,12 +40,14 @@ export interface PatchApplyErrorDetail {
 export interface PatchError {
   type: 'validation' | 'security' | 'execution' | 'limit';
   message: string;
-  details?: {
-    kind?: PatchErrorKind;
-    errors?: PatchApplyErrorDetail[];
-    stderr?: string;
-    [key: string]: unknown;
-  } | unknown;
+  details?:
+    | {
+        kind?: PatchErrorKind;
+        errors?: PatchApplyErrorDetail[];
+        stderr?: string;
+        [key: string]: unknown;
+      }
+    | unknown;
 }
 
 export interface PatchApplyResult {

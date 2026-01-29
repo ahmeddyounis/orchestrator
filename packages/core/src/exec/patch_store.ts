@@ -33,7 +33,7 @@ export class PatchStore {
     try {
       const content = await fs.readFile(this.manifestPath, 'utf-8');
       const manifest: Manifest = JSON.parse(content);
-      
+
       if (!manifest.patchPaths.includes(patchPath)) {
         manifest.patchPaths.push(patchPath);
         await writeManifest(this.manifestPath, manifest);
@@ -41,7 +41,9 @@ export class PatchStore {
     } catch (err) {
       // If manifest doesn't exist or is invalid, we should probably fail
       // as it violates the integrity of the run artifacts.
-      throw new Error(`Failed to update manifest at ${this.manifestPath}: ${(err as Error).message}`);
+      throw new Error(
+        `Failed to update manifest at ${this.manifestPath}: ${(err as Error).message}`,
+      );
     }
   }
 }

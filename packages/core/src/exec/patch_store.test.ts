@@ -15,9 +15,9 @@ describe('PatchStore', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'patch-store-test-'));
     patchesDir = path.join(tmpDir, 'patches');
     manifestPath = path.join(tmpDir, 'manifest.json');
-    
+
     await fs.mkdir(patchesDir, { recursive: true });
-    
+
     // Create initial manifest
     const manifest: Manifest = {
       runId: 'test-run',
@@ -47,7 +47,7 @@ describe('PatchStore', () => {
     const filePath = await store.saveCandidate(1, 0, patchContent);
 
     expect(path.basename(filePath)).toBe('iter_1_candidate_0.patch');
-    
+
     const savedContent = await fs.readFile(filePath, 'utf-8');
     expect(savedContent).toBe(patchContent);
 
@@ -61,7 +61,7 @@ describe('PatchStore', () => {
     const filePath = await store.saveSelected(2, patchContent);
 
     expect(path.basename(filePath)).toBe('iter_2_selected.patch');
-    
+
     const savedContent = await fs.readFile(filePath, 'utf-8');
     expect(savedContent).toBe(patchContent);
 
@@ -75,7 +75,7 @@ describe('PatchStore', () => {
     const filePath = await store.saveFinalDiff(patchContent);
 
     expect(path.basename(filePath)).toBe('final.diff.patch');
-    
+
     const savedContent = await fs.readFile(filePath, 'utf-8');
     expect(savedContent).toBe(patchContent);
 
@@ -94,9 +94,9 @@ describe('PatchStore', () => {
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
-    
+
     // Should only contain it once
-    const matches = manifest.patchPaths.filter(p => p === path1);
+    const matches = manifest.patchPaths.filter((p) => p === path1);
     expect(matches.length).toBe(1);
   });
 });

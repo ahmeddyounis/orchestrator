@@ -212,7 +212,8 @@ export class PatchApplier {
           file: hunkMatch[1],
           line: parseInt(hunkMatch[2], 10),
           message: `Hunk failed at line ${hunkMatch[2]}`,
-          suggestion: 'The file has changed since the patch was created. Try regenerating the patch with updated context.',
+          suggestion:
+            'The file has changed since the patch was created. Try regenerating the patch with updated context.',
         });
         if (overallKind === 'UNKNOWN') overallKind = 'HUNK_FAILED';
         continue;
@@ -225,7 +226,8 @@ export class PatchApplier {
           kind: 'FILE_NOT_FOUND',
           file: fileNotFoundMatch[1],
           message: 'File not found',
-          suggestion: 'Ensure the file exists before applying the patch, or check if the patch should create the file.',
+          suggestion:
+            'Ensure the file exists before applying the patch, or check if the patch should create the file.',
         });
         if (overallKind === 'UNKNOWN') overallKind = 'FILE_NOT_FOUND';
         continue;
@@ -238,7 +240,8 @@ export class PatchApplier {
           kind: 'ALREADY_EXISTS',
           file: existsMatch[1],
           message: 'File already exists',
-          suggestion: 'The patch attempts to create a file that already exists. Remove the file or update the patch.',
+          suggestion:
+            'The patch attempts to create a file that already exists. Remove the file or update the patch.',
         });
         if (overallKind === 'UNKNOWN') overallKind = 'ALREADY_EXISTS';
         continue;
