@@ -119,6 +119,28 @@ describe('ConfigLoader', () => {
       });
       expect(config.providers?.openai.api_key).toBe('secret-key');
     });
+
+    it('should load and validate execution tools policy', () => {
+      const toolConfig = {
+        execution: {
+          tools: {
+            enabled: true,
+            allowlistPrefixes: ['echo'],
+          },
+        },
+      };
+
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(toolConfig));
+
+      const config = ConfigLoader.load({ configPath: '/config.yaml' });
+
+      expect(config.execution?.tools?.enabled).toBe(true);
+      expect(config.execution?.tools?.allowlistPrefixes).toContain('echo');
+      // Verify defaults
+      expect(config.execution?.tools?.requireConfirmation).toBe(true);
+      expect(config.execution?.tools?.timeoutMs).toBe(600_000);
+    });
   });
 
   describe('writeEffectiveConfig', () => {

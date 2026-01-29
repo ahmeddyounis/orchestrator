@@ -52,14 +52,17 @@ budgets:
   tokens: 100000
   cost: 10.0
 
-# commandPolicy (Coming soon)
-# Control which commands the agents are allowed to execute
-commandPolicy:
-  allow:
-    - 'npm test'
-    - 'ls -la'
-  deny:
-    - 'rm -rf /'
+# Execution Policy
+execution:
+  allowDirtyWorkingTree: false
+  tools:
+    enabled: true
+    requireConfirmation: true
+    allowlistPrefixes:
+      - 'npm test'
+      - 'ls -la'
+    denylistPatterns:
+      - 'rm -rf'
 ```
 
 ## Provider Configuration
@@ -95,14 +98,54 @@ budgets:
   global_tokens: 50000
 ```
 
-## Command Policy (Placeholder)
+## Execution Policy
 
-_Note: Command policy enforcement is currently in development._
-
-Command policies provide a security layer by restricting which shell commands the agents can execute.
+Control how the agent interacts with the local environment, including tool execution and git state.
 
 ```yaml
-commandPolicy:
-  deny:
-    - 'rm -rf *'
+execution:
+  # Whether to allow running when the git working tree is dirty
+  allowDirtyWorkingTree: false # Default: false
+
+  # Whether to skip creating git checkpoints (commits) before actions
+  noCheckpoints: false # Default: false
+
+  # Tool Execution Policy
+  tools:
+    # Master switch for tool execution.
+    # Set to true to allow the agent to run commands.
+    enabled: false # Default: false
+
+    # Whether to require human confirmation for every command.
+    requireConfirmation: true # Default: true
+
+    # Commands starting with these prefixes are allowed (subject to confirmation).
+    allowlistPrefixes:
+      - 'pnpm test'
+      - 'pnpm lint'
+      - 'pnpm -r test'
+      - 'pnpm -r lint'
+      - 'pnpm -r build'
+      - 'turbo run test'
+      - 'turbo run build'
+      - 'tsc'
+      - 'vitest'
+      - 'eslint'
+      - 'prettier'
+
+    # Commands matching these regex patterns are blocked automatically.
+    denylistPatterns:
+      - 'rm -rf'
+      - 'mkfs'
+      - ':(){:|:&};:' # fork bomb
+      - 'curl .*\|\s*sh' # pipe to shell
+
+    # Whether to allow tools to access the network (e.g., curl, npm install).
+    allowNetwork: false # Default: false
+
+    # Timeout for tool execution in milliseconds.
+    timeoutMs: 600000 # Default: 10 minutes
+
+    # Maximum size of stdout/stderr output to capture in bytes.
+    maxOutputBytes: 1048576 # Default: 1MB
 ```

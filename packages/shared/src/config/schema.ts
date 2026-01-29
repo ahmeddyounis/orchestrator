@@ -20,6 +20,33 @@ export const ProviderConfigSchema = z
   })
   .passthrough();
 
+export const ToolPolicySchema = z.object({
+  enabled: z.boolean().default(false),
+  requireConfirmation: z.boolean().default(true),
+  allowlistPrefixes: z.array(z.string()).default([
+    'pnpm test',
+    'pnpm lint',
+    'pnpm -r test',
+    'pnpm -r lint',
+    'pnpm -r build',
+    'turbo run test',
+    'turbo run build',
+    'tsc',
+    'vitest',
+    'eslint',
+    'prettier',
+  ]),
+  denylistPatterns: z.array(z.string()).default([
+    'rm -rf',
+    'mkfs',
+    ':(){:|:&};:',
+    'curl .*\\|\\s*sh',
+  ]),
+  allowNetwork: z.boolean().default(false),
+  timeoutMs: z.number().default(600_000),
+  maxOutputBytes: z.number().default(1_024_1024),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
@@ -56,6 +83,7 @@ export const ConfigSchema = z.object({
     .object({
       allowDirtyWorkingTree: z.boolean().default(false),
       noCheckpoints: z.boolean().default(false),
+      tools: ToolPolicySchema.default(ToolPolicySchema.parse({})),
     })
     .optional(),
 });
