@@ -45,6 +45,13 @@ export const ConfigSchema = z.object({
       deny: z.array(z.string()).optional(),
     })
     .optional(),
+  patch: z
+    .object({
+      maxFilesChanged: z.number().default(15),
+      maxLinesChanged: z.number().default(800),
+      allowBinary: z.boolean().default(false),
+    })
+    .optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

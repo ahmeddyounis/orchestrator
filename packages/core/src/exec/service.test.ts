@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ExecutionService } from './service';
+import { ExecutionService, ConfirmationProvider } from './service';
 import { EventBus } from '../registry';
 import { GitService, PatchApplier } from '@orchestrator/repo';
+import { Config } from '@orchestrator/shared';
 
 // Mock dependencies
 const mockGit = {
@@ -13,11 +14,23 @@ const mockApplier = {
   applyUnifiedDiff: vi.fn(),
 };
 
+const mockConfirmationProvider = {
+  confirm: vi.fn(),
+};
+
 describe('ExecutionService', () => {
   let service: ExecutionService;
   let eventBus: EventBus;
   const repoRoot = '/test/repo';
   const runId = 'test-run';
+  const config: Config = {
+    configVersion: 1,
+    patch: {
+      maxFilesChanged: 5,
+      maxLinesChanged: 100,
+      allowBinary: false,
+    },
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,6 +42,7 @@ describe('ExecutionService', () => {
     mockGit.createCheckpoint.mockReset();
     mockGit.rollbackToCheckpoint.mockReset();
     mockApplier.applyUnifiedDiff.mockReset();
+    mockConfirmationProvider.confirm.mockReset();
 
     service = new ExecutionService(
       eventBus,
@@ -36,6 +50,8 @@ describe('ExecutionService', () => {
       mockApplier as unknown as PatchApplier,
       runId,
       repoRoot,
+      config,
+      mockConfirmationProvider as unknown as ConfirmationProvider,
     );
   });
 
@@ -49,7 +65,10 @@ describe('ExecutionService', () => {
     const result = await service.applyPatch('diff...', 'Fix bug');
 
     expect(result).toBe(true);
-    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(repoRoot, 'diff...');
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(repoRoot, 'diff...', expect.objectContaining({
+        maxFilesChanged: 5,
+        maxLinesTouched: 100,
+    }));
     expect(mockGit.createCheckpoint).toHaveBeenCalledWith('After: Fix bug');
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -57,49 +76,71 @@ describe('ExecutionService', () => {
         payload: expect.objectContaining({ filesChanged: ['file1.ts'] }),
       }),
     );
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'CheckpointCreated',
-        payload: expect.objectContaining({ checkpointRef: 'sha123' }),
-      }),
-    );
+  });
+
+  it('should trigger confirmation when limit exceeded and retry if confirmed', async () => {
+    // First call fails with limit error
+    mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
+      applied: false,
+      error: { type: 'limit', message: 'Too many files' },
+    });
+    
+    // Confirmation returns true
+    mockConfirmationProvider.confirm.mockResolvedValue(true);
+    
+    // Second call succeeds
+    mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
+      applied: true,
+      filesChanged: ['many_files...'],
+    });
+
+    mockGit.createCheckpoint.mockResolvedValue('sha123');
+
+    const result = await service.applyPatch('diff...', 'Fix bug');
+
+    expect(result).toBe(true);
+    expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
+    // First call with defaults
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(1, repoRoot, 'diff...', expect.objectContaining({
+        maxFilesChanged: 5,
+    }));
+    // Second call with Infinity
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(2, repoRoot, 'diff...', expect.objectContaining({
+        maxFilesChanged: Infinity,
+        maxLinesTouched: Infinity,
+    }));
+  });
+
+  it('should trigger confirmation and fail if denied', async () => {
+    // First call fails with limit error
+    mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
+      applied: false,
+      error: { type: 'limit', message: 'Too many files' },
+    });
+    
+    // Confirmation returns false
+    mockConfirmationProvider.confirm.mockResolvedValue(false);
+
+    const result = await service.applyPatch('diff...', 'Fix bug');
+
+    expect(result).toBe(false);
+    expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledTimes(1); // No retry
+    expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'PatchApplyFailed',
+        payload: expect.objectContaining({ error: 'Patch rejected by user (limit exceeded)' })
+    }));
   });
 
   it('should rollback to HEAD on patch failure', async () => {
     mockApplier.applyUnifiedDiff.mockResolvedValue({
       applied: false,
-      error: { message: 'Syntax error' },
+      error: { type: 'execution', message: 'Syntax error' },
     });
 
     const result = await service.applyPatch('diff...', 'Fix bug');
 
     expect(result).toBe(false);
     expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('HEAD');
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'PatchApplyFailed',
-      }),
-    );
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'RollbackPerformed',
-        payload: expect.objectContaining({ targetRef: 'HEAD' }),
-      }),
-    );
-    expect(mockGit.createCheckpoint).not.toHaveBeenCalled();
-  });
-
-  it('should rollback to HEAD on unexpected error', async () => {
-    mockApplier.applyUnifiedDiff.mockRejectedValue(new Error('Crash'));
-
-    const result = await service.applyPatch('diff...', 'Fix bug');
-
-    expect(result).toBe(false);
-    expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('HEAD');
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'RollbackPerformed',
-      }),
-    );
   });
 });

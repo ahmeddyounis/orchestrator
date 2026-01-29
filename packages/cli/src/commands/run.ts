@@ -33,6 +33,7 @@ export function registerRunCommand(program: Command) {
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
+    .option('--allow-large-diff', 'Allow large diffs without confirmation')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -51,6 +52,9 @@ export function registerRunCommand(program: Command) {
               executor: options.executor,
               reviewer: options.reviewer,
             },
+            patch: options.allowLargeDiff
+              ? { maxFilesChanged: Infinity, maxLinesChanged: Infinity }
+              : undefined,
           },
         });
 

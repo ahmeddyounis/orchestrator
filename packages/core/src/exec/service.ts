@@ -1,5 +1,10 @@
-import { GitService, PatchApplier } from '@orchestrator/repo';
+import { GitService, PatchApplier, PatchApplierOptions } from '@orchestrator/repo';
+import { Config } from '@orchestrator/shared';
 import { EventBus } from '../registry';
+
+export interface ConfirmationProvider {
+  confirm(message: string, details?: string, defaultNo?: boolean): Promise<boolean>;
+}
 
 export class ExecutionService {
   constructor(
@@ -8,12 +13,54 @@ export class ExecutionService {
     private applier: PatchApplier,
     private runId: string,
     private repoRoot: string,
+    private config?: Config,
+    private confirmationProvider?: ConfirmationProvider,
   ) {}
 
   async applyPatch(patchText: string, description: string): Promise<boolean> {
     try {
-      // Apply the patch
-      const result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText);
+      // 1. Prepare options from config
+      const patchOptions: PatchApplierOptions = {
+        maxFilesChanged: this.config?.patch?.maxFilesChanged,
+        maxLinesTouched: this.config?.patch?.maxLinesChanged,
+        allowBinary: this.config?.patch?.allowBinary,
+      };
+
+      // 2. Try applying with limits
+      let result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText, patchOptions);
+
+      // 3. Handle Limit Exceeded -> Confirmation
+      if (!result.applied && result.error?.type === 'limit') {
+        if (this.confirmationProvider) {
+          const confirmed = await this.confirmationProvider.confirm(
+            'Patch exceeds configured limits. Apply anyway?',
+            result.error.message,
+            true, // Default to No
+          );
+
+          if (confirmed) {
+            // Retry with unlimited
+            result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText, {
+              ...patchOptions,
+              maxFilesChanged: Infinity,
+              maxLinesTouched: Infinity,
+            });
+          } else {
+            // User denied
+            await this.eventBus.emit({
+              type: 'PatchApplyFailed',
+              schemaVersion: 1,
+              timestamp: new Date().toISOString(),
+              runId: this.runId,
+              payload: {
+                error: 'Patch rejected by user (limit exceeded)',
+                details: result.error,
+              },
+            });
+            return false;
+          }
+        }
+      }
 
       if (result.applied) {
         // Success!
@@ -57,28 +104,7 @@ export class ExecutionService {
           },
         });
 
-        // Rollback (even if apply failed, git apply might have left mess if not atomic,
-        // though our Applier usually handles it. But safer to rollback to last good state if we have one?
-        // Actually, if apply failed, it usually doesn't change anything or cleans up.
-        // But the spec says: "On PatchApplyFailed ... rollback to last checkpoint."
-
-        // We need to know the LAST checkpoint.
-        // However, createCheckpoint returns a Ref.
-        // We should probably store the 'current' checkpoint somewhere?
-        // Or create a checkpoint BEFORE trying to apply?
-
-        // Spec says: "After each successfully applied patch ... create a checkpoint."
-        // "On PatchApplyFailed ... rollback to last checkpoint."
-
-        // This implies we rely on the state being clean *before* we tried.
-        // If we simply rely on git, we can just "reset --hard HEAD" if we assume HEAD was the last checkpoint.
-        // But if `createCheckpoint` makes a commit, then HEAD is the checkpoint.
-
-        // If `applyUnifiedDiff` fails, does it leave the repo dirty?
-        // `PatchApplier` seems to try to be atomic or use a temp dir?
-        // Let's check `PatchApplier` logic again.
-
-        // In any case, explicit rollback to HEAD is safe.
+        // Rollback to HEAD
         await this.git.rollbackToCheckpoint('HEAD');
 
         await this.eventBus.emit({
