@@ -1,6 +1,9 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+export * from './scanner/index';
+export * from './scanner/types';
+
 /**
  * Finds the repository root starting from the current directory.
  * Heuristics:
