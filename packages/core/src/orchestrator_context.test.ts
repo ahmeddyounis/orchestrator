@@ -92,7 +92,7 @@ describe('Orchestrator Context Integration', () => {
         getAdapter: vi.fn(),
         resolveRoleProviders: vi.fn(),
     };
-    const config: Config = {
+    const config: Config = { verification: {} as any,
         configVersion: 1,
         thinkLevel: 'L1',
         defaults: { executor: 'mock' },

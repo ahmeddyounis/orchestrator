@@ -22,6 +22,7 @@ import fs from 'fs/promises';
 import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
+import { ConfigLoader } from './config/loader';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -73,6 +74,7 @@ export class Orchestrator {
   async runL0(goal: string, runId: string): Promise<RunResult> {
     // 1. Setup Artifacts
     const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
     const logger = new JsonlLogger(artifacts.trace);
     
     const emitEvent = async (e: OrchestratorEvent) => {
@@ -205,6 +207,14 @@ END_DIFF
             runId,
             payload: { status: 'failure', summary: msg }
         });
+
+        const result: RunResult = { status: 'failure', runId, summary: msg };
+
+        await fs.writeFile(artifacts.summary, JSON.stringify({
+          ...result,
+          verification: this.config.verification
+        }, null, 2));
+
         // Write manifest before returning
         await writeManifest(artifacts.manifest, {
           runId,
@@ -308,6 +318,11 @@ END_DIFF
         };
     }
 
+    await fs.writeFile(artifacts.summary, JSON.stringify({
+      ...runResult,
+      verification: this.config.verification
+    }, null, 2));
+
     // Write manifest
      await writeManifest(artifacts.manifest, {
           runId,
@@ -327,6 +342,7 @@ END_DIFF
 
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
     const logger = new JsonlLogger(artifacts.trace);
     
     const eventBus: EventBus = {
@@ -391,7 +407,14 @@ END_DIFF
             runId,
             payload: { status: 'failure', summary: msg }
         });
-        return { status: 'failure', runId, summary: msg };
+
+        const result: RunResult = { status: 'failure', runId, summary: msg };
+        await fs.writeFile(artifacts.summary, JSON.stringify({
+          ...result,
+          verification: this.config.verification
+        }, null, 2));
+
+        return result;
     }
 
     const executionService = new ExecutionService(
@@ -449,7 +472,7 @@ END_DIFF
             toolLogPaths: [],
         });
 
-        return {
+        const result: RunResult = {
             status,
             runId,
             summary,
@@ -457,6 +480,27 @@ END_DIFF
             patchPaths,
             stopReason
         };
+
+        await fs.writeFile(artifacts.summary, JSON.stringify({
+          ...result,
+          verification: this.config.verification
+        }, null, 2));
+
+        await writeManifest(artifacts.manifest, {
+            runId,
+            startedAt: new Date().toISOString(),
+            command: `run ${goal}`,
+            repoRoot: this.repoRoot,
+            artifactsDir: artifacts.root,
+            tracePath: artifacts.trace,
+            summaryPath: artifacts.summary,
+            effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+            patchPaths, 
+            contextPaths,
+            toolLogPaths: [],
+        });
+
+        return result;
     };
 
     for (const step of steps) {

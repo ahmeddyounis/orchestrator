@@ -47,6 +47,11 @@ export function registerRunCommand(program: Command) {
     .option('--no-tools', 'Force tools disabled')
     .option('--yes', 'Auto-approve confirmations except denylist')
     .option('--non-interactive', 'Deny by default if confirmation required')
+    .option('--verify <mode>', 'Verification mode: on, off, auto')
+    .option('--verify-scope <scope>', 'Verification scope: targeted, full')
+    .option('--no-lint', 'Disable automatic linting')
+    .option('--no-typecheck', 'Disable automatic typechecking')
+    .option('--no-tests', 'Disable automatic testing')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -63,6 +68,39 @@ export function registerRunCommand(program: Command) {
         if (thinkLevel !== 'L0' && thinkLevel !== 'L1') {
           renderer.error(`Invalid think level "${options.think}". Must be L0, L1, or auto.`);
           process.exit(2);
+        }
+
+        // Handle verification flags
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const verification: any = {};
+        if (options.verify) {
+          if (options.verify === 'off') {
+            verification.enabled = false;
+          } else {
+            verification.enabled = true;
+            if (options.verify === 'auto') {
+              verification.mode = 'auto';
+            }
+          }
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const autoVerification: any = {};
+        if (options.verifyScope) {
+          autoVerification.testScope = options.verifyScope;
+        }
+        if (options.lint === false) {
+          autoVerification.enableLint = false;
+        }
+        if (options.typecheck === false) {
+          autoVerification.enableTypecheck = false;
+        }
+        if (options.tests === false) {
+          autoVerification.enableTests = false;
+        }
+
+        if (Object.keys(autoVerification).length > 0) {
+          verification.auto = autoVerification;
         }
 
         const config = ConfigLoader.load({
@@ -88,6 +126,7 @@ export function registerRunCommand(program: Command) {
               sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
+            verification: Object.keys(verification).length > 0 ? verification : undefined,
           },
         });
 

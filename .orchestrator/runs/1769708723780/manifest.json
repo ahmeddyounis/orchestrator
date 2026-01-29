@@ -1,0 +1,13 @@
+{
+  "runId": "1769708723780",
+  "startedAt": "2026-01-29T17:45:23.817Z",
+  "command": "run Goal",
+  "repoRoot": "/Users/ahmedyounis/Documents/Projects/orchestrator",
+  "artifactsDir": "/Users/ahmedyounis/Documents/Projects/orchestrator/.orchestrator/runs/1769708723780",
+  "tracePath": "/Users/ahmedyounis/Documents/Projects/orchestrator/.orchestrator/runs/1769708723780/trace.jsonl",
+  "summaryPath": "/Users/ahmedyounis/Documents/Projects/orchestrator/.orchestrator/runs/1769708723780/summary.json",
+  "effectiveConfigPath": "/Users/ahmedyounis/Documents/Projects/orchestrator/.orchestrator/runs/1769708723780/effective-config.json",
+  "patchPaths": [],
+  "contextPaths": [],
+  "toolLogPaths": []
+}

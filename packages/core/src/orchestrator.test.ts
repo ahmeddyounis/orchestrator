@@ -81,7 +81,7 @@ describe('Orchestrator', () => {
         getAdapter: vi.fn(),
         resolveRoleProviders: vi.fn(),
     };
-    const config: Config = {
+    const config: Config = { verification: {} as any,
         configVersion: 1,
         thinkLevel: 'L0',
         defaults: { executor: 'mock' },

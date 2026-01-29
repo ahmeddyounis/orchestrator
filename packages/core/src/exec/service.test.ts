@@ -23,7 +23,7 @@ describe('ExecutionService', () => {
   let eventBus: EventBus;
   const repoRoot = '/test/repo';
   const runId = 'test-run';
-  const config: Config = {
+  const config: Config = { verification: {} as any,
     configVersion: 1,
     thinkLevel: 'L1',
     patch: {

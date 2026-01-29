@@ -101,6 +101,49 @@ export const ConfigSchema = z.object({
         .default({ mode: 'none' }),
     })
     .optional(),
+  verification: z
+    .object({
+      enabled: z.boolean().default(true),
+      mode: z.enum(['auto', 'custom']).default('auto'),
+      steps: z
+        .array(
+          z.object({
+            name: z.string(),
+            command: z.string(),
+            required: z.boolean(),
+            timeoutMs: z.number().optional(),
+            allowNetwork: z.boolean().optional(),
+          }),
+        )
+        .default([]),
+      auto: z
+        .object({
+          enableLint: z.boolean().default(true),
+          enableTypecheck: z.boolean().default(true),
+          enableTests: z.boolean().default(true),
+          testScope: z.enum(['targeted', 'full']).default('targeted'),
+          maxCommandsPerIteration: z.number().default(3),
+        })
+        .default({
+          enableLint: true,
+          enableTypecheck: true,
+          enableTests: true,
+          testScope: 'targeted',
+          maxCommandsPerIteration: 3,
+        }),
+    })
+    .default({
+      enabled: true,
+      mode: 'auto',
+      steps: [],
+      auto: {
+        enableLint: true,
+        enableTypecheck: true,
+        enableTests: true,
+        testScope: 'targeted',
+        maxCommandsPerIteration: 3,
+      },
+    }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

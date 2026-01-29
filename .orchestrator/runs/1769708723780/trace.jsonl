@@ -1,0 +1,10 @@
+{"type":"RunStarted","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.816Z","runId":"1769708723780","payload":{"taskId":"1769708723780","goal":"Goal"}}
+{"type":"ProviderSelected","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.817Z","runId":"1769708723780","payload":{"role":"planner","providerId":"mock","capabilities":{"supportsStreaming":false,"supportsToolCalling":false,"supportsJsonMode":false,"modality":"text","latencyClass":"medium"}}}
+{"type":"ProviderSelected","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.817Z","runId":"1769708723780","payload":{"role":"executor","providerId":"mock","capabilities":{"supportsStreaming":false,"supportsToolCalling":false,"supportsJsonMode":false,"modality":"text","latencyClass":"medium"}}}
+{"type":"ProviderSelected","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.817Z","runId":"1769708723780","payload":{"role":"reviewer","providerId":"mock","capabilities":{"supportsStreaming":false,"supportsToolCalling":false,"supportsJsonMode":false,"modality":"text","latencyClass":"medium"}}}
+{"type":"PlanRequested","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.817Z","runId":"1769708723780","payload":{"goal":"Goal"}}
+{"type":"RepoScan","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.856Z","runId":"1769708723780","payload":{"fileCount":201,"durationMs":39}}
+{"type":"RepoSearch","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.875Z","runId":"1769708723780","payload":{"query":"Goal","matches":4,"durationMs":19}}
+{"type":"ContextBuilt","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.876Z","runId":"1769708723780","payload":{"fileCount":3,"tokenEstimate":743}}
+{"type":"PlanCreated","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.876Z","runId":"1769708723780","payload":{"planSteps":[]}}
+{"type":"RunFinished","schemaVersion":1,"timestamp":"2026-01-29T17:45:23.876Z","runId":"1769708723780","payload":{"status":"failure","summary":"Planning failed to produce any steps."}}

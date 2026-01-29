@@ -7,7 +7,7 @@ import { CostTracker } from '../cost/tracker';
 import { Config } from '@orchestrator/shared';
 import { BudgetExceededError } from './errors';
 
-const mockConfig: Config = {
+const mockConfig: Config = { verification: {} as any,
   configVersion: 1,
   thinkLevel: 'L1',
   providers: {

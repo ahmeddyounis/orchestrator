@@ -67,7 +67,7 @@ describe('Orchestrator Deterministic E2E', () => {
 
   it('L0: applies simple diff via fake CLI', async () => {
     // Setup Registry with Fake CLI
-    const config: Config = {
+    const config: Config = { verification: {} as any,
         configVersion: 1,
         thinkLevel: 'L0',
         defaults: { executor: 'fake-cli' },
@@ -101,7 +101,7 @@ describe('Orchestrator Deterministic E2E', () => {
   }, 20000);
 
   it('L1: executes multi-step plan via fake CLI', async () => {
-     const config: Config = {
+     const config: Config = { verification: {} as any,
         configVersion: 1,
         thinkLevel: 'L1',
         defaults: { 
@@ -145,7 +145,7 @@ describe('Orchestrator Deterministic E2E', () => {
   }, 20000);
 
   it('L1: rollback on failure', async () => {
-       const config: Config = {
+       const config: Config = { verification: {} as any,
         configVersion: 1,
         thinkLevel: 'L1',
         defaults: { 

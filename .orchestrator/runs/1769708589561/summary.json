@@ -1,0 +1,17 @@
+{
+  "status": "failure",
+  "runId": "1769708589561",
+  "summary": "Failed to extract diff from executor output",
+  "verification": {
+    "enabled": true,
+    "mode": "auto",
+    "steps": [],
+    "auto": {
+      "enableLint": false,
+      "enableTypecheck": true,
+      "enableTests": true,
+      "testScope": "targeted",
+      "maxCommandsPerIteration": 3
+    }
+  }
+}

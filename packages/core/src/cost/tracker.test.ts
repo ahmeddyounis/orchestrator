@@ -4,7 +4,7 @@ import { Config } from '@orchestrator/shared';
 
 describe('CostTracker', () => {
   it('should start with empty stats', () => {
-    const config: Config = { configVersion: 1, thinkLevel: 'L1' };
+    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1' };
     const tracker = new CostTracker(config);
     const summary = tracker.getSummary();
 
@@ -14,7 +14,7 @@ describe('CostTracker', () => {
   });
 
   it('should track usage without pricing', () => {
-    const config: Config = { configVersion: 1, thinkLevel: 'L1' };
+    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1' };
     const tracker = new CostTracker(config);
 
     tracker.recordUsage('gpt-4', {
@@ -36,7 +36,7 @@ describe('CostTracker', () => {
   });
 
   it('should calculate cost with pricing', () => {
-    const config: Config = {
+    const config: Config = { verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -69,7 +69,7 @@ describe('CostTracker', () => {
   });
 
   it('should handle mixed pricing (some known, some unknown)', () => {
-    const config: Config = {
+    const config: Config = { verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -108,7 +108,7 @@ describe('CostTracker', () => {
   });
 
   it('should accumulate costs over multiple records', () => {
-    const config: Config = {
+    const config: Config = { verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
