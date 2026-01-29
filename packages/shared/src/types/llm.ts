@@ -2,6 +2,8 @@ export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   name?: string;
+  toolCalls?: ToolCall[];
+  toolCallId?: string;
 }
 
 export interface ToolSpec {
@@ -14,6 +16,7 @@ export interface ToolSpec {
 export interface ToolCall {
   name: string;
   arguments: unknown;
+  id?: string;
 }
 
 export interface ModelRequest {

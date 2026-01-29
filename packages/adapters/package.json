@@ -16,6 +16,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@orchestrator/shared": "workspace:*"
+    "@orchestrator/shared": "workspace:*",
+    "openai": "^6.17.0"
   }
 }

@@ -8,7 +8,10 @@ export interface EventBus {
 }
 
 export class RegistryError extends Error {
-  constructor(message: string, public exitCode?: number) {
+  constructor(
+    message: string,
+    public exitCode?: number,
+  ) {
     super(message);
     this.name = 'RegistryError';
   }
@@ -61,7 +64,7 @@ export class ProviderRegistry {
 
   async resolveRoleProviders(
     roles: { plannerId: string; executorId: string; reviewerId: string },
-    context: { eventBus: EventBus; runId: string }
+    context: { eventBus: EventBus; runId: string },
   ): Promise<{ planner: ProviderAdapter; executor: ProviderAdapter; reviewer: ProviderAdapter }> {
     const planner = this.getAdapter(roles.plannerId);
     await context.eventBus.emit({

@@ -1,4 +1,9 @@
-import { ModelRequest, ModelResponse, ProviderCapabilities, StreamEvent } from '@orchestrator/shared';
+import {
+  ModelRequest,
+  ModelResponse,
+  ProviderCapabilities,
+  StreamEvent,
+} from '@orchestrator/shared';
 import { AdapterContext } from './types';
 
 export interface ProviderAdapter {

@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { ProviderAdapter, AdapterContext } from './index';
-import { ModelRequest, ModelResponse, ProviderCapabilities, StreamEvent, Logger } from '@orchestrator/shared';
+import {
+  ModelRequest,
+  ModelResponse,
+  ProviderCapabilities,
+  StreamEvent,
+  Logger,
+} from '@orchestrator/shared';
 
 class MockAdapter implements ProviderAdapter {
   id(): string {
@@ -41,11 +47,11 @@ describe('ProviderAdapter Interface', () => {
     const adapter = new MockAdapter();
     expect(adapter.id()).toBe('mock-adapter');
     expect(adapter.capabilities().supportsStreaming).toBe(true);
-    
-    const mockLogger: Logger = { 
-      log: async () => {} 
+
+    const mockLogger: Logger = {
+      log: async () => {},
     };
-    
+
     const ctx: AdapterContext = {
       runId: 'test-run',
       logger: mockLogger,
@@ -54,7 +60,7 @@ describe('ProviderAdapter Interface', () => {
     const response = await adapter.generate({ messages: [] }, ctx);
     expect(response.text).toBe('Mock response');
 
-    const stream = adapter.stream!( { messages: [] }, ctx);
+    const stream = adapter.stream!({ messages: [] }, ctx);
     const events: StreamEvent[] = [];
     for await (const event of stream) {
       events.push(event);
