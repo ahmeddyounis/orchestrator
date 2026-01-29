@@ -32,6 +32,8 @@ orchestrator run <goal> [options]
 
 **Options:**
 
+- `--verify <boolean>`: Enable or disable verification. Defaults to `true`.
+- `--verify-scope <scope>`: Set verification scope (`full` or `targeted`). Defaults to `targeted`.
 - `--think <level>`: Set thinking level (`L0`, `L1`, or `auto`). Defaults to `auto` (L1).
   - `L0`: Reflex mode (fast, single-pass).
   - `L1`: Reasoning mode (plan then execute).

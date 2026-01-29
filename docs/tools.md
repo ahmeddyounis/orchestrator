@@ -78,6 +78,12 @@ You can override these settings per-run using CLI flags:
 - **`--yes`**: Auto-approve all confirmations. **Use with extreme caution.** This bypasses the `requireConfirmation` check but _still respects the Denylist_.
 - **`--non-interactive`**: Run in non-interactive mode. If a tool requires confirmation and is not on the allowlist, the execution will fail. Ideal for CI/CD pipelines.
 
+## Verification
+
+Verification commands (e.g., tests, linters) are also executed via the `ToolExecutor`. This means they are subject to the same safety policies, including `allowlistPrefixes` and `denylistPatterns`.
+
+If your verification commands are not on the allowlist, you will be prompted for confirmation before they run. You can add your common verification commands to the `allowlistPrefixes` in your config to avoid being prompted.
+
 ## Artifacts & Logs
 
 Tool execution logs are stored in the run's artifact directory for auditing and debugging.
