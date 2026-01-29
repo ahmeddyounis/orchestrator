@@ -134,11 +134,10 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       // Strip trailing prompt marker
       outputText = outputText.trim();
       if (outputText.endsWith('>')) {
-          outputText = outputText.slice(0, -1).trim();
+        outputText = outputText.slice(0, -1).trim();
       } else if (outputText.endsWith('$') || outputText.endsWith('#') || outputText.endsWith('%')) {
-          outputText = outputText.slice(0, -1).trim();
+        outputText = outputText.slice(0, -1).trim();
       }
-
     } catch (e) {
       const err = e as Error;
       if (err.message && err.message.includes('timed out')) {

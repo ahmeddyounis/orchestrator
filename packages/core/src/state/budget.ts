@@ -3,7 +3,10 @@ import { Budget, RunState } from './types';
 import { BudgetExceededError } from './errors';
 
 export class BudgetManager extends EventEmitter {
-  constructor(private budget: Budget, private runState: RunState) {
+  constructor(
+    private budget: Budget,
+    private runState: RunState,
+  ) {
     super();
   }
 
@@ -34,8 +37,8 @@ export class BudgetManager extends EventEmitter {
     if (this.budget.maxCostUsd !== undefined) {
       const summary = this.runState.costTracker.getSummary();
       const totalCost = summary.total.estimatedCostUsd;
-      
-      // If cost is null/undefined, we treat it as 0 for check or ignore? 
+
+      // If cost is null/undefined, we treat it as 0 for check or ignore?
       // Assuming 0 if unknown, or strictly check if we have data.
       // tracker.ts says estimatedCostUsd can be null.
       const currentCost = totalCost || 0;

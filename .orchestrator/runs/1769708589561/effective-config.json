@@ -36,12 +36,7 @@
         "eslint",
         "prettier"
       ],
-      "denylistPatterns": [
-        "rm -rf",
-        "mkfs",
-        ":(){:|:&};:",
-        "curl .*\\|\\s*sh"
-      ],
+      "denylistPatterns": ["rm -rf", "mkfs", ":(){:|:&};:", "curl .*\\|\\s*sh"],
       "allowNetwork": false,
       "timeoutMs": 600000,
       "maxOutputBytes": 10241024,

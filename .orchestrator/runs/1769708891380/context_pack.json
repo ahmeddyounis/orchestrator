@@ -1,8 +1,6 @@
 {
   "goal": "Goal",
-  "queries": [
-    "Goal"
-  ],
+  "queries": ["Goal"],
   "pack": {
     "items": [
       {

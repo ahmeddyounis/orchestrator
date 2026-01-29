@@ -67,7 +67,7 @@ export class ToolchainDetector {
     } else {
       // Fallback for non-pnpm (not explicitly detailed in spec heuristics but good to have basics)
       // The spec explicitly focuses on pnpm monorepo.
-      // We will leave commands empty or undefined if not pnpm, 
+      // We will leave commands empty or undefined if not pnpm,
       // or maybe just map root scripts if they exist.
       if (scriptAvailability.test) commands.testCmd = `${packageManager} run test`;
       if (scriptAvailability.lint) commands.lintCmd = `${packageManager} run lint`;

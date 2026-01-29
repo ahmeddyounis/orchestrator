@@ -34,8 +34,8 @@ describe('ToolchainDetector', () => {
           scripts: {
             test: 'vitest',
             lint: 'eslint .',
-            typecheck: 'tsc'
-          }
+            typecheck: 'tsc',
+          },
         });
       }
       return Promise.reject(new Error('ENOENT'));
@@ -72,8 +72,8 @@ describe('ToolchainDetector', () => {
           scripts: {
             test: 'vitest',
             lint: 'eslint .',
-            typecheck: 'tsc'
-          }
+            typecheck: 'tsc',
+          },
         });
       }
       return Promise.reject(new Error('ENOENT'));
@@ -127,10 +127,10 @@ describe('ToolchainDetector', () => {
 
     vi.mocked(fs.readFile).mockImplementation(async (p) => {
       if (p.toString().endsWith('package.json')) {
-         return JSON.stringify({
+        return JSON.stringify({
           scripts: {
-            test: 'jest'
-          }
+            test: 'jest',
+          },
         });
       }
       return Promise.reject(new Error('ENOENT'));

@@ -10,14 +10,14 @@ export class RunStateManager extends EventEmitter {
     super();
     this.state = state;
     this.budgetManager = new BudgetManager(budget, state);
-    
-    // Re-emit BudgetSet from BudgetManager if needed, 
+
+    // Re-emit BudgetSet from BudgetManager if needed,
     // or just rely on consumers listening to this class if we emit it here.
-    // The spec lists "BudgetSet" as an event to emit. 
+    // The spec lists "BudgetSet" as an event to emit.
     // BudgetManager emits it in my implementation.
     // I can listen to BudgetManager and re-emit, or just have consumers access budgetManager.
     // But usually a manager wraps these things.
-    
+
     this.budgetManager.on('BudgetSet', (b) => this.emit('BudgetSet', b));
   }
 

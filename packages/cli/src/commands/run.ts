@@ -8,10 +8,7 @@ import {
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
-import {
-  ProviderCapabilities,
-  ProviderConfig,
-} from '@orchestrator/shared';
+import { ProviderCapabilities, ProviderConfig } from '@orchestrator/shared';
 import { OutputRenderer } from '../output/renderer';
 
 function parseBudgetFlag(value: string, previous: unknown) {
@@ -183,29 +180,28 @@ export function registerRunCommand(program: Command) {
         // Orchestrator saves 'finalDiff' in runL0/runL1 implicitly via PatchStore.
 
         const output = {
-            status: result.status,
-            goal,
-            runId: result.runId,
-            branch: branchName,
-            filesChanged: result.filesChanged || [],
-            patchPaths: result.patchPaths || [],
-            cost: costTracker.getSummary(),
-            summary: result.summary
+          status: result.status,
+          goal,
+          runId: result.runId,
+          branch: branchName,
+          filesChanged: result.filesChanged || [],
+          patchPaths: result.patchPaths || [],
+          cost: costTracker.getSummary(),
+          summary: result.summary,
         };
 
         if (result.status === 'success') {
-             renderer.render(output);
-             process.exit(0);
+          renderer.render(output);
+          process.exit(0);
         } else {
-             renderer.error(result.summary || 'Run failed');
-             // For JSON output we might want to render the error object instead of just text?
-             // OutputRenderer handles structured object.
-             if (globalOpts.json) {
-                 console.log(JSON.stringify(output, null, 2));
-             }
-             process.exit(1);
+          renderer.error(result.summary || 'Run failed');
+          // For JSON output we might want to render the error object instead of just text?
+          // OutputRenderer handles structured object.
+          if (globalOpts.json) {
+            console.log(JSON.stringify(output, null, 2));
+          }
+          process.exit(1);
         }
-
       } catch (err: unknown) {
         if (err instanceof Error) {
           renderer.error(err.message);

@@ -36,7 +36,8 @@ describe('CostTracker', () => {
   });
 
   it('should calculate cost with pricing', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -69,7 +70,8 @@ describe('CostTracker', () => {
   });
 
   it('should handle mixed pricing (some known, some unknown)', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -108,7 +110,8 @@ describe('CostTracker', () => {
   });
 
   it('should accumulate costs over multiple records', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {

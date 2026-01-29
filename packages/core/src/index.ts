@@ -8,5 +8,6 @@ export * from './exec/service';
 export * from './exec/tool_manager';
 export * from './exec/tool_tracker';
 export * from './exec/patch_store';
+export * from './verify';
 export * from './state';
 export * from './orchestrator';

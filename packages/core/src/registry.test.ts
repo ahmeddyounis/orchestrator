@@ -26,7 +26,8 @@ const mockCapabilities: ProviderCapabilities = {
 
 describe('ProviderRegistry', () => {
   it('registers and retrieves adapters', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -43,12 +44,18 @@ describe('ProviderRegistry', () => {
   });
 
   it('throws for unknown provider', () => {
-    const registry = new ProviderRegistry({ verification: {} as any, configVersion: 1, thinkLevel: 'L1', providers: {} });
+    const registry = new ProviderRegistry({
+      verification: {} as any,
+      configVersion: 1,
+      thinkLevel: 'L1',
+      providers: {},
+    });
     expect(() => registry.getAdapter('non-existent')).toThrow("Provider 'non-existent' not found");
   });
 
   it('throws for unknown factory with exit code 2', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -70,7 +77,8 @@ describe('ProviderRegistry', () => {
   });
 
   it('throws for missing env var with exit code 2', () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {
@@ -93,7 +101,8 @@ describe('ProviderRegistry', () => {
   });
 
   it('resolves role providers and emits events', async () => {
-    const config: Config = { verification: {} as any,
+    const config: Config = {
+      verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
       providers: {

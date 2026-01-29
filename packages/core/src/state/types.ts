@@ -29,8 +29,8 @@ export interface RunState {
   selectedProviders: string[];
   iteration: number;
   toolRuns: number;
-  checkpoints: Checkpoint[]; 
+  checkpoints: Checkpoint[];
   lastError?: Error | string;
-  artifacts: Artifact[]; 
+  artifacts: Artifact[];
   costTracker: CostTracker;
 }
