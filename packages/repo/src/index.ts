@@ -5,6 +5,8 @@ export * from './scanner/index';
 export * from './scanner/types';
 export * from './search/index';
 export * from './snippets/index';
+export * from './context/index';
+
 
 /**
  * Finds the repository root starting from the current directory.
