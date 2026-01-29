@@ -11,7 +11,6 @@ import {
   ToolRunResult,
   Manifest,
   writeManifest,
-  OrchestratorEvent,
 } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
