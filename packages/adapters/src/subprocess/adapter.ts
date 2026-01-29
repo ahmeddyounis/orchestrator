@@ -81,8 +81,27 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       await logTranscript(chunk);
     });
 
+    let timedOut = false;
+    pm.on('timeout', () => {
+      timedOut = true;
+    });
+
+    const isPrompt = (text: string) => {
+      const trimmed = text.trim();
+      // Check for common prompt markers
+      return (
+        trimmed.endsWith('>') ||
+        trimmed.endsWith('$') ||
+        trimmed.endsWith('#') ||
+        trimmed.endsWith('%')
+      );
+    };
+
     try {
       await pm.spawn(this.config.command, cwd, env, false, shouldInherit);
+
+      // Consume initial prompt
+      await pm.readUntilHeuristic(800, isPrompt);
 
       // Render prompt
       const prompt = req.messages
@@ -101,16 +120,13 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
 
       // Wait for termination
       // Heuristic: 800ms silence AND prompt marker appears
-      await pm.readUntilHeuristic(800, (text) => {
-        const trimmed = text.trim();
-        // Check for common prompt markers
-        return (
-          trimmed.endsWith('>') ||
-          trimmed.endsWith('$') ||
-          trimmed.endsWith('#') ||
-          trimmed.endsWith('%')
-        );
-      });
+      if (pm.isRunning) {
+        await pm.readUntilHeuristic(800, isPrompt);
+      }
+
+      if (timedOut) {
+        throw new Error('Process timed out');
+      }
     } catch (e) {
       const err = e as Error;
       if (err.message && err.message.includes('timed out')) {

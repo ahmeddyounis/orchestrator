@@ -42,6 +42,10 @@ export class ProcessManager extends EventEmitter {
     this.runId = options.runId || 'unknown';
   }
 
+  public get isRunning(): boolean {
+    return !this.killed;
+  }
+
   async spawn(
     command: string[],
     cwd: string,
