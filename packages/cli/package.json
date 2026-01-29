@@ -20,6 +20,10 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@types/node": "^25.1.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "commander": "^14.0.2"
   }
 }
