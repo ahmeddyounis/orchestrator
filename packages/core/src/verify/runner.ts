@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { SafeCommandRunner, RunnerContext, UserInterface } from '@orchestrator/exec';
 import { ToolPolicy } from '@orchestrator/shared';
+import { ToolchainDetector, TargetingManager } from '@orchestrator/repo';
 import {
   VerificationReport,
   VerificationProfile,
@@ -54,40 +55,44 @@ export class VerificationRunner {
       }
     } else {
       // Auto mode
-      const scripts = await this.detectScripts();
+      const detector = new ToolchainDetector();
+      const targeting = new TargetingManager();
+      const toolchain = await detector.detect(this.repoRoot);
 
-      if (profile.auto.enableLint && scripts.lint) {
-        commandsToRun.push({ name: 'lint', command: scripts.lint });
+      // Determine touched packages if targeting is requested
+      let touchedPackages: Set<string> | null = null;
+      if (profile.auto.testScope === 'targeted' && scope.touchedFiles && scope.touchedFiles.length > 0) {
+        touchedPackages = await targeting.resolveTouchedPackages(this.repoRoot, scope.touchedFiles);
       }
 
-      if (profile.auto.enableTypecheck && scripts.typecheck) {
-        commandsToRun.push({ name: 'typecheck', command: scripts.typecheck });
-      }
-
-      if (profile.auto.enableTests && scripts.test) {
-        let testCmd = scripts.test;
-
-        // Simple targeted logic
-        if (
-          profile.auto.testScope === 'targeted' &&
-          scope.touchedFiles &&
-          scope.touchedFiles.length > 0
-        ) {
-          // Heuristic: if command contains vitest or jest, we can append files
-          if (testCmd.includes('vitest') || testCmd.includes('jest')) {
-            // Filter for test files or source files
-            // For now, just pass all touched files that verify
-            const relevantFiles = scope.touchedFiles.filter(
-              (f) => !f.endsWith('.md') && !f.endsWith('.json') && !f.endsWith('.lock'),
-            );
-
-            if (relevantFiles.length > 0) {
-              testCmd += ` ${relevantFiles.join(' ')}`;
-            }
-          }
+      // Helper to select command (targeted -> root fallback)
+      const getCommand = (task: 'lint' | 'typecheck' | 'test'): string | undefined => {
+        // 1. Try targeted
+        if (touchedPackages && touchedPackages.size > 0) {
+          const targetedCmd = targeting.generateTargetedCommand(toolchain, touchedPackages, task);
+          if (targetedCmd) return targetedCmd;
         }
 
-        commandsToRun.push({ name: 'tests', command: testCmd });
+        // 2. Fallback to root command
+        if (task === 'lint') return toolchain.commands.lintCmd;
+        if (task === 'typecheck') return toolchain.commands.typecheckCmd;
+        if (task === 'test') return toolchain.commands.testCmd;
+        return undefined;
+      };
+
+      if (profile.auto.enableLint) {
+        const cmd = getCommand('lint');
+        if (cmd) commandsToRun.push({ name: 'lint', command: cmd });
+      }
+
+      if (profile.auto.enableTypecheck) {
+        const cmd = getCommand('typecheck');
+        if (cmd) commandsToRun.push({ name: 'typecheck', command: cmd });
+      }
+
+      if (profile.auto.enableTests) {
+        const cmd = getCommand('test');
+        if (cmd) commandsToRun.push({ name: 'tests', command: cmd });
       }
     }
 
@@ -121,10 +126,6 @@ export class VerificationRunner {
           passed,
           truncated: result.truncated,
         });
-
-        // Fail fast? Spec doesn't strictly say, but usually verification continues to gather full feedback.
-        // But if 'lint' fails, maybe we don't care about 'tests'.
-        // For now, I'll run all.
       } catch {
         // Runner error (policy, timeout, etc.)
         allPassed = false;
@@ -138,7 +139,6 @@ export class VerificationRunner {
           passed: false,
           truncated: false,
         });
-        // Log error if needed, but the result captures the failure
       }
     }
 
@@ -164,32 +164,6 @@ export class VerificationRunner {
       summary,
       failureSignature,
     };
-  }
-
-  private async detectScripts(): Promise<{ lint?: string; typecheck?: string; test?: string }> {
-    try {
-      const pkgPath = path.join(this.repoRoot, 'package.json');
-      const content = await fs.promises.readFile(pkgPath, 'utf8');
-      const pkg = JSON.parse(content);
-      const scripts = pkg.scripts || {};
-
-      const result: { lint?: string; typecheck?: string; test?: string } = {};
-
-      if (scripts.lint) result.lint = 'npm run lint';
-      else if (scripts['lint:fix']) result.lint = 'npm run lint:fix'; // fallback? maybe not safe
-
-      if (scripts.typecheck) result.typecheck = 'npm run typecheck';
-      else if (scripts['tsc']) result.typecheck = 'npm run tsc';
-
-      if (scripts.test) result.test = 'npm run test';
-
-      // Heuristics if scripts missing but tools present?
-      // For now rely on scripts.
-
-      return result;
-    } catch {
-      return {};
-    }
   }
 
   private async generateFailureSignature(results: CheckResult[]): Promise<string> {

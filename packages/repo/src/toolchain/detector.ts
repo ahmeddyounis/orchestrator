@@ -14,7 +14,7 @@ export class ToolchainDetector {
       this.readFile(packageJsonPath),
     ]);
 
-    let packageManager: PackageManager = 'unknown';
+    let packageManager: PackageManager = 'npm'; // Default to npm
     if (hasPnpmWorkspace) {
       packageManager = 'pnpm';
     } else {

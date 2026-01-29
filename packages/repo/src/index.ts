@@ -10,6 +10,7 @@ export * from './patch/applier';
 export * from './git';
 export * from './toolchain/types';
 export * from './toolchain/detector';
+export * from './toolchain/targeting';
 
 /**
  * Finds the repository root starting from the current directory.
