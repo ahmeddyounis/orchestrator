@@ -7,7 +7,7 @@ import * as path from 'path';
  * 1. Nearest parent containing .git
  * 2. Nearest parent containing pnpm-workspace.yaml
  * 3. Nearest parent containing package.json with "workspaces" property
- * 
+ *
  * Validates that .orchestrator directory can be created in the found root.
  */
 export async function findRepoRoot(cwd: string = process.cwd()): Promise<string> {
@@ -26,7 +26,9 @@ export async function findRepoRoot(cwd: string = process.cwd()): Promise<string>
     currentDir = path.dirname(currentDir);
   }
 
-  throw new Error(`Could not detect repository root from ${cwd}. Ensure you are inside a git repository or a monorepo root.`);
+  throw new Error(
+    `Could not detect repository root from ${cwd}. Ensure you are inside a git repository or a monorepo root.`,
+  );
 }
 
 async function isRepoRoot(dir: string): Promise<boolean> {
@@ -61,6 +63,8 @@ async function validateRepoRoot(dir: string): Promise<void> {
     await fs.mkdir(orchestratorDir, { recursive: true });
     await fs.access(orchestratorDir, fs.constants.W_OK);
   } catch (error) {
-    throw new Error(`Repository root detected at ${dir}, but cannot write to .orchestrator directory: ${(error as Error).message}`);
+    throw new Error(
+      `Repository root detected at ${dir}, but cannot write to .orchestrator directory: ${(error as Error).message}`,
+    );
   }
 }

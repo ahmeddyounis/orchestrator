@@ -13,14 +13,14 @@ describe('findRepoRoot', () => {
 
   afterEach(async () => {
     try {
-        await fs.rm(tmpDir, { recursive: true, force: true });
+      await fs.rm(tmpDir, { recursive: true, force: true });
     } catch {}
   });
 
   it('should find root with .git', async () => {
     const root = path.join(tmpDir, 'repo-git');
     await fs.mkdir(path.join(root, '.git'), { recursive: true });
-    
+
     const subdir = path.join(root, 'packages', 'cli');
     await fs.mkdir(subdir, { recursive: true });
 

@@ -1,5 +1,9 @@
 import inquirer from 'inquirer';
-import { ConfirmationRequested, ConfirmationResolved, OrchestratorEvent } from '@orchestrator/shared';
+import {
+  ConfirmationRequested,
+  ConfirmationResolved,
+  OrchestratorEvent,
+} from '@orchestrator/shared';
 
 export interface EventLogger {
   log(event: OrchestratorEvent): Promise<void> | void;
@@ -14,7 +18,7 @@ export interface ConfirmOptions {
 
 /**
  * Prompts the user for confirmation.
- * 
+ *
  * @param action The action being confirmed (e.g. "Delete database")
  * @param details Optional details or warning message
  * @param defaultNo Whether the default choice should be 'No' (default: true)
@@ -25,7 +29,7 @@ export async function confirm(
   action: string,
   details?: string,
   defaultNo: boolean = true,
-  options: ConfirmOptions = {}
+  options: ConfirmOptions = {},
 ): Promise<boolean> {
   const timestamp = new Date().toISOString();
   const { logger, runId } = options;
