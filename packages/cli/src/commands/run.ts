@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { ConfigLoader } from '@orchestrator/core';
 import path from 'path';
+import { OutputRenderer } from '../output/renderer';
 
 function parseBudgets(value: string, previous: Record<string, number>): Record<string, number> {
   const [key, val] = value.split('=');
@@ -24,7 +25,9 @@ export function registerRunCommand(program: Command) {
     .option('--reviewer <providerId>', 'Override reviewer provider')
     .action((goal, options) => {
       const globalOpts = program.opts();
-      if (globalOpts.verbose) console.log(`Running goal: "${goal}"`);
+      const renderer = new OutputRenderer(!!globalOpts.json);
+
+      if (globalOpts.verbose) renderer.log(`Running goal: "${goal}"`);
 
       try {
         const config = ConfigLoader.load({
@@ -57,33 +60,32 @@ export function registerRunCommand(program: Command) {
         validateProvider('executor', config.defaults?.executor);
         validateProvider('reviewer', config.defaults?.reviewer);
 
-        const runDir = path.join(process.cwd(), '.runs', Date.now().toString());
+        const runId = Date.now().toString();
+        const runDir = path.join(process.cwd(), '.runs', runId);
         ConfigLoader.writeEffectiveConfig(config, runDir);
 
         if (globalOpts.verbose) {
-          console.log(`Effective config written to ${runDir}`);
+          renderer.log(`Effective config written to ${runDir}`);
         }
 
-        if (globalOpts.json) {
-          console.log(
-            JSON.stringify({
-              status: 'running',
-              goal,
-              runDir,
-              providers: config.defaults,
-            }),
-          );
-        } else {
-          console.log(`Run started in ${runDir}`);
-          if (config.defaults?.planner) console.log(`Planner: ${config.defaults.planner}`);
-          if (config.defaults?.executor) console.log(`Executor: ${config.defaults.executor}`);
-          if (config.defaults?.reviewer) console.log(`Reviewer: ${config.defaults.reviewer}`);
-        }
+        renderer.render({
+          status: 'running',
+          goal,
+          runId,
+          artifactsDir: runDir,
+          providers: config.defaults,
+          nextSteps: [
+            `View detailed logs in ${path.join(runDir, 'run.log')}`, // Example next step
+            'Monitor progress via the dashboard (if available)',
+          ],
+        });
       } catch (err: unknown) {
         if (err instanceof Error) {
-          console.error(err.message);
+          renderer.error(err.message);
         } else {
-          console.error('An unknown error occurred', err);
+          renderer.error('An unknown error occurred');
+          // For unknown errors, we might want to log the object to stderr too
+          console.error(err);
         }
         process.exit(2);
       }

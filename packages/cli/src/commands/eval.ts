@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { OutputRenderer } from '../output/renderer';
 
 export function registerEvalCommand(program: Command) {
   program
@@ -7,10 +8,12 @@ export function registerEvalCommand(program: Command) {
     .description('Run an evaluation suite')
     .action((options) => {
       const globalOpts = program.opts();
-      console.log(`Evaluating suite: "${options.suite}"`);
-      if (globalOpts.verbose) console.log('Verbose mode enabled');
-      if (globalOpts.config) console.log(`Config path: ${globalOpts.config}`);
-      if (globalOpts.json)
-        console.log(JSON.stringify({ status: 'evaluating', suite: options.suite }));
+      const renderer = new OutputRenderer(!!globalOpts.json);
+
+      renderer.log(`Evaluating suite: "${options.suite}"`);
+      if (globalOpts.verbose) renderer.log('Verbose mode enabled');
+      if (globalOpts.config) renderer.log(`Config path: ${globalOpts.config}`);
+
+      renderer.render({ status: 'evaluating', suite: options.suite });
     });
 }

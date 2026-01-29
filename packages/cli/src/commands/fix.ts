@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { OutputRenderer } from '../output/renderer';
 
 export function registerFixCommand(program: Command) {
   program
@@ -7,9 +8,12 @@ export function registerFixCommand(program: Command) {
     .description('Fix an issue based on a goal')
     .action((goal) => {
       const globalOpts = program.opts();
-      console.log(`Fixing goal: "${goal}"`);
-      if (globalOpts.verbose) console.log('Verbose mode enabled');
-      if (globalOpts.config) console.log(`Config path: ${globalOpts.config}`);
-      if (globalOpts.json) console.log(JSON.stringify({ status: 'fixing', goal }));
+      const renderer = new OutputRenderer(!!globalOpts.json);
+
+      renderer.log(`Fixing goal: "${goal}"`);
+      if (globalOpts.verbose) renderer.log('Verbose mode enabled');
+      if (globalOpts.config) renderer.log(`Config path: ${globalOpts.config}`);
+
+      renderer.render({ status: 'fixing', goal });
     });
 }
