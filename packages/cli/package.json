@@ -26,6 +26,8 @@
   "dependencies": {
     "@orchestrator/core": "workspace:*",
     "@orchestrator/shared": "workspace:*",
-    "commander": "^14.0.2"
+    "@types/inquirer": "^8.2.12",
+    "commander": "^14.0.2",
+    "inquirer": "^8.2.7"
   }
 }

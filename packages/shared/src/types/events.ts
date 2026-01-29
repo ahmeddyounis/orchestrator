@@ -82,6 +82,23 @@ export interface MemoryWrite extends BaseEvent {
   };
 }
 
+export interface ConfirmationRequested extends BaseEvent {
+  type: 'ConfirmationRequested';
+  payload: {
+    action: string;
+    details?: string;
+    defaultNo: boolean;
+  };
+}
+
+export interface ConfirmationResolved extends BaseEvent {
+  type: 'ConfirmationResolved';
+  payload: {
+    approved: boolean;
+    autoResolved: boolean; // True if resolved via flag (yes/no) without prompt
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanCreated
@@ -91,4 +108,6 @@ export type OrchestratorEvent =
   | ToolRun
   | VerifyResult
   | RunFinished
-  | MemoryWrite;
+  | MemoryWrite
+  | ConfirmationRequested
+  | ConfirmationResolved;

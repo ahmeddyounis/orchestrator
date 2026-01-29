@@ -14,7 +14,9 @@ program
   .version(version)
   .option('--json', 'Output results as JSON')
   .option('--config <path>', 'Path to configuration file')
-  .option('--verbose', 'Enable verbose logging');
+  .option('--verbose', 'Enable verbose logging')
+  .option('--yes', 'Automatically answer "yes" to all prompts')
+  .option('--non-interactive', 'Disable interactive prompts (fail if prompt needed)');
 
 registerRunCommand(program);
 registerFixCommand(program);
