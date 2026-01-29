@@ -21,13 +21,13 @@ export async function isBinaryFile(filePath: string): Promise<boolean> {
         return true;
       }
     }
-        return false;
-      } catch {
-        // If we can't read, assume binary to be safe? Or text? 
-        // Usually ignoring unreadable files or treating as binary is safer for "snippet extraction".
-        return true; 
-      }
-    }
+    return false;
+  } catch {
+    // If we can't read, assume binary to be safe? Or text?
+    // Usually ignoring unreadable files or treating as binary is safer for "snippet extraction".
+    return true;
+  }
+}
 export const DEFAULT_IGNORES = [
   '.git',
   'node_modules',

@@ -56,11 +56,11 @@ export class RepoScanner {
 
           const absPath = path.join(dir, entryName);
           let stats;
-                       try {
-                          stats = await fs.stat(absPath);
-                       } catch {
-                          continue; // Skip if stat fails
-                       }
+          try {
+            stats = await fs.stat(absPath);
+          } catch {
+            continue; // Skip if stat fails
+          }
           const isText = !(await isBinaryFile(absPath));
           const ext = path.extname(entryName);
 

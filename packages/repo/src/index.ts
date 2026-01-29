@@ -3,6 +3,7 @@ import * as path from 'path';
 
 export * from './scanner/index';
 export * from './scanner/types';
+export * from './search/index';
 
 /**
  * Finds the repository root starting from the current directory.
