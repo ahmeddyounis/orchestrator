@@ -22,10 +22,25 @@ export interface FileEditPatch {
 
 export type PatchCandidate = UnifiedDiffPatch | FileEditPatch;
 
+export type PatchErrorKind = 'HUNK_FAILED' | 'FILE_NOT_FOUND' | 'ALREADY_EXISTS' | 'WHITESPACE' | 'UNKNOWN';
+
+export interface PatchApplyErrorDetail {
+  file?: string;
+  line?: number;
+  kind: PatchErrorKind;
+  message: string;
+  suggestion?: string;
+}
+
 export interface PatchError {
   type: 'validation' | 'security' | 'execution' | 'limit';
   message: string;
-  details?: unknown;
+  details?: {
+    kind?: PatchErrorKind;
+    errors?: PatchApplyErrorDetail[];
+    stderr?: string;
+    [key: string]: unknown;
+  } | unknown;
 }
 
 export interface PatchApplyResult {

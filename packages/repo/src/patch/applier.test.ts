@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { spawn } from 'child_process';
 import { PatchApplier } from './applier';
+import { PatchErrorKind, PatchApplyErrorDetail } from '@orchestrator/shared';
 
 // Helper to run commands
 const run = (cmd: string, args: string[], cwd: string) => {
@@ -126,5 +127,106 @@ describe('PatchApplier', () => {
     expect(result.applied).toBe(false);
     expect(result.error?.type).toBe('limit');
     expect(result.error?.message).toContain('Too many files changed');
+  });
+
+  it('reports specific error when hunk fails', async () => {
+    const filePath = path.join(tmpDir, 'test.txt');
+    await fs.writeFile(filePath, 'Hello World\n');
+    await run('git', ['add', 'test.txt'], tmpDir);
+    await run('git', ['commit', '-m', 'Initial commit'], tmpDir);
+
+    // Patch expects 'Hello Earth' but file has 'Hello World'
+    const diffText =
+      [
+        'diff --git a/test.txt b/test.txt',
+        'index 557db03..980a0d5 100644',
+        '--- a/test.txt',
+        '+++ b/test.txt',
+        '@@ -1 +1 @@',
+        '-Hello Earth',
+        '+Hello Universe',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('execution');
+    
+    const details = result.error?.details as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+    expect(details.kind).toBe('HUNK_FAILED');
+    expect(details.errors).toHaveLength(1);
+    expect(details.errors[0]).toMatchObject({
+        kind: 'HUNK_FAILED',
+        file: 'test.txt',
+        line: 1,
+        suggestion: expect.any(String),
+    });
+  });
+
+  it('reports specific error when file not found', async () => {
+    // Patch expects 'missing.txt' to exist
+    const diffText =
+      [
+        'diff --git a/missing.txt b/missing.txt',
+        'index 557db03..980a0d5 100644',
+        '--- a/missing.txt',
+        '+++ b/missing.txt',
+        '@@ -1 +1 @@',
+        '-Old Content',
+        '+New Content',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    
+    const details = result.error?.details as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+    // Note: git apply might say "error: missing.txt: No such file or directory"
+    // or sometimes simply fails. Let's verify.
+    expect(details.kind).toBe('FILE_NOT_FOUND');
+    expect(details.errors[0]).toMatchObject({
+        kind: 'FILE_NOT_FOUND',
+        file: 'missing.txt'
+    });
+  });
+
+  it('reports specific error when file already exists', async () => {
+    const filePath = path.join(tmpDir, 'existing.txt');
+    await fs.writeFile(filePath, 'Existing Content\n');
+    await run('git', ['add', 'existing.txt'], tmpDir); // Track it so git knows it exists? 
+    // Actually if it's untracked, git apply might still complain if it tries to overwrite?
+    // "git apply" checks working tree.
+
+    // Patch tries to create 'existing.txt'
+    const diffText =
+      [
+        'diff --git a/existing.txt b/existing.txt',
+        'new file mode 100644',
+        'index 0000000..980a0d5',
+        '--- /dev/null',
+        '+++ b/existing.txt',
+        '@@ -0,0 +1 @@',
+        '+New Content',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    
+    const details = result.error?.details as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+    expect(details.kind).toBe('ALREADY_EXISTS');
+    expect(details.errors[0]).toMatchObject({
+        kind: 'ALREADY_EXISTS',
+        file: 'existing.txt'
+    });
   });
 });
