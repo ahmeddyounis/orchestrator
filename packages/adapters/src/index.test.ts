@@ -23,7 +23,8 @@ class MockAdapter implements ProviderAdapter {
     };
   }
 
-  async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async generate(_req: ModelRequest, _ctx: AdapterContext): Promise<ModelResponse> {
     return {
       text: 'Mock response',
       usage: {
@@ -34,7 +35,8 @@ class MockAdapter implements ProviderAdapter {
     };
   }
 
-  async *stream(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async *stream(_req: ModelRequest, _ctx: AdapterContext): AsyncIterable<StreamEvent> {
     yield { type: 'text-delta', content: 'Mock' };
     yield { type: 'text-delta', content: ' ' };
     yield { type: 'text-delta', content: 'response' };

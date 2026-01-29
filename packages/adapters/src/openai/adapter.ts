@@ -61,6 +61,7 @@ export class OpenAIAdapter implements ProviderAdapter {
             model: this.model,
             messages,
             tools: tools.length > 0 ? tools : undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             tool_choice: req.toolChoice as any,
             max_tokens: req.maxTokens,
             temperature: req.temperature ?? 0.2,
@@ -117,6 +118,7 @@ export class OpenAIAdapter implements ProviderAdapter {
               model: this.model,
               messages,
               tools: tools.length > 0 ? tools : undefined,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               tool_choice: req.toolChoice as any,
               max_tokens: req.maxTokens,
               temperature: req.temperature ?? 0.2,
@@ -174,6 +176,7 @@ export class OpenAIAdapter implements ProviderAdapter {
   private mapMessages(messages: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
     return messages.map((m) => {
       // Basic mapping
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const base: any = { role: m.role };
 
       // Handle content
@@ -225,7 +228,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     }));
   }
 
-  private mapError(error: any): Error {
+  private mapError(error: unknown): Error {
     if (error instanceof APIError) {
       if (error.status === 429) {
         return new RateLimitError(error.message);
@@ -237,6 +240,7 @@ export class OpenAIAdapter implements ProviderAdapter {
     if (error instanceof APIConnectionTimeoutError) {
       return new TimeoutError(error.message);
     }
-    return error;
+    if (error instanceof Error) return error;
+    return new Error(String(error));
   }
 }

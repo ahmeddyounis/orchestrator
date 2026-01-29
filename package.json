@@ -11,6 +11,8 @@
     "build": "turbo run build",
     "build:all": "turbo run build",
     "pack:cli": "pnpm --filter @orchestrator/cli pack",
+    "adapters:test": "pnpm --filter @orchestrator/adapters test",
+    "adapters:smoke": "pnpm --filter @orchestrator/adapters smoke",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

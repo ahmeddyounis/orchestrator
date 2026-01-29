@@ -116,10 +116,7 @@ export function registerPlanCommand(program: Command) {
           providers: { planner: plannerId },
           plan: planSteps,
           cost: costSummary,
-          nextSteps: [
-            `Review plan at ${planPath}`,
-            `Run with: orchestrator run "${goal}"`,
-          ],
+          nextSteps: [`Review plan at ${planPath}`, `Run with: orchestrator run "${goal}"`],
         });
       } catch (err: unknown) {
         if (err instanceof Error) {
