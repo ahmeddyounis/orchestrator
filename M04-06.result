@@ -1,0 +1,21 @@
+Status: DONE
+Summary of changes:
+- Defined `RepoScan` and `RepoSearch` events in `packages/shared`.
+- Updated `PlanService` in `packages/core` to:
+    - Use `RepoScanner` to scan the repository.
+    - Emit `RepoScan` event.
+    - Derive search queries/matches from file names (matching goal keywords against file paths).
+    - Combine file name matches with content search matches from `SearchService`.
+    - Emit `RepoSearch` event.
+    - Emit `ContextBuilt` event (which was missing).
+- Updated tests in `packages/core` to mock `RepoScanner` and verify event emission.
+
+How to verify:
+- Run `pnpm test` in `packages/core` to verify unit tests pass.
+- Run `pnpm build` to ensure types are correct.
+- (Manual) Run a plan via CLI (if available) and check trace logs for `RepoScan` and `RepoSearch` events.
+
+Risks / follow-ups:
+- The keyword extraction from goal is naive (`split(/\s+/)`). It might need NLP or better tokenization later.
+- `SearchService` is currently called with the whole goal as query. If the goal is long, `ripgrep` might not find matches or find irrelevant ones. Future improvements could extract specific search terms.
+- Performance: scanning the whole repo might be slow for very large repos, but `RepoScanner` uses `fs.readdir` which is generally fast.

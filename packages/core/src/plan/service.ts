@@ -1,11 +1,13 @@
 import { ModelRequest } from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
+  RepoScanner,
   SearchService,
   SnippetExtractor,
   SimpleContextPacker,
   ContextSignal,
   Snippet,
+  SearchMatch,
 } from '@orchestrator/repo';
 import { EventBus } from '../registry';
 import * as fs from 'fs/promises';
@@ -30,30 +32,96 @@ export class PlanService {
     });
 
     // 1. Build Context
-    const queries = [goal]; // Naive query generation for now
+    const queries = [goal]; 
     let contextPack;
     let candidates: Snippet[] = [];
 
     try {
+      // 1a. Scan Repo
+      const scanner = new RepoScanner();
+      const scanStart = Date.now();
+      const snapshot = await scanner.scan(repoRoot);
+      await this.eventBus.emit({
+        type: 'RepoScan',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: ctx.runId,
+        payload: { 
+          fileCount: snapshot.files.length,
+          durationMs: Date.now() - scanStart
+        },
+      });
+
+      // 1b. Derive File Matches (Naive heuristic)
+      const goalKeywords = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const fileMatches: SearchMatch[] = [];
+
+      for (const file of snapshot.files) {
+        const fileName = path.basename(file.path).toLowerCase();
+        // Check if filename contains a keyword
+        for (const keyword of goalKeywords) {
+          if (fileName.includes(keyword)) {
+             fileMatches.push({
+               path: file.path,
+               line: 1,
+               column: 1,
+               matchText: 'FILENAME_MATCH', 
+               lineText: '', 
+               score: 100, // High priority for filename matches
+             });
+             break; 
+          }
+        }
+      }
+
+      // 1c. Search Content
       const searchService = new SearchService();
+      const searchStart = Date.now();
       const searchResults = await searchService.search({
         query: goal,
         cwd: repoRoot,
-        maxMatchesPerFile: 5, // Limit noise
+        maxMatchesPerFile: 5, 
       });
 
+      await this.eventBus.emit({
+        type: 'RepoSearch',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: ctx.runId,
+        payload: { 
+          query: goal,
+          matches: searchResults.matches.length,
+          durationMs: Date.now() - searchStart
+        },
+      });
+
+      const allMatches = [...fileMatches, ...searchResults.matches];
+
+      // 1d. Extract Snippets
       const extractor = new SnippetExtractor();
-      candidates = await extractor.extractSnippets(searchResults.matches, {
+      candidates = await extractor.extractSnippets(allMatches, {
         cwd: repoRoot,
       });
 
+      // 1e. Pack Context
       const packer = new SimpleContextPacker();
-      const signals: ContextSignal[] = []; // No signals yet
+      const signals: ContextSignal[] = []; 
       const options = {
-        tokenBudget: 10000, // Reasonable default?
+        tokenBudget: 10000, 
       };
 
       contextPack = packer.pack(goal, signals, candidates, options);
+
+      await this.eventBus.emit({
+        type: 'ContextBuilt',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: ctx.runId,
+        payload: { 
+          fileCount: contextPack.items.length,
+          tokenEstimate: contextPack.estimatedTokens
+        },
+      });
 
       // Write Context Artifacts
       const excludedCount = candidates.length - contextPack.items.length;

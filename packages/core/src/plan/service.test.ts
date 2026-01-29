@@ -10,6 +10,9 @@ vi.mock('fs/promises', () => ({
 }));
 
 vi.mock('@orchestrator/repo', () => ({
+  RepoScanner: class {
+    scan = () => Promise.resolve({ files: [] });
+  },
   SearchService: class {
     search = () => Promise.resolve({ matches: [] });
   },
@@ -133,5 +136,17 @@ describe('PlanService', () => {
       `${artifactsDir}/plan.json`,
       JSON.stringify({ steps: [] }, null, 2),
     );
+  });
+
+  it('should emit context events during planning', async () => {
+    (planner.generate as Mock).mockResolvedValue({
+      text: JSON.stringify({ steps: ['Step 1'] }),
+    } as ModelResponse);
+
+    await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
+
+    expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'RepoScan' }));
+    expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'RepoSearch' }));
+    expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ContextBuilt' }));
   });
 });

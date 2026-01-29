@@ -175,6 +175,23 @@ export interface SubprocessParsed extends BaseEvent {
   };
 }
 
+export interface RepoScan extends BaseEvent {
+  type: 'RepoScan';
+  payload: {
+    fileCount: number;
+    durationMs: number;
+  };
+}
+
+export interface RepoSearch extends BaseEvent {
+  type: 'RepoSearch';
+  payload: {
+    query: string;
+    matches: number;
+    durationMs: number;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -194,4 +211,6 @@ export type OrchestratorEvent =
   | SubprocessSpawned
   | SubprocessOutputChunked
   | SubprocessExited
-  | SubprocessParsed;
+  | SubprocessParsed
+  | RepoScan
+  | RepoSearch;
