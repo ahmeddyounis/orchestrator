@@ -6,6 +6,7 @@ import {
   PatchStore,
   ToolRunTracker,
   parseBudget,
+  Orchestrator,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
@@ -174,6 +175,30 @@ export function registerRunCommand(program: Command) {
         registry.registerFactory('anthropic', stubFactory);
         registry.registerFactory('mock', stubFactory);
         registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
+
+        if (thinkLevel === 'L0') {
+          const orchestrator = new Orchestrator({ config, git, registry, repoRoot });
+          try {
+            await orchestrator.runL0(goal, runId);
+            renderer.render({
+              status: 'completed',
+              goal,
+              runId,
+              artifactsDir: artifacts.root,
+              providers: config.defaults,
+              cost: costTracker.getSummary(),
+              nextSteps: [`Check patches in ${path.join(artifacts.root, 'patches')}`],
+            });
+            process.exit(0);
+          } catch (err) {
+            if (err instanceof Error) {
+              renderer.error(err.message);
+            } else {
+              renderer.error('An unknown error occurred during L0 run');
+            }
+            process.exit(2);
+          }
+        }
 
         const emitEvent = async (e: OrchestratorEvent) => {
           await logger.log(e);
