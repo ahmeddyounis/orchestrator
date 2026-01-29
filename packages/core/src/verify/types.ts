@@ -9,11 +9,25 @@ export interface CheckResult {
   truncated: boolean;
 }
 
+export interface FailedCheckSummary {
+  name: string;
+  exitCode: number;
+  keyErrors: string[]; // Top ~5 error lines extracted
+  stderrTailSnippet: string; // Last ~1KB of stderr
+}
+
+export interface FailureSummary {
+  failedChecks: FailedCheckSummary[];
+  suspectedFiles: string[]; // Paths extracted from errors
+  suggestedNextActions: string[]; // Heuristic suggestions
+}
+
 export interface VerificationReport {
   passed: boolean;
   checks: CheckResult[];
   summary: string;
   failureSignature?: string;
+  failureSummary?: FailureSummary;
 }
 
 export interface VerificationScope {

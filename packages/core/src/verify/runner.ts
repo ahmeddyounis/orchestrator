@@ -10,7 +10,9 @@ import {
   VerificationMode,
   VerificationScope,
   CheckResult,
+  FailureSummary,
 } from './types';
+import { FailureSummarizer } from './summarizer';
 import { EventBus } from '../registry';
 
 export class VerificationRunner {
@@ -142,9 +144,16 @@ export class VerificationRunner {
       }
     }
 
-    const failureSignature = !allPassed
-      ? await this.generateFailureSignature(checkResults)
-      : undefined;
+    let failureSignature: string | undefined;
+    let failureSummary: FailureSummary | undefined;
+
+    if (!allPassed) {
+      failureSignature = await this.generateFailureSignature(checkResults);
+      const summarizer = new FailureSummarizer();
+      failureSummary = await summarizer.summarize(checkResults);
+      await this.saveFailureSummary(failureSummary, ctx);
+    }
+
     const summary = this.generateSummary(checkResults);
 
     await this.eventBus.emit({
@@ -163,7 +172,50 @@ export class VerificationRunner {
       checks: checkResults,
       summary,
       failureSignature,
+      failureSummary,
     };
+  }
+
+  private async saveFailureSummary(summary: FailureSummary, ctx: RunnerContext): Promise<void> {
+    try {
+      // Find run directory
+      const runId = ctx.runId;
+      // SafeCommandRunner uses process.cwd() for .orchestrator location
+      const projectRoot = process.cwd();
+      const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId);
+      
+      // Ensure runs dir exists
+      if (!fs.existsSync(runsDir)) {
+          await fs.promises.mkdir(runsDir, { recursive: true });
+      }
+
+      // Determine iteration index
+      let iter = 1;
+      while (fs.existsSync(path.join(runsDir, `failure_summary_iter_${iter}.json`))) {
+        iter++;
+      }
+
+      const jsonPath = path.join(runsDir, `failure_summary_iter_${iter}.json`);
+      const txtPath = path.join(runsDir, `failure_summary_iter_${iter}.txt`);
+
+      await fs.promises.writeFile(jsonPath, JSON.stringify(summary, null, 2));
+      
+      const txtContent = `Failure Summary (Iter ${iter})\n` +
+        `----------------------------\n` +
+        `Failed Checks: ${summary.failedChecks.map(c => c.name).join(', ')}\n` +
+        `Suspected Files:\n${summary.suspectedFiles.map(f => ' - ' + f).join('\n')}\n` +
+        `Suggested Actions:\n${summary.suggestedNextActions.map(a => ' - ' + a).join('\n')}\n` +
+        `\nDetails:\n` +
+        summary.failedChecks.map(c => 
+            `[${c.name}] Exit Code: ${c.exitCode}\n` +
+            `Errors:\n${c.keyErrors.join('\n')}\n`
+        ).join('\n');
+        
+      await fs.promises.writeFile(txtPath, txtContent);
+
+    } catch {
+      // Ignore errors saving summary, don't fail verification
+    }
   }
 
   private async generateFailureSignature(results: CheckResult[]): Promise<string> {
