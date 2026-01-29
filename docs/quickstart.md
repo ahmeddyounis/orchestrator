@@ -54,6 +54,26 @@ The project uses [Turbo](https://turbo.build/) to manage tasks across the monore
   pnpm format
   ```
 
+## Running the CLI
+
+After building the project, you can execute the CLI directly:
+
+```bash
+# Build the CLI first
+pnpm build
+
+# Run the CLI
+node packages/cli/dist/index.js --help
+```
+
+For detailed command usage, see the [CLI Reference](./cli.md).
+
+## Configuration
+
+To configure the Orchestrator (providers, models, etc.), create a `.orchestrator.yaml` file in your project root or `~/.orchestrator/config.yaml`.
+
+See the [Configuration Reference](./config.md) for details.
+
 ## Workspace Structure
 
 The project is organized as a monorepo in the `packages/` directory:
