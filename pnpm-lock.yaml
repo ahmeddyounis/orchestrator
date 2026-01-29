@@ -59,6 +59,9 @@ importers:
       '@orchestrator/core':
         specifier: workspace:*
         version: link:../core
+      '@orchestrator/repo':
+        specifier: workspace:*
+        version: link:../repo
       '@orchestrator/shared':
         specifier: workspace:*
         version: link:../shared
@@ -121,6 +124,9 @@ importers:
 
   packages/repo:
     devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
       typescript:
         specifier: ^5.3.3
         version: 5.9.3

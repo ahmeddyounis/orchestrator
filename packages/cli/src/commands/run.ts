@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 import { ConfigLoader } from '@orchestrator/core';
+import { findRepoRoot } from '@orchestrator/repo';
+import { createRunDir, writeManifest } from '@orchestrator/shared';
 import path from 'path';
 import { OutputRenderer } from '../output/renderer';
 
@@ -23,13 +25,15 @@ export function registerRunCommand(program: Command) {
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
-    .action((goal, options) => {
+    .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
 
       if (globalOpts.verbose) renderer.log(`Running goal: "${goal}"`);
 
       try {
+        const repoRoot = await findRepoRoot();
+
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
@@ -61,21 +65,35 @@ export function registerRunCommand(program: Command) {
         validateProvider('reviewer', config.defaults?.reviewer);
 
         const runId = Date.now().toString();
-        const runDir = path.join(process.cwd(), '.runs', runId);
-        ConfigLoader.writeEffectiveConfig(config, runDir);
+        const artifacts = await createRunDir(repoRoot, runId);
+
+        ConfigLoader.writeEffectiveConfig(config, artifacts.root);
 
         if (globalOpts.verbose) {
-          renderer.log(`Effective config written to ${runDir}`);
+          renderer.log(`Effective config written to ${artifacts.root}`);
         }
+
+        await writeManifest(artifacts.manifest, {
+          runId,
+          startedAt: new Date().toISOString(),
+          command: `run ${goal}`,
+          repoRoot,
+          artifactsDir: artifacts.root,
+          tracePath: artifacts.trace,
+          summaryPath: artifacts.summary,
+          effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+          patchPaths: [],
+          toolLogPaths: [],
+        });
 
         renderer.render({
           status: 'running',
           goal,
           runId,
-          artifactsDir: runDir,
+          artifactsDir: artifacts.root,
           providers: config.defaults,
           nextSteps: [
-            `View detailed logs in ${path.join(runDir, 'run.log')}`, // Example next step
+            `View detailed logs in ${path.join(artifacts.root, 'run.log')}`, // Example next step
             'Monitor progress via the dashboard (if available)',
           ],
         });
