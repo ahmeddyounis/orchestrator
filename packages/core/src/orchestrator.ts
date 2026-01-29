@@ -19,12 +19,16 @@ import { PlanService } from './plan/service';
 import { ExecutionService } from './exec/service';
 import path from 'path';
 import fs from 'fs/promises';
+import { createHash } from 'crypto';
+import { CostTracker } from './cost/tracker';
+import { DEFAULT_BUDGET } from './config/budget';
 
 export interface OrchestratorOptions {
   config: Config;
   git: GitService;
   registry: ProviderRegistry;
   repoRoot: string;
+  costTracker?: CostTracker;
 }
 
 export interface RunResult {
@@ -33,6 +37,8 @@ export interface RunResult {
   summary?: string;
   filesChanged?: string[];
   patchPaths?: string[];
+  stopReason?: 'success' | 'budget_exceeded' | 'repeated_failure' | 'invalid_output' | 'error';
+  recommendations?: string;
 }
 
 export interface RunOptions {
@@ -45,12 +51,14 @@ export class Orchestrator {
   private git: GitService;
   private registry: ProviderRegistry;
   private repoRoot: string;
+  private costTracker?: CostTracker;
 
   constructor(options: OrchestratorOptions) {
     this.config = options.config;
     this.git = options.git;
     this.registry = options.registry;
     this.repoRoot = options.repoRoot;
+    this.costTracker = options.costTracker;
   }
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
@@ -366,14 +374,77 @@ END_DIFF
         this.config,
     );
 
-    const maxIterations = 30;
+    // Budget & Loop State
+    const startTime = Date.now();
+    const budget = { ...DEFAULT_BUDGET, ...this.config.budget };
+    
     let stepsCompleted = 0;
     const patchPaths: string[] = [];
     const contextPaths: string[] = [];
     const touchedFiles = new Set<string>();
+    
+    let consecutiveInvalidDiffs = 0;
+    let consecutiveApplyFailures = 0;
+    let lastApplyErrorHash = '';
+
+    const finish = async (status: 'success' | 'failure', stopReason: RunResult['stopReason'] | undefined, summary: string): Promise<RunResult> => {
+        if (stopReason) {
+             await eventBus.emit({
+                type: 'RunStopped',
+                schemaVersion: 1,
+                timestamp: new Date().toISOString(),
+                runId,
+                payload: { reason: stopReason, details: summary }
+            });
+        }
+
+        await eventBus.emit({
+            type: 'RunFinished',
+            schemaVersion: 1,
+            timestamp: new Date().toISOString(),
+            runId,
+            payload: { status, summary }
+        });
+
+        await writeManifest(artifacts.manifest, {
+            runId,
+            startedAt: new Date().toISOString(),
+            command: `run ${goal}`,
+            repoRoot: this.repoRoot,
+            artifactsDir: artifacts.root,
+            tracePath: artifacts.trace,
+            summaryPath: artifacts.summary,
+            effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+            patchPaths, 
+            contextPaths,
+            toolLogPaths: [],
+        });
+
+        return {
+            status,
+            runId,
+            summary,
+            filesChanged: Array.from(touchedFiles),
+            patchPaths,
+            stopReason
+        };
+    };
 
     for (const step of steps) {
-        if (stepsCompleted >= maxIterations) break;
+        // 1. Budget Checks
+        const elapsed = Date.now() - startTime;
+        if (budget.time !== undefined && elapsed > budget.time) {
+            return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`);
+        }
+        if (budget.iter !== undefined && stepsCompleted >= budget.iter) {
+             return finish('failure', 'budget_exceeded', `Iteration budget exceeded (${budget.iter})`);
+        }
+        if (budget.cost !== undefined && this.costTracker) {
+            const summary = this.costTracker.getSummary();
+            if (summary.total.estimatedCostUsd && summary.total.estimatedCostUsd > budget.cost) {
+                 return finish('failure', 'budget_exceeded', `Cost budget exceeded ($${budget.cost})`);
+            }
+        }
 
         await eventBus.emit({
             type: 'StepStarted',
@@ -500,10 +571,20 @@ INSTRUCTIONS:
             
             if (!diffMatch || !diffMatch[1].trim()) {
                 lastError = 'Failed to extract diff from executor output';
+                consecutiveInvalidDiffs++;
+                if (consecutiveInvalidDiffs >= 2) {
+                    return finish('failure', 'invalid_output', 'Executor produced invalid output twice consecutively');
+                }
                 continue;
+            } else {
+                consecutiveInvalidDiffs = 0;
             }
 
             const diffContent = diffMatch[1].trim();
+
+            if (diffContent.length === 0) {
+                 return finish('failure', 'invalid_output', 'Executor produced empty patch');
+            }
             
             const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
             const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
@@ -516,8 +597,21 @@ INSTRUCTIONS:
                 if (result.filesChanged) {
                     result.filesChanged.forEach(f => touchedFiles.add(f));
                 }
+                consecutiveApplyFailures = 0;
+                lastApplyErrorHash = '';
             } else {
                 lastError = result.error || 'Unknown apply error';
+                const errorHash = createHash('sha256').update(lastError).digest('hex');
+                if (lastApplyErrorHash === errorHash) {
+                    consecutiveApplyFailures++;
+                } else {
+                    consecutiveApplyFailures = 1;
+                    lastApplyErrorHash = errorHash;
+                }
+
+                if (consecutiveApplyFailures >= 2) {
+                     return finish('failure', 'repeated_failure', `Repeated patch apply failure: ${lastError}`);
+                }
             }
         }
 
@@ -539,71 +633,10 @@ INSTRUCTIONS:
                 payload: { step, success: false, error: lastError }
             });
             
-             const msg = `Step failed after retries: ${step}. Error: ${lastError}`;
-             await eventBus.emit({
-                type: 'RunFinished',
-                schemaVersion: 1,
-                timestamp: new Date().toISOString(),
-                runId,
-                payload: { status: 'failure', summary: msg }
-            });
-
-            // Write manifest before returning (so we keep what we have)
-            await writeManifest(artifacts.manifest, {
-                runId,
-                startedAt: new Date().toISOString(),
-                command: `run ${goal}`,
-                repoRoot: this.repoRoot,
-                artifactsDir: artifacts.root,
-                tracePath: artifacts.trace,
-                summaryPath: artifacts.summary,
-                effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-                patchPaths: patchPaths, 
-                contextPaths: contextPaths,
-                toolLogPaths: [],
-            });
-
-            return {
-                status: 'failure',
-                runId,
-                summary: msg,
-                filesChanged: Array.from(touchedFiles),
-                patchPaths
-            };
+             return finish('failure', 'repeated_failure', `Step failed after retries: ${step}. Error: ${lastError}`);
         }
     }
 
-    await writeManifest(artifacts.manifest, {
-          runId,
-          startedAt: new Date().toISOString(),
-          command: `run ${goal}`,
-          repoRoot: this.repoRoot,
-          artifactsDir: artifacts.root,
-          tracePath: artifacts.trace,
-          summaryPath: artifacts.summary,
-          effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-          patchPaths: patchPaths, 
-          contextPaths: contextPaths,
-          toolLogPaths: [],
-    });
-    
-    await eventBus.emit({
-        type: 'RunFinished',
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId,
-        payload: {
-            status: 'success',
-            summary: `L1 Plan Executed Successfully. ${stepsCompleted} steps.`
-        }
-    });
-
-    return {
-        status: 'success',
-        runId,
-        summary: `L1 Plan Executed Successfully. ${stepsCompleted} steps.`,
-        filesChanged: Array.from(touchedFiles),
-        patchPaths
-    };
+    return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
 }

@@ -5,6 +5,7 @@ import { Config } from '@orchestrator/shared';
 import { createRunDir, writeManifest, JsonlLogger } from '@orchestrator/shared';
 import { RepoScanner, SearchService, PatchApplier, GitService } from '@orchestrator/repo';
 import { PatchStore } from './exec/patch_store';
+import { ExecutionService } from './exec/service';
 import fs from 'fs/promises';
 
 // Mocks
@@ -118,6 +119,13 @@ describe('Orchestrator', () => {
             reviewer: {}
         });
 
+        // Reset ExecutionService mock
+        (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+            return {
+                applyPatch: vi.fn().mockResolvedValue({ success: true, filesChanged: ['file.ts'] })
+            };
+        });
+
         orchestrator = new Orchestrator({
             config,
             git: mockGit as unknown as GitService,
@@ -162,7 +170,7 @@ describe('Orchestrator', () => {
         expect(createRunDir).toHaveBeenCalledWith(repoRoot, runId);
         expect(mockRegistry.resolveRoleProviders).toHaveBeenCalled();
         // PlanService and ExecutionService are mocked, so we assume they are called if runL1 completes without error.
-        // We could import them to check calls, but they are mocked via path.
+        expect(ExecutionService).toHaveBeenCalled();
     });
 
     it('should search when keywords are present', async () => {
@@ -183,6 +191,62 @@ describe('Orchestrator', () => {
             })
         });
 
-        await expect(orchestrator.runL0('goal', runId)).rejects.toThrow('Failed to extract diff');
+        const result = await orchestrator.runL0('goal', runId);
+        expect(result.status).toBe('failure');
+        expect(result.summary).toContain('Failed to extract diff');
+    });
+
+    it('should stop runL1 if iteration budget exceeded', async () => {
+        orchestrator = new Orchestrator({
+            config: { ...config, budget: { iter: 0 } },
+            git: mockGit as unknown as GitService,
+            registry: mockRegistry as unknown as ProviderRegistry,
+            repoRoot,
+        });
+
+        const result = await orchestrator.runL1('goal', runId);
+        expect(result.status).toBe('failure');
+        expect(result.stopReason).toBe('budget_exceeded');
+        expect(result.summary).toContain('Iteration budget exceeded');
+    });
+
+    it('should stop runL1 if executor produces invalid output consecutively', async () => {
+         mockRegistry.resolveRoleProviders.mockResolvedValue({
+            planner: { generate: vi.fn() },
+            executor: { 
+                generate: vi.fn()
+                    .mockResolvedValueOnce({ text: 'Bad output 1' })
+                    .mockResolvedValueOnce({ text: 'Bad output 2' }) 
+            },
+            reviewer: {}
+        });
+
+        const result = await orchestrator.runL1('goal', runId);
+        
+        expect(result.status).toBe('failure');
+        expect(result.stopReason).toBe('invalid_output');
+        expect(result.summary).toContain('twice consecutively');
+    });
+
+    it('should stop runL1 if patch application fails repeatedly with same error', async () => {
+        mockRegistry.resolveRoleProviders.mockResolvedValue({
+            planner: { generate: vi.fn() },
+            executor: { 
+                 generate: vi.fn().mockResolvedValue({ text: 'BEGIN_DIFF\ndiff...\nEND_DIFF' })
+            },
+            reviewer: {}
+        });
+    
+        (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+            return {
+                applyPatch: vi.fn().mockResolvedValue({ success: false, error: 'Same Error' })
+            };
+        });
+    
+        const result = await orchestrator.runL1('goal', runId);
+        
+        expect(result.status).toBe('failure');
+        expect(result.stopReason).toBe('repeated_failure');
+        expect(result.summary).toContain('Repeated patch apply failure');
     });
 });

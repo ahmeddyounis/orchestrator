@@ -281,6 +281,14 @@ export interface StepFinished extends BaseEvent {
   };
 }
 
+export interface RunStopped extends BaseEvent {
+  type: 'RunStopped';
+  payload: {
+    reason: string;
+    details?: string;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -296,6 +304,7 @@ export type OrchestratorEvent =
   | ToolRunFinished
   | VerifyResult
   | RunFinished
+  | RunStopped
   | MemoryWrite
   | ConfirmationRequested
   | ConfirmationResolved
