@@ -1,7 +1,6 @@
 import * as pty from 'node-pty';
-import { spawn as spawnChild, ChildProcess, SpawnOptions } from 'child_process';
+import { spawn as spawnChild, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
-import { Readable } from 'stream';
 import {
   Logger,
   SubprocessSpawned,
@@ -48,6 +47,7 @@ export class ProcessManager extends EventEmitter {
     cwd: string,
     env: Record<string, string>,
     usePty: boolean,
+    inheritEnv: boolean = true,
   ): Promise<void> {
     if (this.ptyProcess || this.childProcess) {
       throw new Error('Process already running');
@@ -59,7 +59,7 @@ export class ProcessManager extends EventEmitter {
     const args = command.slice(1);
 
     // Ensure env has basic PATH if not provided or merged
-    const rawEnv = { ...process.env, ...env };
+    const rawEnv = inheritEnv ? { ...process.env, ...env } : env;
     const sanitizedEnv: Record<string, string> = {};
     for (const key in rawEnv) {
       const val = rawEnv[key];
@@ -69,20 +69,14 @@ export class ProcessManager extends EventEmitter {
     }
 
     if (this.isPty) {
-      try {
-        this.ptyProcess = pty.spawn(cmd, args, {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 30,
-          cwd,
-          env: sanitizedEnv,
-        });
-        this.pid = this.ptyProcess.pid;
-      } catch (err) {
-        // Fallback or error? Spec implies PTY is primary, but if it fails (e.g. not supported), maybe fallback?
-        // But here I'll assume if they asked for PTY, they want PTY.
-        throw err;
-      }
+      this.ptyProcess = pty.spawn(cmd, args, {
+        name: 'xterm-color',
+        cols: 80,
+        rows: 30,
+        cwd,
+        env: sanitizedEnv,
+      });
+      this.pid = this.ptyProcess.pid;
 
       this.ptyProcess.onData((data) => this.handleOutput(data, 'stdout'));
       this.ptyProcess.onExit((e) => this.handleExit(e.exitCode, e.signal));
@@ -168,6 +162,7 @@ export class ProcessManager extends EventEmitter {
         return;
       }
 
+      // eslint-disable-next-line prefer-const
       let timer: NodeJS.Timeout;
 
       const cleanup = () => {
@@ -200,6 +195,60 @@ export class ProcessManager extends EventEmitter {
     });
   }
 
+  async readUntilHeuristic(
+    silenceDurationMs: number,
+    predicate: (text: string) => boolean,
+    timeoutMs: number = 30000,
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let silenceTimer: NodeJS.Timeout;
+      // eslint-disable-next-line prefer-const
+      let totalTimeoutTimer: NodeJS.Timeout;
+
+      const cleanup = () => {
+        this.off('output', onOutput);
+        this.off('exit', onExit);
+        if (silenceTimer) clearTimeout(silenceTimer);
+        if (totalTimeoutTimer) clearTimeout(totalTimeoutTimer);
+      };
+
+      const check = () => {
+        if (predicate(this.buffer)) {
+          cleanup();
+          const matched = this.buffer;
+          this.buffer = '';
+          resolve(matched);
+        }
+      };
+
+      const resetSilenceTimer = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(check, silenceDurationMs);
+      };
+
+      const onOutput = () => {
+        resetSilenceTimer();
+      };
+
+      const onExit = () => {
+        cleanup();
+        const matched = this.buffer;
+        this.buffer = '';
+        resolve(matched);
+      };
+
+      this.on('output', onOutput);
+      this.on('exit', onExit);
+
+      resetSilenceTimer();
+
+      totalTimeoutTimer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`readUntilHeuristic timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+  }
+
   // Basic stream interface
   async *readStream(): AsyncGenerator<ProcessOutput, void, unknown> {
     const queue: ProcessOutput[] = [];
@@ -215,7 +264,7 @@ export class ProcessManager extends EventEmitter {
       }
     };
 
-    const onExit = (e: any) => {
+    const onExit = (e: { error?: string }) => {
       finished = true;
       if (e.error) error = new Error(e.error);
       if (resolveNext) {
@@ -254,7 +303,7 @@ export class ProcessManager extends EventEmitter {
     if (this.isPty && this.ptyProcess) {
       try {
         this.ptyProcess.kill(signal);
-      } catch (e) {
+      } catch {
         // ignore if already dead
       }
     } else if (this.childProcess) {

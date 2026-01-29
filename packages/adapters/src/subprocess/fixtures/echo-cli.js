@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const readline = require('readline');
 
 console.log('Echo CLI Started');
+process.stdout.write('> ');
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -9,11 +11,13 @@ const rl = readline.createInterface({
 });
 
 rl.on('line', (line) => {
-  if (line.trim() === 'exit') {
+  const trimmed = line.trim();
+  if (trimmed === 'exit') {
     process.exit(0);
   }
   // Delay slightly to simulate processing
   setTimeout(() => {
     console.log(`Echo: ${line}`);
+    process.stdout.write('> ');
   }, 10);
 });
