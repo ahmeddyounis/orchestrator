@@ -57,16 +57,38 @@ vi.mock('./exec/patch_store', () => {
     };
 });
 
+vi.mock('./plan/service', () => {
+    const MockPlanService = vi.fn();
+    MockPlanService.prototype.generatePlan = vi.fn().mockResolvedValue(['step 1']);
+    return {
+        PlanService: MockPlanService
+    };
+});
+
+vi.mock('./exec/service', () => {
+    const MockExecutionService = vi.fn();
+    MockExecutionService.prototype.applyPatch = vi.fn().mockResolvedValue({ success: true, filesChanged: ['file.ts'] });
+    return {
+        ExecutionService: MockExecutionService,
+    };
+});
+
 describe('Orchestrator', () => {
     let orchestrator: Orchestrator;
     const mockGit = {};
     const mockRegistry = {
-        getProvider: vi.fn(),
+        getAdapter: vi.fn(),
+        resolveRoleProviders: vi.fn(),
     };
     const config: Config = {
         configVersion: 1,
+        thinkLevel: 'L0',
         defaults: { executor: 'mock' },
-        patch: {},
+        patch: {
+            maxFilesChanged: 10,
+            maxLinesChanged: 100,
+            allowBinary: false
+        },
     };
     const repoRoot = '/test/repo';
     const runId = 'test-run';
@@ -83,15 +105,19 @@ describe('Orchestrator', () => {
             patchesDir: '/tmp/run/patches',
         });
 
-        mockRegistry.getProvider.mockResolvedValue({
+        mockRegistry.getAdapter.mockReturnValue({
             generate: vi.fn().mockResolvedValue({
                 text: 'BEGIN_DIFF\ndiff --git a/test.ts b/test.ts\nEND_DIFF'
-            })
+            }),
+            capabilities: () => ({})
         });
 
-        // Reset prototypes if needed, but vi.fn() mocks persist.
-        // We can access instances by spying on the class constructor or checking invocations.
-        
+        mockRegistry.resolveRoleProviders.mockResolvedValue({
+            planner: { generate: vi.fn() },
+            executor: { generate: vi.fn().mockResolvedValue({ text: 'BEGIN_DIFF\ndiff...\nEND_DIFF' }) },
+            reviewer: {}
+        });
+
         orchestrator = new Orchestrator({
             config,
             git: mockGit as unknown as GitService,
@@ -112,7 +138,7 @@ describe('Orchestrator', () => {
         expect(SearchService).toHaveBeenCalled();
 
         // Verify execution
-        expect(mockRegistry.getProvider).toHaveBeenCalledWith('mock', 'executor');
+        expect(mockRegistry.getAdapter).toHaveBeenCalledWith('mock');
         
         // Verify artifact writing
         expect(fs.writeFile).toHaveBeenCalledWith(
@@ -130,14 +156,20 @@ describe('Orchestrator', () => {
         expect(writeManifest).toHaveBeenCalled();
     });
 
+    it('should run L1 successfully', async () => {
+        await orchestrator.runL1('complex goal', runId);
+
+        expect(createRunDir).toHaveBeenCalledWith(repoRoot, runId);
+        expect(mockRegistry.resolveRoleProviders).toHaveBeenCalled();
+        // PlanService and ExecutionService are mocked, so we assume they are called if runL1 completes without error.
+        // We could import them to check calls, but they are mocked via path.
+    });
+
     it('should search when keywords are present', async () => {
         const goal = 'update user profile controller';
         await orchestrator.runL0(goal, runId);
         
         // Verify search service called
-        // Since we mock the class, we can check if prototype method was called
-        // But better to check instances.
-        
         const searchInstances = (SearchService as unknown as ReturnType<typeof vi.fn>).mock.instances;
         expect(searchInstances.length).toBeGreaterThan(0);
         const searchInstance = searchInstances[0];
@@ -145,7 +177,7 @@ describe('Orchestrator', () => {
     });
 
     it('should fail if executor returns invalid output', async () => {
-        mockRegistry.getProvider.mockResolvedValue({
+        mockRegistry.getAdapter.mockReturnValue({
             generate: vi.fn().mockResolvedValue({
                 text: 'No diff here'
             })

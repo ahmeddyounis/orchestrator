@@ -65,7 +65,7 @@ describe('ExecutionService', () => {
 
     const result = await service.applyPatch('diff...', 'Fix bug');
 
-    expect(result).toBe(true);
+    expect(result.success).toBe(true);
     expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(
       repoRoot,
       'diff...',
@@ -103,7 +103,7 @@ describe('ExecutionService', () => {
 
     const result = await service.applyPatch('diff...', 'Fix bug');
 
-    expect(result).toBe(true);
+    expect(result.success).toBe(true);
     expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
     // First call with defaults
     expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(
@@ -138,7 +138,7 @@ describe('ExecutionService', () => {
 
     const result = await service.applyPatch('diff...', 'Fix bug');
 
-    expect(result).toBe(false);
+    expect(result.success).toBe(false);
     expect(mockConfirmationProvider.confirm).toHaveBeenCalled();
     expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledTimes(1); // No retry
     expect(eventBus.emit).toHaveBeenCalledWith(
@@ -157,7 +157,7 @@ describe('ExecutionService', () => {
 
     const result = await service.applyPatch('diff...', 'Fix bug');
 
-    expect(result).toBe(false);
+    expect(result.success).toBe(false);
     expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('HEAD');
   });
 });

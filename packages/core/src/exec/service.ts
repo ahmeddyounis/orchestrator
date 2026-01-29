@@ -6,6 +6,12 @@ export interface ConfirmationProvider {
   confirm(message: string, details?: string, defaultNo?: boolean): Promise<boolean>;
 }
 
+export interface ApplyResult {
+  success: boolean;
+  error?: string;
+  filesChanged?: string[];
+}
+
 export class ExecutionService {
   constructor(
     private eventBus: EventBus,
@@ -17,7 +23,7 @@ export class ExecutionService {
     private confirmationProvider?: ConfirmationProvider,
   ) {}
 
-  async applyPatch(patchText: string, description: string): Promise<boolean> {
+  async applyPatch(patchText: string, description: string): Promise<ApplyResult> {
     try {
       // 1. Prepare options from config
       const patchOptions: PatchApplierOptions = {
@@ -47,17 +53,18 @@ export class ExecutionService {
             });
           } else {
             // User denied
+            const msg = 'Patch rejected by user (limit exceeded)';
             await this.eventBus.emit({
               type: 'PatchApplyFailed',
               schemaVersion: 1,
               timestamp: new Date().toISOString(),
               runId: this.runId,
               payload: {
-                error: 'Patch rejected by user (limit exceeded)',
+                error: msg,
                 details: result.error,
               },
             });
-            return false;
+            return { success: false, error: msg };
           }
         }
       }
@@ -92,16 +99,17 @@ export class ExecutionService {
           });
         }
 
-        return true;
+        return { success: true, filesChanged: result.filesChanged };
       } else {
         // Application Failed
+        const errorMsg = result.error?.message || 'Unknown error';
         await this.eventBus.emit({
           type: 'PatchApplyFailed',
           schemaVersion: 1,
           timestamp: new Date().toISOString(),
           runId: this.runId,
           payload: {
-            error: result.error?.message || 'Unknown error',
+            error: errorMsg,
             details: result.error?.details,
           },
         });
@@ -120,17 +128,18 @@ export class ExecutionService {
           },
         });
 
-        return false;
+        return { success: false, error: errorMsg };
       }
     } catch (err) {
       // Unexpected error
+      const errorMsg = (err as Error).message;
       await this.eventBus.emit({
         type: 'PatchApplyFailed',
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId: this.runId,
         payload: {
-          error: (err as Error).message,
+          error: errorMsg,
         },
       });
 
@@ -147,7 +156,7 @@ export class ExecutionService {
         },
       });
 
-      return false;
+      return { success: false, error: errorMsg };
     }
   }
 }

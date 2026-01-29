@@ -263,6 +263,24 @@ export interface RepoSearch extends BaseEvent {
   };
 }
 
+export interface StepStarted extends BaseEvent {
+  type: 'StepStarted';
+  payload: {
+    step: string;
+    index: number;
+    total: number;
+  };
+}
+
+export interface StepFinished extends BaseEvent {
+  type: 'StepFinished';
+  payload: {
+    step: string;
+    success: boolean;
+    error?: string;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -292,4 +310,6 @@ export type OrchestratorEvent =
   | RepoSearch
   | CheckpointCreated
   | PatchApplyFailed
-  | RollbackPerformed;
+  | RollbackPerformed
+  | StepStarted
+  | StepFinished;
