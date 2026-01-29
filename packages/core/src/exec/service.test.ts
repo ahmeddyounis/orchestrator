@@ -41,8 +41,8 @@ describe('ExecutionService', () => {
 
   it('should apply patch and create checkpoint on success', async () => {
     mockApplier.applyUnifiedDiff.mockResolvedValue({
-      success: true,
-      modifiedFiles: ['file1.ts'],
+      applied: true,
+      filesChanged: ['file1.ts'],
     });
     mockGit.createCheckpoint.mockResolvedValue('sha123');
 
@@ -54,7 +54,7 @@ describe('ExecutionService', () => {
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'PatchApplied',
-        payload: expect.objectContaining({ files: ['file1.ts'] }),
+        payload: expect.objectContaining({ filesChanged: ['file1.ts'] }),
       }),
     );
     expect(eventBus.emit).toHaveBeenCalledWith(
@@ -67,7 +67,7 @@ describe('ExecutionService', () => {
 
   it('should rollback to HEAD on patch failure', async () => {
     mockApplier.applyUnifiedDiff.mockResolvedValue({
-      success: false,
+      applied: false,
       error: { message: 'Syntax error' },
     });
 

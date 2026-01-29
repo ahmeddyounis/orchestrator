@@ -15,7 +15,7 @@ export class ExecutionService {
       // Apply the patch
       const result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText);
 
-      if (result.success) {
+      if (result.applied) {
         // Success!
         await this.eventBus.emit({
           type: 'PatchApplied',
@@ -24,7 +24,8 @@ export class ExecutionService {
           runId: this.runId,
           payload: {
             description,
-            files: result.modifiedFiles,
+            filesChanged: result.filesChanged,
+            success: true,
           },
         });
 

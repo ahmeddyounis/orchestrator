@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry, CostTracker } from '@orchestrator/core';
-import { findRepoRoot } from '@orchestrator/repo';
+import { ConfigLoader, ProviderRegistry, CostTracker, PatchStore } from '@orchestrator/core';
+import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
 import {
   createRunDir,
@@ -140,6 +140,23 @@ export function registerRunCommand(program: Command) {
         const costSummary = costTracker.getSummary();
         await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
 
+        // Save final diff
+        const git = new GitService({ repoRoot });
+        const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+
+        try {
+          const finalDiff = await git.diffToHead();
+          // Always write final diff patch if we have diff
+          if (finalDiff) {
+            await patchStore.saveFinalDiff(finalDiff);
+            if (globalOpts.verbose) {
+              renderer.log('Saved final diff to artifacts.');
+            }
+          }
+        } catch (err) {
+            console.error('Failed to save final diff:', err);
+        }
+
         renderer.render({
           status: 'running',
           goal,
@@ -153,6 +170,7 @@ export function registerRunCommand(program: Command) {
           ],
         });
       } catch (err: unknown) {
+
         if (err instanceof Error) {
           renderer.error(err.message);
         } else {

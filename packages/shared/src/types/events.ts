@@ -49,8 +49,33 @@ export interface PatchProposed extends BaseEvent {
 export interface PatchApplied extends BaseEvent {
   type: 'PatchApplied';
   payload: {
+    description?: string;
     filesChanged: string[];
     success: boolean;
+  };
+}
+
+export interface CheckpointCreated extends BaseEvent {
+  type: 'CheckpointCreated';
+  payload: {
+    checkpointRef: string;
+    label: string;
+  };
+}
+
+export interface PatchApplyFailed extends BaseEvent {
+  type: 'PatchApplyFailed';
+  payload: {
+    error: string;
+    details?: unknown;
+  };
+}
+
+export interface RollbackPerformed extends BaseEvent {
+  type: 'RollbackPerformed';
+  payload: {
+    reason: string;
+    targetRef: string;
   };
 }
 
@@ -213,4 +238,7 @@ export type OrchestratorEvent =
   | SubprocessExited
   | SubprocessParsed
   | RepoScan
-  | RepoSearch;
+  | RepoSearch
+  | CheckpointCreated
+  | PatchApplyFailed
+  | RollbackPerformed;
