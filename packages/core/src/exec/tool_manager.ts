@@ -1,4 +1,4 @@
-import { SafeCommandRunner, RunnerContext, UserInterface } from '@orchestrator/exec';
+import { SafeCommandRunner, RunnerContext, UserInterface, SandboxProvider, NoneSandboxProvider } from '@orchestrator/exec';
 import {
   ToolRunRequest,
   ToolPolicy,
@@ -114,22 +114,34 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
 export class ToolManager {
   constructor(
     private eventBus: EventBus,
-    private manifestPath: string
+    private manifestPath: string,
+    private repoRoot: string = process.cwd(),
+    private sandboxProvider: SandboxProvider = new NoneSandboxProvider(),
   ) {}
 
   async runTool(
     req: ToolRunRequest,
     policy: ToolPolicy,
     ui: UserInterface,
-    ctx: RunnerContext
+    ctx: RunnerContext,
   ): Promise<ToolRunResult> {
     const toolRunId = ctx.toolRunId || randomUUID();
     const runner = new ObservableSafeCommandRunner(this.eventBus, ctx.runId, toolRunId);
-    
-    // Ensure toolRunId is in context for SafeCommandRunner to use it for paths
-    const ctxWithId = { ...ctx, toolRunId };
 
-    const result = await runner.run(req, policy, ui, ctxWithId);
+    // Prepare sandbox
+    const sandbox = await this.sandboxProvider.prepare(this.repoRoot, ctx.runId);
+
+    // Apply sandbox settings to request if not overridden
+    const reqWithSandbox = {
+      ...req,
+      cwd: req.cwd || sandbox.cwd,
+      env: { ...req.env, ...sandbox.envOverrides },
+    };
+
+    // Ensure toolRunId is in context for SafeCommandRunner to use it for paths
+    const ctxWithId = { ...ctx, toolRunId, cwd: reqWithSandbox.cwd };
+
+    const result = await runner.run(reqWithSandbox, policy, ui, ctxWithId);
 
     // Update manifest with logs
     // We compute relative paths if possible

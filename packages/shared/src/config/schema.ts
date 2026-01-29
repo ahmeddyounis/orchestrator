@@ -86,6 +86,11 @@ export const ConfigSchema = z.object({
       allowDirtyWorkingTree: z.boolean().default(false),
       noCheckpoints: z.boolean().default(false),
       tools: ToolPolicySchema.default(ToolPolicySchema.parse({})),
+      sandbox: z
+        .object({
+          mode: z.enum(['none', 'docker', 'devcontainer']).default('none'),
+        })
+        .default({ mode: 'none' }),
     })
     .optional(),
 });

@@ -34,6 +34,7 @@ export function registerRunCommand(program: Command) {
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
+    .option('--sandbox <mode>', 'Sandbox mode: none, docker, devcontainer')
     .option('--allow-large-diff', 'Allow large diffs without confirmation')
     .option('--no-tools', 'Force tools disabled')
     .option('--yes', 'Auto-approve confirmations except denylist')
@@ -65,9 +66,16 @@ export function registerRunCommand(program: Command) {
                 autoApprove: options.yes,
                 interactive: options.nonInteractive ? false : undefined,
               } as any,
+              sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
             } as any,
           },
         });
+
+        // Validate sandbox mode (MVP limitation)
+        if (config.execution?.sandbox?.mode && config.execution.sandbox.mode !== 'none') {
+          renderer.error(`Sandbox mode '${config.execution.sandbox.mode}' is not yet implemented.`);
+          process.exit(2);
+        }
 
         // Initialize Git and branch
         const runId = Date.now().toString();
