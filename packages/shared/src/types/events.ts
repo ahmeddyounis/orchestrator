@@ -167,6 +167,14 @@ export interface SubprocessExited extends BaseEvent {
   };
 }
 
+export interface SubprocessParsed extends BaseEvent {
+  type: 'SubprocessParsed';
+  payload: {
+    kind: 'diff' | 'plan' | 'text';
+    confidence: number;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -185,4 +193,5 @@ export type OrchestratorEvent =
   | ProviderRequestFinished
   | SubprocessSpawned
   | SubprocessOutputChunked
-  | SubprocessExited;
+  | SubprocessExited
+  | SubprocessParsed;

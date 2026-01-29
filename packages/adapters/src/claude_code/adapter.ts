@@ -1,4 +1,4 @@
-import { SubprocessProviderAdapter } from '../subprocess';
+import { SubprocessProviderAdapter, parseUnifiedDiffFromText, parsePlanFromText } from '../subprocess';
 import { ProviderConfig, ModelRequest, ModelResponse, ChatMessage } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 
@@ -46,14 +46,43 @@ index 1234567..89abcdef 100644
 
     const response = await super.generate(wrappedReq, ctx);
     
-    // Extract diff if present
+    // Extract diff if present using robust parser
     if (response.text) {
-      const diffMatch = response.text.match(/<BEGIN_DIFF>([\s\S]*?)<END_DIFF>/);
-      if (diffMatch) {
+      const diffParsed = parseUnifiedDiffFromText(response.text);
+      if (diffParsed && diffParsed.confidence >= 0.7) {
+        // Emit diff parsed event
+        await ctx.logger.log({
+           schemaVersion: 1,
+           timestamp: new Date().toISOString(),
+           runId: ctx.runId,
+           type: 'SubprocessParsed',
+           payload: { kind: 'diff', confidence: diffParsed.confidence }
+        });
+
         return {
           ...response,
-          text: diffMatch[1].trim()
+          text: diffParsed.diffText
         };
+      }
+      
+      // Fallback: Check for plan or just text
+      const planParsed = parsePlanFromText(response.text);
+      if (planParsed) {
+        await ctx.logger.log({
+           schemaVersion: 1,
+           timestamp: new Date().toISOString(),
+           runId: ctx.runId,
+           type: 'SubprocessParsed',
+           payload: { kind: 'plan', confidence: planParsed.confidence }
+        });
+      } else {
+        await ctx.logger.log({
+           schemaVersion: 1,
+           timestamp: new Date().toISOString(),
+           runId: ctx.runId,
+           type: 'SubprocessParsed',
+           payload: { kind: 'text', confidence: 1.0 }
+        });
       }
     }
 
