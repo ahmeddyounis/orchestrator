@@ -27,6 +27,19 @@ export interface OrchestratorOptions {
   repoRoot: string;
 }
 
+export interface RunResult {
+  status: 'success' | 'failure';
+  runId: string;
+  summary?: string;
+  filesChanged?: string[];
+  patchPaths?: string[];
+}
+
+export interface RunOptions {
+  thinkLevel: 'L0' | 'L1';
+  runId?: string;
+}
+
 export class Orchestrator {
   private config: Config;
   private git: GitService;
@@ -40,7 +53,16 @@ export class Orchestrator {
     this.repoRoot = options.repoRoot;
   }
 
-  async runL0(goal: string, runId: string): Promise<void> {
+  async run(goal: string, options: RunOptions): Promise<RunResult> {
+    const runId = options.runId || Date.now().toString();
+    if (options.thinkLevel === 'L0') {
+      return this.runL0(goal, runId);
+    } else {
+      return this.runL1(goal, runId);
+    }
+  }
+
+  async runL0(goal: string, runId: string): Promise<RunResult> {
     // 1. Setup Artifacts
     const artifacts = await createRunDir(this.repoRoot, runId);
     const logger = new JsonlLogger(artifacts.trace);
@@ -161,14 +183,27 @@ END_DIFF
             runId,
             payload: { status: 'failure', summary: msg }
         });
-        throw new Error(msg);
+        // Write manifest before returning
+        await writeManifest(artifacts.manifest, {
+          runId,
+          startedAt: new Date().toISOString(), 
+          command: `run ${goal}`,
+          repoRoot: this.repoRoot,
+          artifactsDir: artifacts.root,
+          tracePath: artifacts.trace,
+          summaryPath: artifacts.summary,
+          effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+          patchPaths: [],
+          toolLogPaths: [],
+        });
+        return { status: 'failure', runId, summary: msg };
     }
 
     const diffContent = diffMatch[1].trim();
 
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-    await patchStore.saveSelected(0, diffContent);
+    const patchPath = await patchStore.saveSelected(0, diffContent);
     await patchStore.saveFinalDiff(diffContent); 
 
     await emitEvent({
@@ -188,6 +223,8 @@ END_DIFF
         maxLinesTouched: this.config.patch?.maxLinesChanged,
         allowBinary: this.config.patch?.allowBinary
     });
+
+    let runResult: RunResult;
 
     if (result.applied) {
         await emitEvent({
@@ -212,14 +249,23 @@ END_DIFF
                 summary: 'Patch applied successfully' 
             }
         });
+        
+        runResult = {
+            status: 'success',
+            runId,
+            summary: 'Patch applied successfully',
+            filesChanged: result.filesChanged,
+            patchPaths: [patchPath]
+        };
     } else {
+        const msg = result.error?.message || 'Unknown error';
         await emitEvent({
             type: 'PatchApplyFailed',
             schemaVersion: 1,
             timestamp: new Date().toISOString(),
             runId,
             payload: {
-                error: result.error?.message || 'Unknown error',
+                error: msg,
                 details: result.error?.details
             }
         });
@@ -231,6 +277,13 @@ END_DIFF
             runId,
             payload: { status: 'failure', summary: 'Patch application failed' }
         });
+
+        runResult = {
+            status: 'failure',
+            runId,
+            summary: `Patch application failed: ${msg}`,
+            patchPaths: [patchPath]
+        };
     }
 
     // Write manifest
@@ -243,12 +296,14 @@ END_DIFF
           tracePath: artifacts.trace,
           summaryPath: artifacts.summary,
           effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-          patchPaths: [path.join(artifacts.patchesDir, 'iter_0_selected.patch')],
+          patchPaths: [patchPath],
           toolLogPaths: [],
         });
+
+    return runResult;
   }
 
-  async runL1(goal: string, runId: string): Promise<void> {
+  async runL1(goal: string, runId: string): Promise<RunResult> {
     const artifacts = await createRunDir(this.repoRoot, runId);
     const logger = new JsonlLogger(artifacts.trace);
     
@@ -291,7 +346,15 @@ END_DIFF
     );
 
     if (steps.length === 0) {
-        throw new Error('Planning failed to produce any steps.');
+        const msg = 'Planning failed to produce any steps.';
+        await eventBus.emit({
+            type: 'RunFinished',
+            schemaVersion: 1,
+            timestamp: new Date().toISOString(),
+            runId,
+            payload: { status: 'failure', summary: msg }
+        });
+        return { status: 'failure', runId, summary: msg };
     }
 
     const executionService = new ExecutionService(
@@ -475,7 +538,38 @@ INSTRUCTIONS:
                 runId,
                 payload: { step, success: false, error: lastError }
             });
-            throw new Error(`Step failed after retries: ${step}. Error: ${lastError}`);
+            
+             const msg = `Step failed after retries: ${step}. Error: ${lastError}`;
+             await eventBus.emit({
+                type: 'RunFinished',
+                schemaVersion: 1,
+                timestamp: new Date().toISOString(),
+                runId,
+                payload: { status: 'failure', summary: msg }
+            });
+
+            // Write manifest before returning (so we keep what we have)
+            await writeManifest(artifacts.manifest, {
+                runId,
+                startedAt: new Date().toISOString(),
+                command: `run ${goal}`,
+                repoRoot: this.repoRoot,
+                artifactsDir: artifacts.root,
+                tracePath: artifacts.trace,
+                summaryPath: artifacts.summary,
+                effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+                patchPaths: patchPaths, 
+                contextPaths: contextPaths,
+                toolLogPaths: [],
+            });
+
+            return {
+                status: 'failure',
+                runId,
+                summary: msg,
+                filesChanged: Array.from(touchedFiles),
+                patchPaths
+            };
         }
     }
 
@@ -503,5 +597,13 @@ INSTRUCTIONS:
             summary: `L1 Plan Executed Successfully. ${stepsCompleted} steps.`
         }
     });
+
+    return {
+        status: 'success',
+        runId,
+        summary: `L1 Plan Executed Successfully. ${stepsCompleted} steps.`,
+        filesChanged: Array.from(touchedFiles),
+        patchPaths
+    };
   }
 }
