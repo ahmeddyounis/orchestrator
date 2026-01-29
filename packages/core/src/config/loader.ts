@@ -142,25 +142,13 @@ export class ConfigLoader {
     // Handle `api_key_env` resolution
     if (finalConfig.providers) {
         for (const providerName in finalConfig.providers) {
-            const providerConfig = finalConfig.providers[providerName];
-            for (const key in providerConfig) {
-                 // Flat structure support
-                 if (key === 'api_key_env' && !providerConfig['api_key']) {
-                     const envKey = providerConfig[key];
-                     if (env[envKey]) {
-                         providerConfig['api_key'] = env[envKey];
-                     }
-                 }
-                 // Nested support (e.g. openai.api_key_env)
-                 else if (typeof providerConfig[key] === 'object' && providerConfig[key] !== null) {
-                     const pConfig = providerConfig[key];
-                     if (pConfig.api_key_env && !pConfig.api_key) {
-                         const envKey = pConfig.api_key_env;
-                         if (env[envKey]) {
-                             pConfig.api_key = env[envKey];
-                         }
-                     }
-                 }
+            const providerConfig: NonNullable<Config['providers']>[string] = finalConfig.providers[providerName];
+            
+            if (providerConfig.api_key_env && !providerConfig.api_key) {
+                const envKey = providerConfig.api_key_env;
+                if (env[envKey]) {
+                    providerConfig.api_key = env[envKey];
+                }
             }
         }
     }

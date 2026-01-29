@@ -19,6 +19,9 @@ export function registerRunCommand(program: Command) {
     .argument('<goal>', 'The goal to run')
     .description('Run an agentic task to achieve a goal')
     .option('--budget <key=value>', 'Set budget overrides (e.g. gpt4=100)', parseBudgets, {})
+    .option('--planner <providerId>', 'Override planner provider')
+    .option('--executor <providerId>', 'Override executor provider')
+    .option('--reviewer <providerId>', 'Override reviewer provider')
     .action((goal, options) => {
       const globalOpts = program.opts();
       if (globalOpts.verbose) console.log(`Running goal: "${goal}"`);
@@ -27,9 +30,28 @@ export function registerRunCommand(program: Command) {
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
-            budgets: options.budget
+            budgets: options.budget,
+            defaults: {
+              planner: options.planner,
+              executor: options.executor,
+              reviewer: options.reviewer
+            }
           }
         });
+
+        // Validate providers
+        const validateProvider = (role: string, providerId?: string) => {
+          if (providerId) {
+            if (!config.providers || !config.providers[providerId]) {
+              const available = config.providers ? Object.keys(config.providers).join(', ') : 'none';
+              throw new Error(`Unknown ${role} provider: "${providerId}". Available providers: ${available}`);
+            }
+          }
+        };
+
+        validateProvider('planner', config.defaults?.planner);
+        validateProvider('executor', config.defaults?.executor);
+        validateProvider('reviewer', config.defaults?.reviewer);
 
         const runDir = path.join(process.cwd(), '.runs', Date.now().toString());
         ConfigLoader.writeEffectiveConfig(config, runDir);
@@ -39,9 +61,17 @@ export function registerRunCommand(program: Command) {
         }
         
         if (globalOpts.json) {
-           console.log(JSON.stringify({ status: 'running', goal, runDir }));
+           console.log(JSON.stringify({ 
+             status: 'running', 
+             goal, 
+             runDir,
+             providers: config.defaults
+           }));
         } else {
            console.log(`Run started in ${runDir}`);
+           if (config.defaults?.planner) console.log(`Planner: ${config.defaults.planner}`);
+           if (config.defaults?.executor) console.log(`Executor: ${config.defaults.executor}`);
+           if (config.defaults?.reviewer) console.log(`Reviewer: ${config.defaults.reviewer}`);
         }
 
       } catch (err: unknown) {

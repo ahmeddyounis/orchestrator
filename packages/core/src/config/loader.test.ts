@@ -95,6 +95,8 @@ describe('ConfigLoader', () => {
         const configWithEnv = {
             providers: {
                 openai: {
+                    type: 'openai',
+                    model: 'gpt-4',
                     api_key_env: 'MY_API_KEY'
                 }
             }
@@ -105,25 +107,6 @@ describe('ConfigLoader', () => {
 
         const config = ConfigLoader.load({ configPath: '/config.yaml', env: env as NodeJS.ProcessEnv });
         expect(config.providers?.openai.api_key).toBe('secret-key');
-    });
-
-    it('should resolve nested api_key_env', () => {
-        const env = { MY_API_KEY: 'secret-key' };
-        const configWithEnv = {
-            providers: {
-                openai: {
-                    nested: {
-                        api_key_env: 'MY_API_KEY'
-                    }
-                }
-            }
-        };
-        
-        vi.mocked(fs.existsSync).mockReturnValue(true);
-        vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(configWithEnv));
-
-        const config = ConfigLoader.load({ configPath: '/config.yaml', env: env as NodeJS.ProcessEnv });
-        expect(config.providers?.openai.nested.api_key).toBe('secret-key');
     });
   });
 
