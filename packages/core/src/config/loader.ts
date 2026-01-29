@@ -28,10 +28,7 @@ export class ConfigLoader {
     }
   }
 
-  static mergeConfigs<T extends Record<string, unknown>>(
-    target: T,
-    source: Partial<T>
-  ): T {
+  static mergeConfigs<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
     const output = { ...target };
     if (!source || Object.keys(source).length === 0) {
       return output;
@@ -42,19 +39,11 @@ export class ConfigLoader {
         const sourceValue = source[key];
         const targetValue = output[key];
 
-        if (
-          sourceValue &&
-          typeof sourceValue === 'object' &&
-          !Array.isArray(sourceValue)
-        ) {
-          if (
-            targetValue &&
-            typeof targetValue === 'object' &&
-            !Array.isArray(targetValue)
-          ) {
+        if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+          if (targetValue && typeof targetValue === 'object' && !Array.isArray(targetValue)) {
             output[key] = this.mergeConfigs(
               targetValue as Record<string, unknown>,
-              sourceValue as Record<string, unknown>
+              sourceValue as Record<string, unknown>,
             ) as T[Extract<keyof T, string>];
           } else {
             output[key] = sourceValue as T[Extract<keyof T, string>];
@@ -105,35 +94,25 @@ export class ConfigLoader {
     // while maintaining type safety through ConfigSchema validation at the end.
     let mergedConfig = this.mergeConfigs<Record<string, unknown>>(
       {},
-      userConfig as Record<string, unknown>
+      userConfig as Record<string, unknown>,
     );
-    mergedConfig = this.mergeConfigs(
-      mergedConfig,
-      repoConfig as Record<string, unknown>
-    );
-    mergedConfig = this.mergeConfigs(
-      mergedConfig,
-      explicitConfig as Record<string, unknown>
-    );
-    mergedConfig = this.mergeConfigs(
-      mergedConfig,
-      flagConfig as Record<string, unknown>
-    );
+    mergedConfig = this.mergeConfigs(mergedConfig, repoConfig as Record<string, unknown>);
+    mergedConfig = this.mergeConfigs(mergedConfig, explicitConfig as Record<string, unknown>);
+    mergedConfig = this.mergeConfigs(mergedConfig, flagConfig as Record<string, unknown>);
 
     // Defaults
     const defaults: Partial<Config> = {
       configVersion: 1,
     };
-    mergedConfig = this.mergeConfigs(
-      defaults as Record<string, unknown>,
-      mergedConfig
-    );
+    mergedConfig = this.mergeConfigs(defaults as Record<string, unknown>, mergedConfig);
 
     // Validate
     const result = ConfigSchema.safeParse(mergedConfig);
 
     if (!result.success) {
-      const issues = result.error.issues.map(i => `- ${i.path.join('.')}: ${i.message}`).join('\n');
+      const issues = result.error.issues
+        .map((i) => `- ${i.path.join('.')}: ${i.message}`)
+        .join('\n');
       throw new Error(`Configuration validation failed:\n${issues}`);
     }
 
@@ -141,16 +120,17 @@ export class ConfigLoader {
 
     // Handle `api_key_env` resolution
     if (finalConfig.providers) {
-        for (const providerName in finalConfig.providers) {
-            const providerConfig: NonNullable<Config['providers']>[string] = finalConfig.providers[providerName];
-            
-            if (providerConfig.api_key_env && !providerConfig.api_key) {
-                const envKey = providerConfig.api_key_env;
-                if (env[envKey]) {
-                    providerConfig.api_key = env[envKey];
-                }
-            }
+      for (const providerName in finalConfig.providers) {
+        const providerConfig: NonNullable<Config['providers']>[string] =
+          finalConfig.providers[providerName];
+
+        if (providerConfig.api_key_env && !providerConfig.api_key) {
+          const envKey = providerConfig.api_key_env;
+          if (env[envKey]) {
+            providerConfig.api_key = env[envKey];
+          }
         }
+      }
     }
 
     return finalConfig;
