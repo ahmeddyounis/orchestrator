@@ -5,7 +5,7 @@ import { RepoSnapshot, RepoFileMeta } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
 
 export class RepoScanner {
-  async scan(repoRoot: string): Promise<RepoSnapshot> {
+  async scan(repoRoot: string, options: { excludes?: string[] } = {}): Promise<RepoSnapshot> {
     const ig = ignore();
 
     // 1. Add default ignores
@@ -27,6 +27,11 @@ export class RepoScanner {
       ig.add(orchIgnoreContent);
     } catch {
       // ignore missing .orchestratorignore
+    }
+
+    // 4. Add config excludes
+    if (options.excludes && options.excludes.length > 0) {
+      ig.add(options.excludes);
     }
 
     const files: RepoFileMeta[] = [];

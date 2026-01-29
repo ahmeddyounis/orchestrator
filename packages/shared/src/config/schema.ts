@@ -31,6 +31,14 @@ export const ConfigSchema = z.object({
     })
     .optional(),
   budgets: z.record(z.string(), z.number()).optional(),
+  context: z
+    .object({
+      tokenBudget: z.number().optional(),
+      include: z.array(z.string()).optional(),
+      exclude: z.array(z.string()).optional(),
+      rgPath: z.string().optional(),
+    })
+    .optional(),
   commandPolicy: z
     .object({
       allow: z.array(z.string()).optional(),

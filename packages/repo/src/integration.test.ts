@@ -49,7 +49,6 @@ describe('Repo Context Pipeline Integration', () => {
       const result = await searchService.search({
         cwd: FIXTURE_ROOT,
         query: 'hello',
-        caseSensitive: false,
       });
 
       expect(result.matches.length).toBeGreaterThan(0);
@@ -74,12 +73,13 @@ describe('Repo Context Pipeline Integration', () => {
           {
             path: 'packages/b/src/util.ts',
             line: 1,
+            column: 1,
             lineText: "export const hello = () => 'world';",
             matchText: 'hello',
             score: 10,
           },
         ],
-        stats: { durationMs: 1, matchedFiles: 1 },
+        stats: { durationMs: 1, filesSearched: 1, matchesFound: 1, engine: 'ripgrep' },
       });
 
       const result = await searchService.search({

@@ -5,11 +5,13 @@ import * as readline from 'node:readline';
 export class RipgrepSearch implements SearchEngine {
   private _isAvailable: boolean | null = null;
 
+  constructor(private rgPath: string = 'rg') {}
+
   async isAvailable(): Promise<boolean> {
     if (this._isAvailable !== null) return this._isAvailable;
 
     try {
-      const p = spawn('rg', ['--version']);
+      const p = spawn(this.rgPath, ['--version']);
       this._isAvailable = await new Promise<boolean>((resolve) => {
         p.on('error', () => resolve(false));
         p.on('close', (code) => resolve(code === 0));
@@ -38,7 +40,7 @@ export class RipgrepSearch implements SearchEngine {
     // We should probably explicitly ignore .git if not already done by rg defaults (which it usually does)
     // rg respects .gitignore by default.
 
-    const child = spawn('rg', args, {
+    const child = spawn(this.rgPath, args, {
       cwd: options.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

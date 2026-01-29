@@ -92,6 +92,7 @@ export function registerPlanCommand(program: Command) {
           ctx,
           artifacts.root,
           repoRoot,
+          config,
         );
 
         // plan.json is written by PlanService

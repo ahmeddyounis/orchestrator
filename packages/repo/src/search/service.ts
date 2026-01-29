@@ -7,9 +7,9 @@ export class SearchService extends EventEmitter {
   private rg: RipgrepSearch;
   private js: JsFallbackSearch;
 
-  constructor() {
+  constructor(rgPath?: string) {
     super();
-    this.rg = new RipgrepSearch();
+    this.rg = new RipgrepSearch(rgPath);
     this.js = new JsFallbackSearch();
   }
 

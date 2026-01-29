@@ -1,4 +1,4 @@
-import { ModelRequest } from '@orchestrator/shared';
+import { ModelRequest, Config } from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
   RepoScanner,
@@ -22,6 +22,7 @@ export class PlanService {
     ctx: AdapterContext,
     artifactsDir: string,
     repoRoot: string,
+    config?: Config,
   ): Promise<string[]> {
     await this.eventBus.emit({
       type: 'PlanRequested',
@@ -40,7 +41,9 @@ export class PlanService {
       // 1a. Scan Repo
       const scanner = new RepoScanner();
       const scanStart = Date.now();
-      const snapshot = await scanner.scan(repoRoot);
+      const snapshot = await scanner.scan(repoRoot, {
+        excludes: config?.context?.exclude,
+      });
       await this.eventBus.emit({
         type: 'RepoScan',
         schemaVersion: 1,
@@ -78,7 +81,7 @@ export class PlanService {
       }
 
       // 1c. Search Content
-      const searchService = new SearchService();
+      const searchService = new SearchService(config?.context?.rgPath);
       const searchStart = Date.now();
       const searchResults = await searchService.search({
         query: goal,
@@ -110,7 +113,7 @@ export class PlanService {
       const packer = new SimpleContextPacker();
       const signals: ContextSignal[] = [];
       const options = {
-        tokenBudget: 10000,
+        tokenBudget: config?.context?.tokenBudget || 10000,
       };
 
       contextPack = packer.pack(goal, signals, candidates, options);
