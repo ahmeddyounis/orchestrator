@@ -11,7 +11,9 @@
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
     },
     "lint": {},
+    "lint:fix": {},
     "typecheck": {},
-    "format": {}
+    "format": {},
+    "format:check": {}
   }
 }

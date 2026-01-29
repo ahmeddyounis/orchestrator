@@ -7,7 +7,10 @@
     "build": "tsc",
     "test": "echo 'test' && exit 0",
     "typecheck": "tsc --noEmit",
-    "lint": "echo 'lint' && exit 0"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "typescript": "^5.3.3"
