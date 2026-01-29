@@ -56,14 +56,14 @@ Each step should be a concise instruction.`;
       if (parsed && Array.isArray(parsed.steps)) {
         planSteps = parsed.steps.map(String);
       } else if (Array.isArray(parsed)) {
-                        // Fallback if model returns just array
-                        planSteps = parsed.map(String);
-                      }
-                    } catch {
-                       // JSON parsing failed, try plain text parsing
-                    }
-                
-            // Attempt 2: Parse text (bullets/numbers)
+        // Fallback if model returns just array
+        planSteps = parsed.map(String);
+      }
+    } catch {
+      // JSON parsing failed, try plain text parsing
+    }
+
+    // Attempt 2: Parse text (bullets/numbers)
     if (planSteps.length === 0) {
       const parsedPlan = parsePlanFromText(rawText);
       if (parsedPlan && parsedPlan.steps.length > 0) {

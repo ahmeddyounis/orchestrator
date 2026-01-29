@@ -23,7 +23,13 @@ describe('Subprocess Integration', () => {
     timeoutMs: 5000,
   };
 
-  const runDir = path.join(process.cwd(), '.orchestrator', 'runs', 'test-run-id-integration', 'tool_logs');
+  const runDir = path.join(
+    process.cwd(),
+    '.orchestrator',
+    'runs',
+    'test-run-id-integration',
+    'tool_logs',
+  );
 
   beforeEach(async () => {
     await fs.mkdir(runDir, { recursive: true });
@@ -58,9 +64,9 @@ describe('Subprocess Integration', () => {
 
     const shortCtx = { ...ctx, timeoutMs: 1000 };
 
-    await expect(adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx))
-      .rejects
-      .toThrow('TimeoutError');
+    await expect(
+      adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx),
+    ).rejects.toThrow('TimeoutError');
   });
 
   it('should timeout if end marker is missing', async () => {
@@ -70,9 +76,9 @@ describe('Subprocess Integration', () => {
 
     const shortCtx = { ...ctx, timeoutMs: 1500 };
 
-    await expect(adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx))
-      .rejects
-      .toThrow('TimeoutError');
+    await expect(
+      adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx),
+    ).rejects.toThrow('TimeoutError');
   });
 
   it('should enforce maxOutputSize via ProcessManager', async () => {
@@ -82,8 +88,8 @@ describe('Subprocess Integration', () => {
     });
 
     const resultPromise = new Promise<void>((resolve, reject) => {
-        pm.on('exit', () => resolve());
-        pm.on('error', (err) => reject(err));
+      pm.on('exit', () => resolve());
+      pm.on('error', (err) => reject(err));
     });
 
     await pm.spawn(['node', FAKE_CLI_PATH, '--large'], process.cwd(), {}, false);

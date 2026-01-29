@@ -33,6 +33,10 @@ providers:
     type: 'ollama'
     model: 'llama3'
 
+  claude-agent:
+    type: 'claude_code'
+    # See docs/providers/claude-code.md for setup
+
   custom-script:
     type: 'stdio' # For custom providers communicating via stdio
     command: './scripts/my-agent.sh'
@@ -64,7 +68,7 @@ Providers are the core AI models or agents used by the Orchestrator. You can def
 
 ### Properties
 
-- `type`: The type of provider. Common types include `openai`, `anthropic`, `google`, `ollama`.
+- `type`: The type of provider. Common types include `openai`, `anthropic`, `google`, `ollama`, and `claude_code` (see [Claude Code Provider](providers/claude-code.md)).
 - `model`: The specific model identifier (e.g., `gpt-4-turbo`, `claude-3-opus-20240229`).
 - `api_key_env`: The name of the environment variable that holds the API key. **Security Note:** Do not commit API keys directly to configuration files. Use `api_key_env`.
 - `api_key`: (Optional) Direct API key string. Discouraged for security reasons.

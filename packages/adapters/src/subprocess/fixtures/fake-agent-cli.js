@@ -19,16 +19,16 @@ process.stdin.on('data', (chunk) => {
     process.stdout.write(`You said: ${input}\n`);
 
     if (isLarge) {
-        // Output ~100KB
-        const chunk = 'X'.repeat(1024); 
-        for(let i=0; i<100; i++) {
-            process.stdout.write(chunk);
-        }
-        process.stdout.write('\n');
+      // Output ~100KB
+      const chunk = 'X'.repeat(1024);
+      for (let i = 0; i < 100; i++) {
+        process.stdout.write(chunk);
+      }
+      process.stdout.write('\n');
     }
 
     if (!noEndMarker) {
-        process.stdout.write(promptMarker);
+      process.stdout.write(promptMarker);
     }
   };
 
