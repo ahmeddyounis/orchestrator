@@ -12,13 +12,13 @@ These options apply to all commands:
 - `--config <path>`: Path to an explicit configuration file. Overrides user and repo configs.
 - `--verbose`: Enable verbose logging for debugging purposes.
 - `--yes`: Automatically answer "yes" to all prompts.
-- `--non-interactive`: Disable interactive prompts. FAils if a prompt is required and not answered via flags.
+- `--non-interactive`: Disable interactive prompts. Fails if a prompt is required and not answered via flags.
 
 ## Commands
 
 ### `run`
 
-Run an agentic task to achieve a specified goal.
+Run an agentic task to achieve a specified goal. **Best for general features, refactoring, or ad-hoc tasks.**
 
 **Usage:**
 
@@ -32,7 +32,11 @@ orchestrator run <goal> [options]
 
 **Options:**
 
-- `--budget <key=value>`: Set budget overrides (e.g., `gpt4=100`). Can be specified multiple times for different keys.
+- `--think <level>`: Set thinking level (`L0`, `L1`, or `auto`). Defaults to `auto` (L1).
+  - `L0`: Reflex mode (fast, single-pass).
+  - `L1`: Reasoning mode (plan then execute).
+- `--budget <key=value>`: Set budget limits. Can be specified multiple times.
+  - Keys: `tokens`, `cost` (USD), `iter` (steps), `time` (duration).
 - `--planner <providerId>`: Override the configured planner provider.
 - `--executor <providerId>`: Override the configured executor provider.
 - `--reviewer <providerId>`: Override the configured reviewer provider.
@@ -40,27 +44,45 @@ orchestrator run <goal> [options]
 
 **Examples:**
 
-Run a simple task:
+Run a simple task (L0 is efficient here):
 
 ```bash
-orchestrator run "Update the README to include installation instructions"
+orchestrator run "Update the README to include installation instructions" --think L0
 ```
 
-Run with specific providers:
+Run a complex task with planning (L1):
 
 ```bash
-orchestrator run "Refactor the login component" --planner o1 --executor claude-3-opus
+orchestrator run "Refactor the login component to use hooks" --think L1
 ```
 
-Run with budget limits:
+Run with specific budgets:
 
 ```bash
-orchestrator run "Fix the bug in auth" --budget tokens=10000 --budget cost=5.00
+orchestrator run "Optimize database queries" --budget cost=2.00 --budget time=15m
+```
+
+**Monorepo Examples:**
+
+Run a task in a specific package (pnpm):
+
+```bash
+# Using pnpm filtering to run in a specific package context
+pnpm --filter @my-org/ui exec orchestrator run "Add a Button component"
+```
+
+Run a task across the workspace (Turbo):
+
+```bash
+# Orchestrator is aware of monorepo structures
+orchestrator run "Update all packages to use React 19"
 ```
 
 ### `fix`
 
-Fix an issue based on a goal.
+Fix an issue based on a goal. **Best for bug fixes and targeted repairs.**
+
+Functionally similar to `run`, but uses a `fix/` branch prefix and defaults to L1 thinking to ensure careful analysis of the bug.
 
 **Usage:**
 
@@ -72,15 +94,28 @@ orchestrator fix <goal> [options]
 
 - `<goal>`: The description of the issue to fix.
 
+**Options:**
+
+- `--think <level>`: Set thinking level (`L0`, `L1`). Defaults to `L1`.
+- `--budget <key=value>`: Set budget limits.
+
 **Examples:**
+
+Fix a specific bug:
 
 ```bash
 orchestrator fix "The login button is misaligned on mobile"
 ```
 
+Fix with a strict cost limit:
+
+```bash
+orchestrator fix "Resolve the race condition in the cache" --budget cost=0.50
+```
+
 ### `plan`
 
-Plan a task based on a goal without executing it.
+Plan a task based on a goal without executing it. This is effectively the "Plan" phase of an L1 run, stopping before execution.
 
 **Usage:**
 
