@@ -52,6 +52,14 @@ export interface RunResult {
     | 'error'
     | 'non_improving';
   recommendations?: string;
+  verification?: {
+    enabled: boolean;
+    passed: boolean;
+    summary?: string;
+    failedChecks?: string[];
+    reportPaths?: string[];
+  };
+  lastFailureSignature?: string;
 }
 
 export interface RunOptions {
@@ -234,19 +242,18 @@ END_DIFF
         payload: { status: 'failure', summary: msg },
       });
 
-      const result: RunResult = { status: 'failure', runId, summary: msg };
+      const result: RunResult = {
+        status: 'failure',
+        runId,
+        summary: msg,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
+      };
 
-      await fs.writeFile(
-        artifacts.summary,
-        JSON.stringify(
-          {
-            ...result,
-            verification: this.config.verification,
-          },
-          null,
-          2,
-        ),
-      );
+      await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
       // Write manifest before returning
       await writeManifest(artifacts.manifest, {
@@ -321,6 +328,11 @@ END_DIFF
         summary: 'Patch applied successfully',
         filesChanged: result.filesChanged,
         patchPaths: [patchPath],
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
       };
     } else {
       const msg = result.error?.message || 'Unknown error';
@@ -348,20 +360,15 @@ END_DIFF
         runId,
         summary: `Patch application failed: ${msg}`,
         patchPaths: [patchPath],
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
       };
     }
 
-    await fs.writeFile(
-      artifacts.summary,
-      JSON.stringify(
-        {
-          ...runResult,
-          verification: this.config.verification,
-        },
-        null,
-        2,
-      ),
-    );
+    await fs.writeFile(artifacts.summary, JSON.stringify(runResult, null, 2));
 
     // Write manifest
     await writeManifest(artifacts.manifest, {
@@ -448,18 +455,17 @@ END_DIFF
         payload: { status: 'failure', summary: msg },
       });
 
-      const result: RunResult = { status: 'failure', runId, summary: msg };
-      await fs.writeFile(
-        artifacts.summary,
-        JSON.stringify(
-          {
-            ...result,
-            verification: this.config.verification,
-          },
-          null,
-          2,
-        ),
-      );
+      const result: RunResult = {
+        status: 'failure',
+        runId,
+        summary: msg,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
+      };
+      await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
       return result;
     }
@@ -530,19 +536,14 @@ END_DIFF
         filesChanged: Array.from(touchedFiles),
         patchPaths,
         stopReason,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
       };
 
-      await fs.writeFile(
-        artifacts.summary,
-        JSON.stringify(
-          {
-            ...result,
-            verification: this.config.verification,
-          },
-          null,
-          2,
-        ),
-      );
+      await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
       await writeManifest(artifacts.manifest, {
         runId,
@@ -841,6 +842,10 @@ INSTRUCTIONS:
       { runId },
     );
 
+    const initialReportPath = path.join(artifacts.root, 'verification_report_initial.json');
+    await fs.writeFile(initialReportPath, JSON.stringify(verification, null, 2));
+    const reportPaths = [initialReportPath];
+
     if (verification.passed) {
       await eventBus.emit({
         type: 'RunFinished',
@@ -849,11 +854,21 @@ INSTRUCTIONS:
         runId,
         payload: { status: 'success', summary: 'L2 Verified Success' },
       });
-      return {
+      
+      const result: RunResult = {
         ...l1Result,
         status: 'success',
         summary: 'L2 Verified Success',
+        verification: {
+          enabled: profile.enabled,
+          passed: true,
+          summary: verification.summary,
+          reportPaths,
+        },
       };
+
+      await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+      return result;
     }
 
     // 4. Repair Loop
@@ -894,14 +909,26 @@ INSTRUCTIONS:
               details: 'Verification failure signature unchanged for 2 iterations',
             },
           });
-          return {
+          
+          const result: RunResult = {
             ...l1Result,
             status: 'failure',
             stopReason: 'non_improving',
             summary: 'Verification failure signature unchanged for 2 iterations',
             filesChanged: Array.from(touchedFiles),
             patchPaths,
+            verification: {
+              enabled: profile.enabled,
+              passed: false,
+              summary: verification.summary,
+              failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
+              reportPaths,
+            },
+            lastFailureSignature: verification.failureSignature,
           };
+
+          await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+          return result;
         }
       } else {
         consecutiveSameSignature = 0;
@@ -1031,10 +1058,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         { runId },
       );
 
-      await fs.writeFile(
-        path.join(artifacts.root, `verification_report_iter_${iterations}.json`),
-        JSON.stringify(verification, null, 2),
-      );
+      const reportPath = path.join(artifacts.root, `verification_report_iter_${iterations}.json`);
+      await fs.writeFile(reportPath, JSON.stringify(verification, null, 2));
+      reportPaths.push(reportPath);
 
       await fs.writeFile(
         path.join(artifacts.root, `verification_summary_iter_${iterations}.txt`),
@@ -1068,6 +1094,12 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           summary: `L2 Verified Success after ${iterations} iterations`,
           filesChanged: Array.from(touchedFiles),
           patchPaths,
+          verification: {
+            enabled: profile.enabled,
+            passed: true,
+            summary: verification.summary,
+            reportPaths,
+          },
         };
 
         await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
@@ -1101,6 +1133,14 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       filesChanged: Array.from(touchedFiles),
       patchPaths,
       stopReason: 'budget_exceeded',
+      verification: {
+        enabled: profile.enabled,
+        passed: false,
+        summary: verification.summary,
+        failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
+        reportPaths,
+      },
+      lastFailureSignature: verification.failureSignature,
     };
 
     await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));

@@ -6,6 +6,14 @@ export interface OutputResult {
   artifactsDir?: string;
   providers?: Record<string, string | undefined>;
   nextSteps?: string[];
+  verification?: {
+    enabled: boolean;
+    passed: boolean;
+    summary?: string;
+    failedChecks?: string[];
+    reportPaths?: string[];
+  };
+  lastFailureSignature?: string;
   [key: string]: unknown;
 }
 
@@ -26,6 +34,25 @@ export class OutputRenderer {
     if (data.suite) console.log(`Suite: ${data.suite}`);
     if (data.runId) console.log(`Run ID: ${data.runId}`);
     if (data.artifactsDir) console.log(`Artifacts: ${data.artifactsDir}`);
+
+    if (data.verification) {
+      console.log('\nVerification:');
+      if (!data.verification.enabled) {
+        console.log('  Status: Not run');
+      } else {
+        const icon = data.verification.passed ? '✅' : '❌';
+        console.log(
+          `  Status: ${icon} ${data.verification.passed ? 'Verified' : 'Verification failed'}`,
+        );
+        if (data.verification.failedChecks && data.verification.failedChecks.length > 0) {
+          console.log(`  Failed Checks: ${data.verification.failedChecks.join(', ')}`);
+        }
+        if (data.verification.reportPaths && data.verification.reportPaths.length > 0) {
+          console.log('  Reports:');
+          data.verification.reportPaths.forEach((p) => console.log(`    - ${p}`));
+        }
+      }
+    }
 
     if (data.providers) {
       const activeProviders = Object.entries(data.providers).filter(([, provider]) => !!provider);

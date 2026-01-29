@@ -189,6 +189,13 @@ describe('Orchestrator L2', () => {
 
     expect(result.status).toBe('success');
     expect(result.summary).toContain('L2 Verified Success');
+    
+    expect(result.verification).toBeDefined();
+    expect(result.verification?.enabled).toBe(true);
+    expect(result.verification?.passed).toBe(true);
+    expect(result.verification?.summary).toBe('Verification Passed');
+    expect(result.verification?.reportPaths).toHaveLength(1);
+
     // Check verification run was called once
     const runnerMock = (VerificationRunner as unknown as ReturnType<typeof vi.fn>).prototype.run;
     expect(runnerMock).toHaveBeenCalledTimes(1);
@@ -238,6 +245,12 @@ describe('Orchestrator L2', () => {
 
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('non_improving');
+    
+    expect(result.verification).toBeDefined();
+    expect(result.verification?.enabled).toBe(true);
+    expect(result.verification?.passed).toBe(false);
+    expect(result.verification?.failedChecks).toContain('test');
+    
     // Iterations:
     // 0: Initial fail (sig1)
     // 1: Repair 1 fail (sig1) -> consecutive=1

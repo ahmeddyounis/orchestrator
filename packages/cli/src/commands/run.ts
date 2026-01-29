@@ -210,6 +210,8 @@ export function registerRunCommand(program: Command) {
           patchPaths: result.patchPaths || [],
           cost: costTracker.getSummary(),
           summary: result.summary,
+          verification: result.verification,
+          lastFailureSignature: result.lastFailureSignature,
         };
 
         if (result.status === 'success') {
