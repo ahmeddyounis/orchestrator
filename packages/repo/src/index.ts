@@ -8,6 +8,9 @@ export * from './snippets/index';
 export * from './context/index';
 export * from './patch/applier';
 export * from './git';
+export * from './toolchain/types';
+export * from './toolchain/detector';
+
 
 /**
  * Finds the repository root starting from the current directory.

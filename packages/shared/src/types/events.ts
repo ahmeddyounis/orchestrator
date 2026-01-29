@@ -281,6 +281,19 @@ export interface StepFinished extends BaseEvent {
   };
 }
 
+export interface ToolchainDetected extends BaseEvent {
+  type: 'ToolchainDetected';
+  payload: {
+    packageManager: string;
+    usesTurbo: boolean;
+    commands: {
+      testCmd?: string;
+      lintCmd?: string;
+      typecheckCmd?: string;
+    };
+  };
+}
+
 export interface RunStopped extends BaseEvent {
   type: 'RunStopped';
   payload: {
@@ -320,5 +333,6 @@ export type OrchestratorEvent =
   | CheckpointCreated
   | PatchApplyFailed
   | RollbackPerformed
+  | ToolchainDetected
   | StepStarted
   | StepFinished;
