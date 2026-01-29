@@ -49,7 +49,7 @@ describe('PatchStore', () => {
     expect(path.basename(filePath)).toBe('iter_1_candidate_0.patch');
 
     const savedContent = await fs.readFile(filePath, 'utf-8');
-    expect(savedContent).toBe(patchContent);
+    expect(savedContent).toBe(patchContent + '\n');
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
@@ -63,7 +63,7 @@ describe('PatchStore', () => {
     expect(path.basename(filePath)).toBe('iter_2_selected.patch');
 
     const savedContent = await fs.readFile(filePath, 'utf-8');
-    expect(savedContent).toBe(patchContent);
+    expect(savedContent).toBe(patchContent + '\n');
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
@@ -77,7 +77,7 @@ describe('PatchStore', () => {
     expect(path.basename(filePath)).toBe('final.diff.patch');
 
     const savedContent = await fs.readFile(filePath, 'utf-8');
-    expect(savedContent).toBe(patchContent);
+    expect(savedContent).toBe(patchContent + '\n');
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);

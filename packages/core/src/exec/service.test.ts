@@ -69,7 +69,7 @@ describe('ExecutionService', () => {
     expect(result.success).toBe(true);
     expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(
       repoRoot,
-      'diff...',
+      'diff...\n',
       expect.objectContaining({
         maxFilesChanged: 5,
         maxLinesTouched: 100,
@@ -110,7 +110,7 @@ describe('ExecutionService', () => {
     expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(
       1,
       repoRoot,
-      'diff...',
+      'diff...\n',
       expect.objectContaining({
         maxFilesChanged: 5,
       }),
@@ -119,7 +119,7 @@ describe('ExecutionService', () => {
     expect(mockApplier.applyUnifiedDiff).toHaveBeenNthCalledWith(
       2,
       repoRoot,
-      'diff...',
+      'diff...\n',
       expect.objectContaining({
         maxFilesChanged: Infinity,
         maxLinesTouched: Infinity,

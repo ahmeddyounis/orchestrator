@@ -13,11 +13,28 @@ export default [
       '**/.t2',
       '**/.plans',
       '**/.idea',
+      '**/.orchestrator',
+      '**/.tmp',
     ],
   },
   { files: ['**/*.{js,mjs,cjs,ts}'] },
   { languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    files: ['**/*.test.ts', '**/*.deterministic.test.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+  {
+    files: ['**/__fixtures__/**/*.{js,cjs,mjs}'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-empty': 'off',
+    },
+  },
   eslintConfigPrettier,
 ];

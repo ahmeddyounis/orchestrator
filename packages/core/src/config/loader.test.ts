@@ -32,6 +32,18 @@ describe('ConfigLoader', () => {
         configVersion: 1,
         thinkLevel: 'L1',
         budget: DEFAULT_BUDGET,
+        verification: {
+          enabled: true,
+          mode: 'auto',
+          steps: [],
+          auto: {
+            enableLint: true,
+            enableTypecheck: true,
+            enableTests: true,
+            testScope: 'targeted',
+            maxCommandsPerIteration: 3,
+          },
+        },
       });
     });
 

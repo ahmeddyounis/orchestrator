@@ -271,7 +271,19 @@ END_DIFF
       return { status: 'failure', runId, summary: msg };
     }
 
-    const diffContent = diffMatch[1].trim();
+    const rawDiffContent = diffMatch[1];
+    // Remove completely empty leading/trailing lines (no characters at all)
+    // but preserve lines with spaces (which are valid diff context for blank lines)
+    const lines = rawDiffContent.split('\n');
+    const firstContentIdx = lines.findIndex((l) => l !== '');
+    let lastContentIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i] !== '') {
+        lastContentIdx = i;
+        break;
+      }
+    }
+    const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
@@ -290,7 +302,8 @@ END_DIFF
     });
 
     const applier = new PatchApplier();
-    const result = await applier.applyUnifiedDiff(this.repoRoot, diffContent, {
+    const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
+    const result = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
       maxFilesChanged: this.config.patch?.maxFilesChanged,
       maxLinesTouched: this.config.patch?.maxLinesChanged,
       allowBinary: this.config.patch?.allowBinary,
@@ -722,7 +735,20 @@ INSTRUCTIONS:
           consecutiveInvalidDiffs = 0;
         }
 
-        const diffContent = diffMatch[1].trim();
+        const rawDiffContent = diffMatch[1];
+        // Remove completely empty leading/trailing lines (no characters at all)
+        // but preserve lines with spaces (which are valid diff context for blank lines)
+        const lines = rawDiffContent.split('\n');
+        const firstContentIdx = lines.findIndex((l) => l !== '');
+        let lastContentIdx = -1;
+        for (let i = lines.length - 1; i >= 0; i--) {
+          if (lines[i] !== '') {
+            lastContentIdx = i;
+            break;
+          }
+        }
+        const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
+
 
         if (diffContent.length === 0) {
           return finish('failure', 'invalid_output', 'Executor produced empty patch');
@@ -823,14 +849,14 @@ INSTRUCTIONS:
     // Construct Profile
     const profile: VerificationProfile = {
       enabled: this.config.verification?.enabled ?? true,
-      mode: (this.config.verification?.mode as any) || 'auto',
+      mode: this.config.verification?.mode || 'auto',
       steps: [],
       auto: {
         enableLint: this.config.verification?.auto?.enableLint ?? true,
         enableTypecheck: this.config.verification?.auto?.enableTypecheck ?? true,
         enableTests: this.config.verification?.auto?.enableTests ?? true,
-        testScope: (this.config.verification?.auto?.testScope as any) || 'targeted',
-        maxCommandsPerIteration: 5,
+        testScope: this.config.verification?.auto?.testScope || 'targeted',
+        maxCommandsPerIteration: this.config.verification?.auto?.maxCommandsPerIteration ?? 5,
       },
     };
 
@@ -892,7 +918,7 @@ INSTRUCTIONS:
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, goal },
-      } as any);
+      });
 
       // Stop Conditions checks (Signature)
       if (failureSignature && verification.failureSignature === failureSignature) {
@@ -998,11 +1024,23 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           timestamp: new Date().toISOString(),
           runId,
           payload: { iteration: iterations, patchPath: 'none (no-diff)' },
-        } as any);
+        });
         continue;
       }
 
-      const diffContent = diffMatch[1].trim();
+      const rawDiffContent = diffMatch[1];
+      // Remove completely empty leading/trailing lines (no characters at all)
+      // but preserve lines with spaces (which are valid diff context for blank lines)
+      const lines = rawDiffContent.split('\n');
+      const firstContentIdx = lines.findIndex((l) => l !== '');
+      let lastContentIdx = -1;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i] !== '') {
+          lastContentIdx = i;
+          break;
+        }
+      }
+      const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
       // Apply Patch
       const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
@@ -1015,10 +1053,12 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, patchPath },
-      } as any);
+      });
 
       const applier = new PatchApplier();
-      const applyResult = await applier.applyUnifiedDiff(this.repoRoot, diffContent, {
+      const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
+      
+      const applyResult = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
         maxFilesChanged: 5,
       });
 
@@ -1074,7 +1114,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           timestamp: new Date().toISOString(),
           runId,
           payload: { iteration: iterations, result: 'success' },
-        } as any);
+        });
 
         await eventBus.emit({
           type: 'RunFinished',
@@ -1113,7 +1153,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, result: 'failure' },
-      } as any);
+      });
     }
 
     // Budget exceeded

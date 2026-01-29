@@ -103,8 +103,11 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       // Consume initial prompt
       await pm.readUntilHeuristic(800, isPrompt);
 
-      // Reset output buffer to avoid including initial prompt in response
-      outputText = '';
+      // Only clear outputText if pm.isRunning after initial read
+      // Non-interactive processes exit and their output is the response
+      if (pm.isRunning) {
+        outputText = '';
+      }
 
       // Render prompt
       const prompt = req.messages

@@ -113,7 +113,8 @@ ${stderr}`),
     // Reset hard to the checkpoint ref
     await this.exec(['reset', '--hard', checkpointRef]);
 
-    // Also clean any untracked files that might have been created since then
-    await this.exec(['clean', '-fd']);
+    // Also clean any untracked files that might have been created since then.
+    // Preserve run artifacts so the orchestrator can continue logging across retries.
+    await this.exec(['clean', '-fd', '-e', '.orchestrator/']);
   }
 }

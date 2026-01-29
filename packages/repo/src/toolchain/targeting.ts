@@ -45,7 +45,7 @@ export class TargetingManager {
            }
            // Once found, we stop traversing up for this file (nearest package)
            break;
-         } catch (e) {
+         } catch {
            // File doesn't exist or is invalid, continue up
          }
 

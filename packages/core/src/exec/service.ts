@@ -32,10 +32,13 @@ export class ExecutionService {
         allowBinary: this.config?.patch?.allowBinary,
       };
 
-      // 2. Try applying with limits
-      let result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText, patchOptions);
+      // 2. Ensure patch has trailing newline (required by git apply)
+      const patchTextWithNewline = patchText.endsWith('\n') ? patchText : patchText + '\n';
 
-      // 3. Handle Limit Exceeded -> Confirmation
+      // 3. Try applying with limits
+      let result = await this.applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, patchOptions);
+
+      // 4. Handle Limit Exceeded -> Confirmation
       if (!result.applied && result.error?.type === 'limit') {
         if (this.confirmationProvider) {
           const confirmed = await this.confirmationProvider.confirm(
@@ -46,7 +49,7 @@ export class ExecutionService {
 
           if (confirmed) {
             // Retry with unlimited
-            result = await this.applier.applyUnifiedDiff(this.repoRoot, patchText, {
+            result = await this.applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
               ...patchOptions,
               maxFilesChanged: Infinity,
               maxLinesTouched: Infinity,

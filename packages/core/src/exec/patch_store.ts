@@ -24,7 +24,8 @@ export class PatchStore {
 
   private async savePatch(filename: string, content: string): Promise<string> {
     const filePath = path.join(this.patchesDir, filename);
-    await fs.writeFile(filePath, content, 'utf-8');
+    const contentWithNewline = content.endsWith('\n') ? content : content + '\n';
+    await fs.writeFile(filePath, contentWithNewline, 'utf-8');
     await this.updateManifest(filePath);
     return filePath;
   }

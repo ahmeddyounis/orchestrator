@@ -1,9 +1,12 @@
 /.t2
 /.plans
 /.logs
+.orchestrator
+.tmp
 node_modules
 dist
 .turbo
 coverage
 .DS_Store
 *.log.orchestrator
+*.tsbuildinfo

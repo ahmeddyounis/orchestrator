@@ -27,7 +27,7 @@ async function copyDir(src: string, dest: string) {
 
 const FIXTURE_SRC = path.resolve(__dirname, '../../repo/src/__fixtures__/ts-monorepo');
 // Use a unique path for the test execution to avoid conflicts
-const TEST_ROOT = path.resolve(__dirname, '__tmp_test_env_' + Date.now());
+const TEST_ROOT = path.resolve(process.cwd(), '.tmp', '__tmp_test_env_' + Date.now());
 const CLI_PATH = path.resolve(__dirname, '__fixtures__/fake-diff-cli.js');
 
 describe('Orchestrator Deterministic E2E', () => {
