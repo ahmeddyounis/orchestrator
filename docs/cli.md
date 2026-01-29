@@ -36,6 +36,7 @@ orchestrator run <goal> [options]
 - `--planner <providerId>`: Override the configured planner provider.
 - `--executor <providerId>`: Override the configured executor provider.
 - `--reviewer <providerId>`: Override the configured reviewer provider.
+- `--allow-large-diff`: Allow large diffs without user confirmation. Useful for non-interactive runs.
 
 **Examples:**
 

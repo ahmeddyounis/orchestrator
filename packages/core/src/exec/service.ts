@@ -77,18 +77,20 @@ export class ExecutionService {
         });
 
         // Create Checkpoint
-        const checkpointRef = await this.git.createCheckpoint(`After: ${description}`);
+        if (!this.config?.execution?.noCheckpoints) {
+          const checkpointRef = await this.git.createCheckpoint(`After: ${description}`);
 
-        await this.eventBus.emit({
-          type: 'CheckpointCreated',
-          schemaVersion: 1,
-          timestamp: new Date().toISOString(),
-          runId: this.runId,
-          payload: {
-            checkpointRef,
-            label: description,
-          },
-        });
+          await this.eventBus.emit({
+            type: 'CheckpointCreated',
+            schemaVersion: 1,
+            timestamp: new Date().toISOString(),
+            runId: this.runId,
+            payload: {
+              checkpointRef,
+              label: description,
+            },
+          });
+        }
 
         return true;
       } else {

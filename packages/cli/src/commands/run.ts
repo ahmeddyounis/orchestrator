@@ -53,10 +53,31 @@ export function registerRunCommand(program: Command) {
               reviewer: options.reviewer,
             },
             patch: options.allowLargeDiff
-              ? { maxFilesChanged: Infinity, maxLinesChanged: Infinity }
+              ? { maxFilesChanged: Infinity, maxLinesChanged: Infinity, allowBinary: false }
               : undefined,
           },
         });
+
+        // Initialize Git and branch
+        const runId = Date.now().toString();
+        const git = new GitService({ repoRoot });
+
+        // Ensure clean state (unless allowed)
+        if (config.execution?.allowDirtyWorkingTree) {
+          renderer.log(
+            'WARNING: execution.allowDirtyWorkingTree is enabled. Uncommitted changes may be committed or lost during rollback.',
+          );
+        }
+        await git.ensureCleanWorkingTree({
+          allowDirty: config.execution?.allowDirtyWorkingTree,
+        });
+
+        // Create and switch to agent branch
+        const branchName = `agent/${runId}`;
+        await git.createAndCheckoutBranch(branchName);
+        if (globalOpts.verbose) {
+          renderer.log(`Created and checked out branch "${branchName}"`);
+        }
 
         // Validate providers
         const validateProvider = (role: string, providerId?: string) => {
@@ -76,7 +97,6 @@ export function registerRunCommand(program: Command) {
         validateProvider('executor', config.defaults?.executor);
         validateProvider('reviewer', config.defaults?.reviewer);
 
-        const runId = Date.now().toString();
         const artifacts = await createRunDir(repoRoot, runId);
         const logger = new JsonlLogger(artifacts.trace);
 
@@ -145,7 +165,6 @@ export function registerRunCommand(program: Command) {
         await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
 
         // Save final diff
-        const git = new GitService({ repoRoot });
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
 
         try {

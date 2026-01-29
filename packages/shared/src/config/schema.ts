@@ -52,6 +52,12 @@ export const ConfigSchema = z.object({
       allowBinary: z.boolean().default(false),
     })
     .optional(),
+  execution: z
+    .object({
+      allowDirtyWorkingTree: z.boolean().default(false),
+      noCheckpoints: z.boolean().default(false),
+    })
+    .optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
