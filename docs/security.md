@@ -46,7 +46,9 @@ These controls are enforced in the initial version of the Orchestrator.
 ### 1. Command Execution Policy
 
 - **Denylist:** The agent is explicitly forbidden from running dangerous commands (e.g., `sudo`, dangerous `rm` patterns) without explicit, granular confirmation.
-- **Confirmation:** All shell commands defaults to requiring user confirmation.
+- **Confirmation:** All shell commands defaults to requiring user confirmation unless they match a configured **Allowlist**.
+- **Flags:** Users can enforce strict non-interactive modes (`--non-interactive`) or opt-in to riskier auto-approval (`--yes`).
+- **Documentation:** See [docs/tools.md](tools.md) for full configuration details.
 
 ### 2. Secrets Handling
 
