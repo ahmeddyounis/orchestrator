@@ -136,6 +136,37 @@ export interface ProviderRequestFinished extends BaseEvent {
   };
 }
 
+export interface SubprocessSpawned extends BaseEvent {
+  type: 'SubprocessSpawned';
+  payload: {
+    command: string[];
+    cwd: string;
+    pid: number;
+    pty: boolean;
+  };
+}
+
+export interface SubprocessOutputChunked extends BaseEvent {
+  type: 'SubprocessOutputChunked';
+  payload: {
+    pid: number;
+    stream: 'stdout' | 'stderr';
+    chunk: string;
+    isSampled?: boolean; // if we are skipping chunks
+  };
+}
+
+export interface SubprocessExited extends BaseEvent {
+  type: 'SubprocessExited';
+  payload: {
+    pid: number;
+    exitCode: number | null;
+    signal: string | number | null;
+    durationMs: number;
+    error?: string; // For things like timeouts or spawn errors
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -151,4 +182,7 @@ export type OrchestratorEvent =
   | ConfirmationResolved
   | ProviderSelected
   | ProviderRequestStarted
-  | ProviderRequestFinished;
+  | ProviderRequestFinished
+  | SubprocessSpawned
+  | SubprocessOutputChunked
+  | SubprocessExited;

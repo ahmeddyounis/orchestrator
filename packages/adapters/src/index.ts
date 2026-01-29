@@ -8,3 +8,4 @@ export * from './errors';
 
 export * from './openai';
 export * from './anthropic';
+export * from './subprocess';
