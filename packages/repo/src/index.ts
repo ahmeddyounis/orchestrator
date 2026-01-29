@@ -36,13 +36,17 @@ async function isRepoRoot(dir: string): Promise<boolean> {
   try {
     await fs.access(path.join(dir, '.git'));
     return true;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   // 2. Check for pnpm-workspace.yaml
   try {
     await fs.access(path.join(dir, 'pnpm-workspace.yaml'));
     return true;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   // 3. Check for package.json with workspaces
   try {
@@ -52,7 +56,9 @@ async function isRepoRoot(dir: string): Promise<boolean> {
     if (pkg.workspaces) {
       return true;
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   return false;
 }

@@ -12,18 +12,18 @@ vi.mock('openai', () => {
     default: class MockOpenAI {
       chat = {
         completions: {
-          create: mockCreate
-        }
+          create: mockCreate,
+        },
       };
     },
     APIError: class extends Error {
-        status: number;
-        constructor(message: string, status?: number) {
-            super(message);
-            this.status = status || 500;
-        }
+      status: number;
+      constructor(message: string, status?: number) {
+        super(message);
+        this.status = status || 500;
+      }
     },
-    APIConnectionTimeoutError: class extends Error {}
+    APIConnectionTimeoutError: class extends Error {},
   };
 });
 
@@ -32,68 +32,83 @@ describe('OpenAIAdapter', () => {
   const mockContext: AdapterContext = {
     runId: 'test-run',
     logger: { log: vi.fn().mockResolvedValue(undefined) },
-    retryOptions: { maxRetries: 0 }
+    retryOptions: { maxRetries: 0 },
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     adapter = new OpenAIAdapter({
       type: 'openai',
       model: 'gpt-4',
-      api_key: 'test-key'
+      api_key: 'test-key',
     });
   });
 
   it('generate returns text and usage', async () => {
     mockCreate.mockResolvedValue({
-      choices: [{
-        message: { content: 'Hello', tool_calls: null }
-      }],
-      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
+      choices: [
+        {
+          message: { content: 'Hello', tool_calls: null },
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     });
 
-    const result = await adapter.generate({
-      messages: [{ role: 'user', content: 'Hi' }]
-    }, mockContext);
+    const result = await adapter.generate(
+      {
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      mockContext,
+    );
 
     expect(result.text).toBe('Hello');
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
-    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: 'Hi' }],
-      temperature: 0.2
-    }), expect.anything());
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: 'Hi' }],
+        temperature: 0.2,
+      }),
+      expect.anything(),
+    );
   });
 
   it('generate handles tool calls', async () => {
     mockCreate.mockResolvedValue({
-      choices: [{
-        message: { 
-          content: null,
-          tool_calls: [{
-            type: 'function',
-            id: 'call_1',
-            function: {
-              name: 'get_weather',
-              arguments: '{"location": "London"}'
-            }
-          }]
-        }
-      }]
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                type: 'function',
+                id: 'call_1',
+                function: {
+                  name: 'get_weather',
+                  arguments: '{"location": "London"}',
+                },
+              },
+            ],
+          },
+        },
+      ],
     });
 
-    const result = await adapter.generate({
-      messages: [{ role: 'user', content: 'Weather?' }],
-      tools: [{ name: 'get_weather', inputSchema: {} }]
-    }, mockContext);
+    const result = await adapter.generate(
+      {
+        messages: [{ role: 'user', content: 'Weather?' }],
+        tools: [{ name: 'get_weather', inputSchema: {} }],
+      },
+      mockContext,
+    );
 
     expect(result.text).toBeUndefined();
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls![0]).toEqual({
       name: 'get_weather',
       arguments: { location: 'London' },
-      id: 'call_1'
+      id: 'call_1',
     });
   });
 
@@ -102,16 +117,19 @@ describe('OpenAIAdapter', () => {
       yield { choices: [{ delta: { content: 'Hello' } }] };
       yield { choices: [{ delta: { content: ' World' } }] };
     })();
-    
+
     mockCreate.mockResolvedValue(asyncIterator);
 
-    const stream = adapter.stream({
-        messages: [{ role: 'user', content: 'Hi' }]
-    }, mockContext);
+    const stream = adapter.stream(
+      {
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      mockContext,
+    );
 
     const events: StreamEvent[] = [];
     for await (const event of stream) {
-        events.push(event);
+      events.push(event);
     }
 
     expect(events).toHaveLength(2);
@@ -124,17 +142,19 @@ describe('OpenAIAdapter', () => {
     const error = new (APIError as any)('Rate limit', 429);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (error as any).status = 429;
-    
+
     mockCreate.mockRejectedValue(error);
-    await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
-        .rejects.toThrow(RateLimitError);
+    await expect(
+      adapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, mockContext),
+    ).rejects.toThrow(RateLimitError);
   });
 
   it('maps TimeoutError', async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const error = new (APIConnectionTimeoutError as any)('Timeout');
-      mockCreate.mockRejectedValue(error);
-      await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
-          .rejects.toThrow(TimeoutError);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const error = new (APIConnectionTimeoutError as any)('Timeout');
+    mockCreate.mockRejectedValue(error);
+    await expect(
+      adapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, mockContext),
+    ).rejects.toThrow(TimeoutError);
   });
 });

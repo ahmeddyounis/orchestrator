@@ -8,6 +8,12 @@ export const ProviderConfigSchema = z
     api_key_env: z.string().optional(),
     api_key: z.string().optional(),
     command: z.string().optional(),
+    pricing: z
+      .object({
+        inputPerMTokUsd: z.number().optional(),
+        outputPerMTokUsd: z.number().optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

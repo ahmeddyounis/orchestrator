@@ -56,17 +56,20 @@ export class OpenAIAdapter implements ProviderAdapter {
         const messages = this.mapMessages(req.messages);
         const tools = this.mapTools(req.tools);
 
-        const completion = await this.client.chat.completions.create({
-          model: this.model,
-          messages,
-          tools: tools.length > 0 ? tools : undefined,
-          tool_choice: req.toolChoice as any,
-          max_tokens: req.maxTokens,
-          temperature: req.temperature ?? 0.2,
-          response_format: req.jsonMode ? { type: 'json_object' } : undefined,
-        }, {
-          signal,
-        });
+        const completion = await this.client.chat.completions.create(
+          {
+            model: this.model,
+            messages,
+            tools: tools.length > 0 ? tools : undefined,
+            tool_choice: req.toolChoice as any,
+            max_tokens: req.maxTokens,
+            temperature: req.temperature ?? 0.2,
+            response_format: req.jsonMode ? { type: 'json_object' } : undefined,
+          },
+          {
+            signal,
+          },
+        );
 
         const choice = completion.choices[0];
         const usage = completion.usage
@@ -109,19 +112,22 @@ export class OpenAIAdapter implements ProviderAdapter {
           const messages = this.mapMessages(req.messages);
           const tools = this.mapTools(req.tools);
 
-          return await this.client.chat.completions.create({
-            model: this.model,
-            messages,
-            tools: tools.length > 0 ? tools : undefined,
-            tool_choice: req.toolChoice as any,
-            max_tokens: req.maxTokens,
-            temperature: req.temperature ?? 0.2,
-            response_format: req.jsonMode ? { type: 'json_object' } : undefined,
-            stream: true,
-            stream_options: { include_usage: true }
-          }, {
-            signal,
-          });
+          return await this.client.chat.completions.create(
+            {
+              model: this.model,
+              messages,
+              tools: tools.length > 0 ? tools : undefined,
+              tool_choice: req.toolChoice as any,
+              max_tokens: req.maxTokens,
+              temperature: req.temperature ?? 0.2,
+              response_format: req.jsonMode ? { type: 'json_object' } : undefined,
+              stream: true,
+              stream_options: { include_usage: true },
+            },
+            {
+              signal,
+            },
+          );
         } catch (error) {
           throw this.mapError(error);
         }
@@ -234,4 +240,3 @@ export class OpenAIAdapter implements ProviderAdapter {
     return error;
   }
 }
-

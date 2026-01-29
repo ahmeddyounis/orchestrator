@@ -14,7 +14,9 @@ describe('findRepoRoot', () => {
   afterEach(async () => {
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // ignore
+    }
   });
 
   it('should find root with .git', async () => {

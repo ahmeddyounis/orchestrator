@@ -1,5 +1,7 @@
 import { Config, ProviderConfig, OrchestratorEvent } from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
+import { CostTracker } from './cost/tracker';
+import { CostTrackingAdapter } from './cost/proxy';
 
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
 
@@ -21,7 +23,10 @@ export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();
   private adapters = new Map<string, ProviderAdapter>();
 
-  constructor(private config: Config) {}
+  constructor(
+    private config: Config,
+    private costTracker?: CostTracker,
+  ) {}
 
   registerFactory(type: string, factory: AdapterFactory) {
     this.factories.set(type, factory);
@@ -57,7 +62,12 @@ export class ProviderRegistry {
     }
 
     // Create adapter
-    const adapter = factory(providerConfig);
+    let adapter = factory(providerConfig);
+
+    if (this.costTracker) {
+      adapter = new CostTrackingAdapter(providerId, adapter, this.costTracker);
+    }
+
     this.adapters.set(providerId, adapter);
     return adapter;
   }

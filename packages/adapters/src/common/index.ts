@@ -13,9 +13,11 @@ function isRetriableError(error: unknown): boolean {
   if (error instanceof RateLimitError || error instanceof TimeoutError) {
     return true;
   }
-  
+
   // Check for status codes (common in SDKs)
-  const status = (error as { status?: number; statusCode?: number })?.status || (error as { status?: number; statusCode?: number })?.statusCode;
+  const status =
+    (error as { status?: number; statusCode?: number })?.status ||
+    (error as { status?: number; statusCode?: number })?.statusCode;
   if (typeof status === 'number') {
     // 429: Too Many Requests
     // 500: Internal Server Error
@@ -26,7 +28,9 @@ function isRetriableError(error: unknown): boolean {
   }
 
   // Check for fetch/network errors
-  const code = (error as { code?: string; cause?: { code?: string } })?.code || (error as { code?: string; cause?: { code?: string } })?.cause?.code;
+  const code =
+    (error as { code?: string; cause?: { code?: string } })?.code ||
+    (error as { code?: string; cause?: { code?: string } })?.cause?.code;
   if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ECONNREFUSED') {
     return true;
   }
@@ -39,7 +43,7 @@ export async function executeProviderRequest<T>(
   provider: string,
   model: string,
   requestFn: (signal: AbortSignal) => Promise<T>,
-  optionsOverride: RetryOptions = {}
+  optionsOverride: RetryOptions = {},
 ): Promise<T> {
   const { maxRetries, initialDelayMs, maxDelayMs, backoffFactor } = {
     ...DEFAULT_OPTIONS,
@@ -48,7 +52,7 @@ export async function executeProviderRequest<T>(
   };
 
   const startTime = Date.now();
-  
+
   await ctx.logger.log({
     type: 'ProviderRequestStarted',
     schemaVersion: 1,
@@ -65,7 +69,7 @@ export async function executeProviderRequest<T>(
 
   while (attempts <= maxRetries) {
     const abortController = new AbortController();
-    
+
     // Handle user cancellation
     const abortHandler = () => {
       abortController.abort();
@@ -89,7 +93,7 @@ export async function executeProviderRequest<T>(
 
     try {
       const result = await requestFn(abortController.signal);
-      
+
       // Clear timeout
       if (timeoutId) clearTimeout(timeoutId);
       if (ctx.abortSignal) ctx.abortSignal.removeEventListener('abort', abortHandler);
@@ -115,12 +119,12 @@ export async function executeProviderRequest<T>(
       if (ctx.abortSignal) ctx.abortSignal.removeEventListener('abort', abortHandler);
 
       lastError = error;
-      
+
       // Don't retry if aborted by user
       if (ctx.abortSignal?.aborted) {
         throw error; // Let the AbortError propagate
       }
-      
+
       // Don't retry config errors (401, etc)
       if (error instanceof ConfigError) {
         break;
@@ -132,12 +136,9 @@ export async function executeProviderRequest<T>(
       }
 
       attempts++;
-      
+
       // Calculate delay with jitter
-      const delay = Math.min(
-        maxDelayMs,
-        initialDelayMs * Math.pow(backoffFactor, attempts - 1)
-      );
+      const delay = Math.min(maxDelayMs, initialDelayMs * Math.pow(backoffFactor, attempts - 1));
       const jitter = delay * 0.1 * (Math.random() * 2 - 1); // +/- 10%
       const finalDelay = Math.max(0, delay + jitter);
 
@@ -155,7 +156,7 @@ export async function executeProviderRequest<T>(
       provider,
       durationMs,
       success: false,
-      error: (lastError instanceof Error) ? lastError.message : String(lastError),
+      error: lastError instanceof Error ? lastError.message : String(lastError),
       retries: attempts,
     },
   });

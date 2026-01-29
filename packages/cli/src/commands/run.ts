@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry } from '@orchestrator/core';
+import { ConfigLoader, ProviderRegistry, CostTracker } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
 import {
   createRunDir,
@@ -9,6 +9,7 @@ import {
   ProviderConfig,
 } from '@orchestrator/shared';
 import path from 'path';
+import * as fs from 'fs/promises';
 import { OutputRenderer } from '../output/renderer';
 
 function parseBudgets(value: string, previous: Record<string, number>): Record<string, number> {
@@ -76,8 +77,10 @@ export function registerRunCommand(program: Command) {
 
         ConfigLoader.writeEffectiveConfig(config, artifacts.root);
 
+        const costTracker = new CostTracker(config);
+
         // Initialize Registry and wiring
-        const registry = new ProviderRegistry(config);
+        const registry = new ProviderRegistry(config, costTracker);
 
         // TODO: Move this to a central adapter registration location
         const stubFactory = (cfg: ProviderConfig) => ({
@@ -132,12 +135,16 @@ export function registerRunCommand(program: Command) {
           toolLogPaths: [],
         });
 
+        const costSummary = costTracker.getSummary();
+        await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
+
         renderer.render({
           status: 'running',
           goal,
           runId,
           artifactsDir: artifacts.root,
           providers: config.defaults,
+          cost: costSummary,
           nextSteps: [
             `View detailed logs in ${path.join(artifacts.root, 'run.log')}`, // Example next step
             'Monitor progress via the dashboard (if available)',
