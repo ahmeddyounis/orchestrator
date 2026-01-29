@@ -1,8 +1,15 @@
 {
   "name": "@orchestrator/cli",
   "version": "0.0.0",
+  "description": "Orchestrator CLI",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "orchestrator": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

@@ -9,6 +9,8 @@
   "packageManager": "pnpm@10.25.0",
   "scripts": {
     "build": "turbo run build",
+    "build:all": "turbo run build",
+    "pack:cli": "pnpm --filter @orchestrator/cli pack",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
