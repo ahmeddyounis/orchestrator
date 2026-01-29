@@ -110,6 +110,25 @@ export interface ProviderSelected extends BaseEvent {
   };
 }
 
+export interface ProviderRequestStarted extends BaseEvent {
+  type: 'ProviderRequestStarted';
+  payload: {
+    provider: string;
+    model: string;
+  };
+}
+
+export interface ProviderRequestFinished extends BaseEvent {
+  type: 'ProviderRequestFinished';
+  payload: {
+    provider: string;
+    durationMs: number;
+    success: boolean;
+    error?: string;
+    retries: number;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanCreated
@@ -122,4 +141,6 @@ export type OrchestratorEvent =
   | MemoryWrite
   | ConfirmationRequested
   | ConfirmationResolved
-  | ProviderSelected;
+  | ProviderSelected
+  | ProviderRequestStarted
+  | ProviderRequestFinished;

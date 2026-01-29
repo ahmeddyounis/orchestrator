@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AnthropicAdapter } from './adapter';
-import { StreamEvent } from '@orchestrator/shared';
+import { StreamEvent, ProviderConfig } from '@orchestrator/shared';
 import Anthropic from '@anthropic-ai/sdk';
 import { RateLimitError, TimeoutError, ConfigError } from '../errors';
+import { AdapterContext } from '../types';
 
 const mockCreate = vi.fn();
 
@@ -32,6 +33,11 @@ vi.mock('@anthropic-ai/sdk', () => {
 
 describe('AnthropicAdapter', () => {
   let adapter: AnthropicAdapter;
+  const mockContext: AdapterContext = {
+    runId: 'test-run',
+    logger: { log: vi.fn().mockResolvedValue(undefined) },
+    retryOptions: { maxRetries: 0 }
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,7 +57,7 @@ describe('AnthropicAdapter', () => {
 
     const result = await adapter.generate({
       messages: [{ role: 'user', content: 'Hi' }]
-    }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    }, mockContext);
 
     expect(result.text).toBe('Hello');
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
@@ -79,7 +85,7 @@ describe('AnthropicAdapter', () => {
     const result = await adapter.generate({
       messages: [{ role: 'user', content: 'Weather?' }],
       tools: [{ name: 'get_weather', inputSchema: {} }]
-    }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    }, mockContext);
 
     expect(result.text).toBe('Thinking...');
     expect(result.toolCalls).toHaveLength(1);
@@ -103,7 +109,7 @@ describe('AnthropicAdapter', () => {
 
     const stream = adapter.stream({
         messages: [{ role: 'user', content: 'Hi' }]
-    }, {} as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    }, mockContext);
 
     const events: StreamEvent[] = [];
     for await (const event of stream) {
@@ -121,7 +127,7 @@ describe('AnthropicAdapter', () => {
     const error = new APIError(429, 'Rate limit');
     
     mockCreate.mockRejectedValue(error);
-    await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, {} as any)) // eslint-disable-line @typescript-eslint/no-explicit-any
+    await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
         .rejects.toThrow(RateLimitError);
   });
 
@@ -130,7 +136,7 @@ describe('AnthropicAdapter', () => {
       const APIConnectionTimeoutError = (Anthropic as any).APIConnectionTimeoutError;
       const error = new APIConnectionTimeoutError('Timeout');
       mockCreate.mockRejectedValue(error);
-      await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, {} as any)) // eslint-disable-line @typescript-eslint/no-explicit-any
+      await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
           .rejects.toThrow(TimeoutError);
   });
 
@@ -139,6 +145,6 @@ describe('AnthropicAdapter', () => {
           type: 'anthropic',
           model: 'claude-3-opus',
           // no api_key or api_key_env
-      } as any)).toThrow(ConfigError);
+      } as ProviderConfig)).toThrow(ConfigError);
   });
 });

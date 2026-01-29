@@ -17,6 +17,7 @@ import {
   RateLimitError,
   TimeoutError,
 } from '../index';
+import { executeProviderRequest } from '../common';
 
 export class AnthropicAdapter implements ProviderAdapter {
   private client: Anthropic;
@@ -50,65 +51,71 @@ export class AnthropicAdapter implements ProviderAdapter {
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    try {
-      const { system, messages } = this.mapMessages(req.messages);
-      const tools = this.mapTools(req.tools);
+    return executeProviderRequest(ctx, 'anthropic', this.model, async (signal) => {
+      try {
+        const { system, messages } = this.mapMessages(req.messages);
+        const tools = this.mapTools(req.tools);
 
-      const response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: req.maxTokens || 1024,
-        system,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        temperature: req.temperature,
-      }, {
-        signal: ctx.abortSignal,
-        timeout: ctx.timeoutMs,
-      });
+        const response = await this.client.messages.create({
+          model: this.model,
+          max_tokens: req.maxTokens || 1024,
+          system,
+          messages,
+          tools: tools.length > 0 ? tools : undefined,
+          temperature: req.temperature,
+        }, {
+          signal,
+        });
 
-      const textBlocks = response.content.filter(b => b.type === 'text');
-      const text = textBlocks.map(b => b.text).join('');
-      
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-      const toolCalls: ToolCall[] = toolUseBlocks.map(b => ({
-        name: b.name,
-        arguments: b.input,
-        id: b.id
-      }));
+        const textBlocks = response.content.filter(b => b.type === 'text');
+        const text = textBlocks.map(b => b.text).join('');
+        
+        const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+        const toolCalls: ToolCall[] = toolUseBlocks.map(b => ({
+          name: b.name,
+          arguments: b.input,
+          id: b.id
+        }));
 
-      const usage: Usage = {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
-      };
+        const usage: Usage = {
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+        };
 
-      return {
-        text,
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-        usage,
-        raw: response,
-      };
-    } catch (error) {
-      throw this.mapError(error);
-    }
+        return {
+          text,
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          usage,
+          raw: response,
+        };
+      } catch (error) {
+        throw this.mapError(error);
+      }
+    });
   }
 
   async *stream(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent> {
     try {
-      const { system, messages } = this.mapMessages(req.messages);
-      const tools = this.mapTools(req.tools);
+      const stream = await executeProviderRequest(ctx, 'anthropic', this.model, async (signal) => {
+        try {
+          const { system, messages } = this.mapMessages(req.messages);
+          const tools = this.mapTools(req.tools);
 
-      const stream = await this.client.messages.create({
-        model: this.model,
-        max_tokens: req.maxTokens || 1024,
-        system,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        temperature: req.temperature,
-        stream: true,
-      }, {
-        signal: ctx.abortSignal,
-        timeout: ctx.timeoutMs,
+          return await this.client.messages.create({
+            model: this.model,
+            max_tokens: req.maxTokens || 1024,
+            system,
+            messages,
+            tools: tools.length > 0 ? tools : undefined,
+            temperature: req.temperature,
+            stream: true,
+          }, {
+            signal,
+          });
+        } catch (error) {
+          throw this.mapError(error);
+        }
       });
 
       for await (const chunk of stream) {

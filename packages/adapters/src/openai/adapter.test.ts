@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenAIAdapter } from './adapter';
 import { StreamEvent } from '@orchestrator/shared';
 import { APIError, APIConnectionTimeoutError } from 'openai';
-import { RateLimitError, TimeoutError, ConfigError } from '../errors';
+import { RateLimitError, TimeoutError } from '../errors';
+import { AdapterContext } from '../types';
 
 const mockCreate = vi.fn();
 
@@ -14,7 +15,6 @@ vi.mock('openai', () => {
           create: mockCreate
         }
       };
-      constructor(args: any) {}
     },
     APIError: class extends Error {
         status: number;
@@ -29,6 +29,11 @@ vi.mock('openai', () => {
 
 describe('OpenAIAdapter', () => {
   let adapter: OpenAIAdapter;
+  const mockContext: AdapterContext = {
+    runId: 'test-run',
+    logger: { log: vi.fn().mockResolvedValue(undefined) },
+    retryOptions: { maxRetries: 0 }
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -50,7 +55,7 @@ describe('OpenAIAdapter', () => {
 
     const result = await adapter.generate({
       messages: [{ role: 'user', content: 'Hi' }]
-    }, {} as any);
+    }, mockContext);
 
     expect(result.text).toBe('Hello');
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
@@ -81,7 +86,7 @@ describe('OpenAIAdapter', () => {
     const result = await adapter.generate({
       messages: [{ role: 'user', content: 'Weather?' }],
       tools: [{ name: 'get_weather', inputSchema: {} }]
-    }, {} as any);
+    }, mockContext);
 
     expect(result.text).toBeUndefined();
     expect(result.toolCalls).toHaveLength(1);
@@ -102,7 +107,7 @@ describe('OpenAIAdapter', () => {
 
     const stream = adapter.stream({
         messages: [{ role: 'user', content: 'Hi' }]
-    }, {} as any);
+    }, mockContext);
 
     const events: StreamEvent[] = [];
     for await (const event of stream) {
@@ -115,18 +120,21 @@ describe('OpenAIAdapter', () => {
   });
 
   it('maps RateLimitError', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const error = new (APIError as any)('Rate limit', 429);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (error as any).status = 429;
     
     mockCreate.mockRejectedValue(error);
-    await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, {} as any))
+    await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
         .rejects.toThrow(RateLimitError);
   });
 
   it('maps TimeoutError', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = new (APIConnectionTimeoutError as any)('Timeout');
       mockCreate.mockRejectedValue(error);
-      await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, {} as any))
+      await expect(adapter.generate({ messages: [{role: 'user', content:'hi'}] }, mockContext))
           .rejects.toThrow(TimeoutError);
   });
 });

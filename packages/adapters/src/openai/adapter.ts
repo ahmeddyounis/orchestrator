@@ -5,7 +5,6 @@ import {
   ProviderCapabilities,
   StreamEvent,
   ChatMessage,
-  Usage,
   ToolSpec,
   ProviderConfig,
   ToolCall,
@@ -17,6 +16,7 @@ import {
   RateLimitError,
   TimeoutError,
 } from '../index';
+import { executeProviderRequest } from '../common';
 
 export class OpenAIAdapter implements ProviderAdapter {
   private client: OpenAI;
@@ -51,74 +51,80 @@ export class OpenAIAdapter implements ProviderAdapter {
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    try {
-      const messages = this.mapMessages(req.messages);
-      const tools = this.mapTools(req.tools);
+    return executeProviderRequest(ctx, 'openai', this.model, async (signal) => {
+      try {
+        const messages = this.mapMessages(req.messages);
+        const tools = this.mapTools(req.tools);
 
-      const completion = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        tool_choice: req.toolChoice as any,
-        max_tokens: req.maxTokens,
-        temperature: req.temperature ?? 0.2,
-        response_format: req.jsonMode ? { type: 'json_object' } : undefined,
-      }, {
-        signal: ctx.abortSignal,
-        timeout: ctx.timeoutMs
-      });
+        const completion = await this.client.chat.completions.create({
+          model: this.model,
+          messages,
+          tools: tools.length > 0 ? tools : undefined,
+          tool_choice: req.toolChoice as any,
+          max_tokens: req.maxTokens,
+          temperature: req.temperature ?? 0.2,
+          response_format: req.jsonMode ? { type: 'json_object' } : undefined,
+        }, {
+          signal,
+        });
 
-      const choice = completion.choices[0];
-      const usage = completion.usage
-        ? {
-            inputTokens: completion.usage.prompt_tokens,
-            outputTokens: completion.usage.completion_tokens,
-            totalTokens: completion.usage.total_tokens,
-          }
-        : undefined;
+        const choice = completion.choices[0];
+        const usage = completion.usage
+          ? {
+              inputTokens: completion.usage.prompt_tokens,
+              outputTokens: completion.usage.completion_tokens,
+              totalTokens: completion.usage.total_tokens,
+            }
+          : undefined;
 
-      const toolCalls = choice.message.tool_calls
-        ?.map((tc) => {
-          if (tc.type === 'function') {
-            return {
-              name: tc.function.name,
-              arguments: JSON.parse(tc.function.arguments),
-              id: tc.id,
-            };
-          }
-          return null;
-        })
-        .filter((tc) => tc !== null) as ToolCall[];
+        const toolCalls = choice.message.tool_calls
+          ?.map((tc) => {
+            if (tc.type === 'function') {
+              return {
+                name: tc.function.name,
+                arguments: JSON.parse(tc.function.arguments),
+                id: tc.id,
+              };
+            }
+            return null;
+          })
+          .filter((tc) => tc !== null) as ToolCall[];
 
-      return {
-        text: choice.message.content || undefined,
-        toolCalls,
-        usage,
-        raw: completion,
-      };
-    } catch (error) {
-      throw this.mapError(error);
-    }
+        return {
+          text: choice.message.content || undefined,
+          toolCalls,
+          usage,
+          raw: completion,
+        };
+      } catch (error) {
+        throw this.mapError(error);
+      }
+    });
   }
 
   async *stream(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent> {
     try {
-      const messages = this.mapMessages(req.messages);
-      const tools = this.mapTools(req.tools);
+      const stream = await executeProviderRequest(ctx, 'openai', this.model, async (signal) => {
+        try {
+          const messages = this.mapMessages(req.messages);
+          const tools = this.mapTools(req.tools);
 
-      const stream = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        tool_choice: req.toolChoice as any,
-        max_tokens: req.maxTokens,
-        temperature: req.temperature ?? 0.2,
-        response_format: req.jsonMode ? { type: 'json_object' } : undefined,
-        stream: true,
-        stream_options: { include_usage: true }
-      }, {
-        signal: ctx.abortSignal,
-        timeout: ctx.timeoutMs
+          return await this.client.chat.completions.create({
+            model: this.model,
+            messages,
+            tools: tools.length > 0 ? tools : undefined,
+            tool_choice: req.toolChoice as any,
+            max_tokens: req.maxTokens,
+            temperature: req.temperature ?? 0.2,
+            response_format: req.jsonMode ? { type: 'json_object' } : undefined,
+            stream: true,
+            stream_options: { include_usage: true }
+          }, {
+            signal,
+          });
+        } catch (error) {
+          throw this.mapError(error);
+        }
       });
 
       for await (const chunk of stream) {
@@ -228,3 +234,4 @@ export class OpenAIAdapter implements ProviderAdapter {
     return error;
   }
 }
+
