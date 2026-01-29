@@ -6,3 +6,4 @@ export * from './logger/redactor';
 export * from './fs/artifacts';
 export * from './config/schema';
 export * from './types/llm';
+export * from './types/patch';

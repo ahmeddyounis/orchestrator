@@ -17,6 +17,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@orchestrator/shared": "workspace:*",
     "ignore": "^7.0.5",
     "is-binary-path": "^3.0.0"
   }
