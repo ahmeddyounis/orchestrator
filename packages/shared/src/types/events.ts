@@ -15,6 +15,13 @@ export interface RunStarted extends BaseEvent {
   };
 }
 
+export interface PlanRequested extends BaseEvent {
+  type: 'PlanRequested';
+  payload: {
+    goal: string;
+  };
+}
+
 export interface PlanCreated extends BaseEvent {
   type: 'PlanCreated';
   payload: {
@@ -131,6 +138,7 @@ export interface ProviderRequestFinished extends BaseEvent {
 
 export type OrchestratorEvent =
   | RunStarted
+  | PlanRequested
   | PlanCreated
   | ContextBuilt
   | PatchProposed
