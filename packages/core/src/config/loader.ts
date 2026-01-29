@@ -37,6 +37,11 @@ export class ConfigLoader {
     for (const key in source) {
       if (Object.prototype.hasOwnProperty.call(source, key)) {
         const sourceValue = source[key];
+
+        if (sourceValue === undefined) {
+          continue;
+        }
+
         const targetValue = output[key];
 
         if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {

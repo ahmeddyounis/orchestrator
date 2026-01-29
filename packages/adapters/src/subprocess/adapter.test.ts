@@ -39,22 +39,20 @@ describe('SubprocessProviderAdapter', () => {
     });
 
     const req: ModelRequest = {
-      messages: [
-        { role: 'user', content: 'hello world' },
-      ],
+      messages: [{ role: 'user', content: 'hello world' }],
     };
 
     const response = await adapter.generate(req, ctx);
 
     // echo-cli prints:
     // Echo CLI Started
-    // > 
+    // >
     // (wait)
     // Echo: hello world
-    // > 
-    
+    // >
+
     expect(response.text).toContain('Echo: hello world');
-    
+
     // Check if log file was created
     const logPath = path.join(runDir, 'subprocess_subprocess.log');
     const logContent = await fs.readFile(logPath, 'utf-8');
@@ -64,10 +62,14 @@ describe('SubprocessProviderAdapter', () => {
   it('should handle config env allowlist', async () => {
     // We can't easily test env isolation with echo-cli unless we modify it to print env.
     // But we trust ProcessManager test for logic, or we can use `node -e "console.log(process.env.FOO)"`
-    
+
     const adapter = new SubprocessProviderAdapter({
-      command: [process.execPath, '-e', 'console.log(process.env.TEST_VAR || "MISSING"); console.log("> ");'],
-      env: ['TEST_VAR']
+      command: [
+        process.execPath,
+        '-e',
+        'console.log(process.env.TEST_VAR || "MISSING"); console.log("> ");',
+      ],
+      env: ['TEST_VAR'],
     });
 
     // Set env in process
@@ -80,7 +82,7 @@ describe('SubprocessProviderAdapter', () => {
 
     const response = await adapter.generate(req, ctx);
     expect(response.text).toContain('found');
-    
+
     delete process.env.TEST_VAR;
     delete process.env.OTHER_VAR;
   });

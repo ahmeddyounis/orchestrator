@@ -3,14 +3,21 @@ import { PlanService } from './service';
 import { EventBus } from '../registry';
 import { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
 import { ModelResponse } from '@orchestrator/shared';
+import * as fs from 'fs/promises';
+
+vi.mock('fs/promises', () => ({
+  writeFile: vi.fn(),
+}));
 
 describe('PlanService', () => {
   let eventBus: EventBus;
   let planner: ProviderAdapter;
   let ctx: AdapterContext;
   let service: PlanService;
+  const artifactsDir = '/mock/artifacts';
 
   beforeEach(() => {
+    vi.clearAllMocks();
     eventBus = {
       emit: vi.fn(),
     };
@@ -38,15 +45,16 @@ describe('PlanService', () => {
       text: JSON.stringify({ steps: mockSteps }),
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
 
     expect(result).toEqual(mockSteps);
-    expect(eventBus.emit).toHaveBeenCalledTimes(2);
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'PlanRequested',
-        payload: { goal: 'my goal' },
-      }),
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_raw.txt`,
+      JSON.stringify({ steps: mockSteps }),
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan.json`,
+      JSON.stringify({ steps: mockSteps }, null, 2),
     );
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -62,9 +70,13 @@ describe('PlanService', () => {
       text: JSON.stringify(mockSteps),
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
 
     expect(result).toEqual(mockSteps);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan.json`,
+      JSON.stringify({ steps: mockSteps }, null, 2),
+    );
   });
 
   it('should cleanup markdown code blocks', async () => {
@@ -73,28 +85,40 @@ describe('PlanService', () => {
       text: '```json\n{"steps": ["Step X"]}\n```',
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
 
     expect(result).toEqual(mockSteps);
   });
 
-  it('should throw if response is invalid json', async () => {
+  it('should fallback to text parsing if JSON is invalid', async () => {
+    const rawText = '1. Step One\n2. Step Two';
     (planner.generate as Mock).mockResolvedValue({
-      text: 'Not JSON',
+      text: rawText,
     } as ModelResponse);
 
-    await expect(service.generatePlan('my goal', { planner }, ctx)).rejects.toThrow(
-      'Failed to parse planner response',
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+
+    expect(result).toEqual(['Step One', 'Step Two']);
+    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan.json`,
+      JSON.stringify({ steps: ['Step One', 'Step Two'] }, null, 2),
     );
   });
 
-  it('should throw if response does not contain steps', async () => {
+  it('should return empty steps if parsing fails completely', async () => {
+    const rawText = 'Just some random thoughts without structure.';
     (planner.generate as Mock).mockResolvedValue({
-      text: JSON.stringify({ something: 'else' }),
+      text: rawText,
     } as ModelResponse);
 
-    await expect(service.generatePlan('my goal', { planner }, ctx)).rejects.toThrow(
-      'Response does not contain "steps" array',
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+
+    expect(result).toEqual([]);
+    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan.json`,
+      JSON.stringify({ steps: [] }, null, 2),
     );
   });
 });

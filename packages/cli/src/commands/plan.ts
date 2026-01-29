@@ -86,11 +86,15 @@ export function registerPlanCommand(program: Command) {
           retryOptions: { maxRetries: 3 },
         };
 
-        const planSteps = await planService.generatePlan(goal, { planner }, ctx);
+        const planSteps = await planService.generatePlan(goal, { planner }, ctx, artifacts.root);
 
-        // Write plan.json
-        const planPath = path.join(artifacts.root, 'plan.json');
-        await fs.writeFile(planPath, JSON.stringify({ steps: planSteps }, null, 2));
+        // plan.json is written by PlanService
+
+        if (planSteps.length === 0) {
+          renderer.log(
+            `Note: Plan output is unstructured. See ${path.join(artifacts.root, 'plan_raw.txt')}`,
+          );
+        }
 
         // Write manifest
         await writeManifest(artifacts.manifest, {
@@ -109,6 +113,7 @@ export function registerPlanCommand(program: Command) {
         const costSummary = costTracker.getSummary();
         await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
 
+        const planPath = path.join(artifacts.root, 'plan.json');
         renderer.render({
           status: 'success',
           goal,

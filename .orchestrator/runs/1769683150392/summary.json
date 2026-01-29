@@ -1,0 +1,16 @@
+{
+  "providers": {
+    "mock-claude": {
+      "inputTokens": 24,
+      "outputTokens": 24,
+      "totalTokens": 48,
+      "estimatedCostUsd": null
+    }
+  },
+  "total": {
+    "inputTokens": 24,
+    "outputTokens": 24,
+    "totalTokens": 48,
+    "estimatedCostUsd": null
+  }
+}

@@ -51,13 +51,12 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
   // We want to capture from the first valid header to the end of the last hunk
   const lines = sanitized.split('\n');
   let startLine = -1;
-  let lastHunkLine = -1;
   let hasDiffHeader = false;
   let hasHunk = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    
+
     // Check for start of diff
     if (startLine === -1) {
       if (line.startsWith('diff --git')) {
@@ -66,9 +65,9 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
       } else if (line.startsWith('--- a/')) {
         // Check next line for +++ b/
         if (i + 1 < lines.length && lines[i + 1].startsWith('+++ b/')) {
-           startLine = i;
-           hasDiffHeader = true;
-           i++; // Skip next line as we checked it
+          startLine = i;
+          hasDiffHeader = true;
+          i++; // Skip next line as we checked it
         }
       }
       continue;
@@ -77,18 +76,6 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
     // Inside candidate block
     if (line.startsWith('@@ ') && line.includes(' @@')) {
       hasHunk = true;
-      lastHunkLine = i; // at least the header of the hunk
-    } else if (hasHunk) {
-       // If we are in a hunk, extend lastHunkLine for content
-       if (line.startsWith(' ') || line.startsWith('+') || line.startsWith('-')) {
-         lastHunkLine = i;
-       } else if (line.startsWith('diff --git') || (line.startsWith('--- a/') && lines[i+1]?.startsWith('+++ b/'))) {
-         // New file in diff, keep going
-         lastHunkLine = i - 1; // Actually, new header means we continue, so this is part of the diff block
-       } else {
-         // Maybe end of diff?
-         // For now, let's just keep tracking the last valid looking diff line
-       }
     }
   }
 
@@ -97,61 +84,61 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
     // Simple approach: if we found headers and hunks, try to extract that block.
     // Issues: interleaving text.
     // For "dirty" output, we might want to extract *only* the diff lines.
-    
+
     // Refined Strategy 3: Extract block from startLine.
     // We iterate from startLine and keep lines that look like diff lines.
     const extractedLines: string[] = [];
     let validDiffSoFar = false;
-    
+
     // Reset state to re-scan from startLine
     let inHeader = true;
     let inHunk = false;
-    
+
     for (let i = startLine; i < lines.length; i++) {
-        const line = lines[i];
-        
-        if (line.startsWith('diff --git')) {
-            inHeader = true;
-            inHunk = false;
-            extractedLines.push(line);
-        } else if (line.startsWith('index ')) {
-             if (inHeader) extractedLines.push(line);
-        } else if (line.startsWith('--- ') || line.startsWith('+++ ')) {
-            inHeader = true;
-            extractedLines.push(line);
-        } else if (line.startsWith('@@ ')) {
-            inHeader = false;
-            inHunk = true;
-            validDiffSoFar = true;
-            extractedLines.push(line);
-        } else if (inHunk) {
-            if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) {
-                extractedLines.push(line);
-            } else if (line === '' || line.startsWith('\ No newline')) {
-                extractedLines.push(line);
-            } else {
-                 // Encountered non-diff line. 
-                 // If it looks like start of new file, good.
-                 if (line.startsWith('diff --git') || line.startsWith('--- a/')) {
-                     // Back up one iteration to let the outer loop handle it? 
-                     // No, we are in the extraction loop.
-                     // But wait, the check above `if (line.startsWith('diff --git'))` handles it.
-                     // So this branch is for *garbage* inside/after hunk.
-                     
-                     // If we encounter garbage, we stop? Or skip?
-                     // Safer to stop if we assume continuous diff block.
-                     break; 
-                 }
-                 break;
-            }
+      const line = lines[i];
+
+      if (line.startsWith('diff --git')) {
+        inHeader = true;
+        inHunk = false;
+        extractedLines.push(line);
+      } else if (line.startsWith('index ')) {
+        if (inHeader) extractedLines.push(line);
+      } else if (line.startsWith('--- ') || line.startsWith('+++ ')) {
+        inHeader = true;
+        extractedLines.push(line);
+      } else if (line.startsWith('@@ ')) {
+        inHeader = false;
+        inHunk = true;
+        validDiffSoFar = true;
+        extractedLines.push(line);
+      } else if (inHunk) {
+        if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) {
+          extractedLines.push(line);
+        } else if (line === '' || line.startsWith('\\ No newline')) {
+          extractedLines.push(line);
+        } else {
+          // Encountered non-diff line.
+          // If it looks like start of new file, good.
+          if (line.startsWith('diff --git') || line.startsWith('--- a/')) {
+            // Back up one iteration to let the outer loop handle it?
+            // No, we are in the extraction loop.
+            // But wait, the check above `if (line.startsWith('diff --git'))` handles it.
+            // So this branch is for *garbage* inside/after hunk.
+
+            // If we encounter garbage, we stop? Or skip?
+            // Safer to stop if we assume continuous diff block.
+            break;
+          }
+          break;
         }
+      }
     }
 
     if (validDiffSoFar && extractedLines.length > 0) {
-        return {
-            diffText: extractedLines.join('\n'),
-            confidence: 0.7
-        };
+      return {
+        diffText: extractedLines.join('\n'),
+        confidence: 0.7,
+      };
     }
   }
 
@@ -172,26 +159,26 @@ function isValidDiffStructure(text: string): boolean {
  * Looks for numbered lists (1. ) or bullet points (- ) that look like steps.
  */
 export function parsePlanFromText(text: string): PlanParsed | null {
-    const sanitized = sanitizeOutput(text);
-    const lines = sanitized.split('\n');
-    const steps: string[] = [];
-    
-    for (const line of lines) {
-        const trimmed = line.trim();
-        // Match "1. Step" or "- Step"
-        const numberMatch = trimmed.match(/^\d+\.\s+(.*)/);
-        const bulletMatch = trimmed.match(/^[-*]\s+(.*)/);
-        
-        if (numberMatch) {
-            steps.push(numberMatch[1]);
-        } else if (bulletMatch) {
-            steps.push(bulletMatch[1]);
-        }
+  const sanitized = sanitizeOutput(text);
+  const lines = sanitized.split('\n');
+  const steps: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Match "1. Step" or "- Step"
+    const numberMatch = trimmed.match(/^\d+\.\s+(.*)/);
+    const bulletMatch = trimmed.match(/^[-*]\s+(.*)/);
+
+    if (numberMatch) {
+      steps.push(numberMatch[1]);
+    } else if (bulletMatch) {
+      steps.push(bulletMatch[1]);
     }
-    
-    if (steps.length > 0) {
-        return { steps, confidence: 0.8 };
-    }
-    
-    return null;
+  }
+
+  if (steps.length > 0) {
+    return { steps, confidence: 0.8 };
+  }
+
+  return null;
 }

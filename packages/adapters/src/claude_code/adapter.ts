@@ -1,4 +1,8 @@
-import { SubprocessProviderAdapter, parseUnifiedDiffFromText, parsePlanFromText } from '../subprocess';
+import {
+  SubprocessProviderAdapter,
+  parseUnifiedDiffFromText,
+  parsePlanFromText,
+} from '../subprocess';
 import { ProviderConfig, ModelRequest, ModelResponse, ChatMessage } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 
@@ -6,7 +10,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
-    
+
     super({
       command: [...command, ...args],
       cwdMode: 'repoRoot', // Enforce repoRoot
@@ -33,55 +37,52 @@ index 1234567..89abcdef 100644
 -const x = 1;
 +const x = 2;
 <END_DIFF>
-`
+`,
     };
 
     const wrappedReq = {
       ...req,
-      messages: [
-        ...req.messages,
-        systemMessage
-      ]
+      messages: [...req.messages, systemMessage],
     };
 
     const response = await super.generate(wrappedReq, ctx);
-    
+
     // Extract diff if present using robust parser
     if (response.text) {
       const diffParsed = parseUnifiedDiffFromText(response.text);
       if (diffParsed && diffParsed.confidence >= 0.7) {
         // Emit diff parsed event
         await ctx.logger.log({
-           schemaVersion: 1,
-           timestamp: new Date().toISOString(),
-           runId: ctx.runId,
-           type: 'SubprocessParsed',
-           payload: { kind: 'diff', confidence: diffParsed.confidence }
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'diff', confidence: diffParsed.confidence },
         });
 
         return {
           ...response,
-          text: diffParsed.diffText
+          text: diffParsed.diffText,
         };
       }
-      
+
       // Fallback: Check for plan or just text
       const planParsed = parsePlanFromText(response.text);
       if (planParsed) {
         await ctx.logger.log({
-           schemaVersion: 1,
-           timestamp: new Date().toISOString(),
-           runId: ctx.runId,
-           type: 'SubprocessParsed',
-           payload: { kind: 'plan', confidence: planParsed.confidence }
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'plan', confidence: planParsed.confidence },
         });
       } else {
         await ctx.logger.log({
-           schemaVersion: 1,
-           timestamp: new Date().toISOString(),
-           runId: ctx.runId,
-           type: 'SubprocessParsed',
-           payload: { kind: 'text', confidence: 1.0 }
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'text', confidence: 1.0 },
         });
       }
     }

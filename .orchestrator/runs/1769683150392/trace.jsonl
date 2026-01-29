@@ -1,0 +1,7 @@
+{"type":"ProviderSelected","schemaVersion":1,"timestamp":"2026-01-29T10:39:10.394Z","runId":"1769683150392","payload":{"role":"planner","providerId":"mock-claude","capabilities":{"supportsStreaming":false,"supportsToolCalling":false,"supportsJsonMode":false,"modality":"text","latencyClass":"slow"}}}
+{"type":"PlanRequested","schemaVersion":1,"timestamp":"2026-01-29T10:39:10.395Z","runId":"1769683150392","payload":{"goal":"My Goal"}}
+{"type":"SubprocessSpawned","runId":"1769683150392","timestamp":"2026-01-29T10:39:10.398Z","schemaVersion":1,"payload":{"command":["echo","1. Step One\n2. Step Two"],"cwd":"/Users/ahmedyounis/Documents/Projects/orchestrator","pid":94795,"pty":false}}
+{"type":"SubprocessOutputChunked","runId":"1769683150392","timestamp":"2026-01-29T10:39:10.399Z","schemaVersion":1,"payload":{"pid":94795,"stream":"stdout","chunk":"1. Step One\n2. Step Two\n"}}
+{"type":"SubprocessExited","runId":"1769683150392","timestamp":"2026-01-29T10:39:10.400Z","schemaVersion":1,"payload":{"pid":94795,"exitCode":0,"signal":null,"durationMs":5}}
+{"schemaVersion":1,"timestamp":"2026-01-29T10:39:10.400Z","runId":"1769683150392","type":"SubprocessParsed","payload":{"kind":"plan","confidence":0.8}}
+{"type":"PlanCreated","schemaVersion":1,"timestamp":"2026-01-29T10:39:10.400Z","runId":"1769683150392","payload":{"planSteps":["Step One","Step Two"]}}
