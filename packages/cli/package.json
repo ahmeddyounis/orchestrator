@@ -24,6 +24,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@orchestrator/core": "workspace:*",
+    "@orchestrator/shared": "workspace:*",
     "commander": "^14.0.2"
   }
 }

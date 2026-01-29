@@ -10,6 +10,7 @@ export function registerEvalCommand(program: Command) {
       console.log(`Evaluating suite: "${options.suite}"`);
       if (globalOpts.verbose) console.log('Verbose mode enabled');
       if (globalOpts.config) console.log(`Config path: ${globalOpts.config}`);
-      if (globalOpts.json) console.log(JSON.stringify({ status: 'evaluating', suite: options.suite }));
+      if (globalOpts.json)
+        console.log(JSON.stringify({ status: 'evaluating', suite: options.suite }));
     });
 }
