@@ -24,6 +24,7 @@ export interface Manifest {
   summaryPath: string;
   effectiveConfigPath: string;
   patchPaths: string[];
+  contextPaths?: string[];
   toolLogPaths: string[];
 }
 

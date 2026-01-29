@@ -306,6 +306,7 @@ END_DIFF
     const maxIterations = 30;
     let stepsCompleted = 0;
     const patchPaths: string[] = [];
+    const contextPaths: string[] = [];
     const touchedFiles = new Set<string>();
 
     for (const step of steps) {
@@ -363,13 +364,32 @@ END_DIFF
 
         let contextText = `Goal: ${goal}\nCurrent Step: ${step}\n`;
         if (contextPack) {
-             contextText += `\nCONTEXT:\n`;
+             const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
+             const packFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.json`;
+             const packPath = path.join(artifacts.root, packFilename);
+             await fs.writeFile(packPath, JSON.stringify(contextPack, null, 2));
+             contextPaths.push(packPath);
+
+             let formattedContext = `\nCONTEXT:\n`;
+             
+             formattedContext += `Context Rationale:\n`;
              for (const item of contextPack.items) {
-                contextText += `File: ${item.path}\n\
+                 formattedContext += `- ${item.path}:${item.startLine}-${item.endLine} (Score: ${item.score.toFixed(2)}): ${item.reason}\n`;
+             }
+             formattedContext += `\n`;
+
+             for (const item of contextPack.items) {
+                formattedContext += `File: ${item.path} (Lines ${item.startLine}-${item.endLine})\n\
 ${item.content}\
 \
 `;
              }
+             
+             const txtFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.txt`;
+             const txtPath = path.join(artifacts.root, txtFilename);
+             await fs.writeFile(txtPath, formattedContext);
+
+             contextText += formattedContext;
         }
 
         let attempt = 0;
@@ -469,6 +489,7 @@ INSTRUCTIONS:
           summaryPath: artifacts.summary,
           effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
           patchPaths: patchPaths, 
+          contextPaths: contextPaths,
           toolLogPaths: [],
     });
     
