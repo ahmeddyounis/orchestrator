@@ -89,6 +89,52 @@ export interface ToolRun extends BaseEvent {
   };
 }
 
+export interface ToolRunRequested extends BaseEvent {
+  type: 'ToolRunRequested';
+  payload: {
+    toolRunId: string;
+    command: string;
+    classification: string;
+    reason: string;
+  };
+}
+
+export interface ToolRunApproved extends BaseEvent {
+  type: 'ToolRunApproved';
+  payload: {
+    toolRunId: string;
+    command: string;
+  };
+}
+
+export interface ToolRunDenied extends BaseEvent {
+  type: 'ToolRunDenied';
+  payload: {
+    toolRunId: string;
+    command: string;
+    reason: string;
+  };
+}
+
+export interface ToolRunStarted extends BaseEvent {
+  type: 'ToolRunStarted';
+  payload: {
+    toolRunId: string;
+  };
+}
+
+export interface ToolRunFinished extends BaseEvent {
+  type: 'ToolRunFinished';
+  payload: {
+    toolRunId: string;
+    exitCode: number;
+    durationMs: number;
+    stdoutPath: string;
+    stderrPath: string;
+    truncated: boolean;
+  };
+}
+
 export interface VerifyResult extends BaseEvent {
   type: 'VerifyResult';
   payload: {
@@ -225,6 +271,11 @@ export type OrchestratorEvent =
   | PatchProposed
   | PatchApplied
   | ToolRun
+  | ToolRunRequested
+  | ToolRunApproved
+  | ToolRunDenied
+  | ToolRunStarted
+  | ToolRunFinished
   | VerifyResult
   | RunFinished
   | MemoryWrite

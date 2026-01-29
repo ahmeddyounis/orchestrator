@@ -4,5 +4,7 @@ export * from './config/loader';
 export * from './cost/tracker';
 export * from './plan/service';
 export * from './exec/service';
+export * from './exec/tool_manager';
+export * from './exec/tool_tracker';
 export * from './exec/patch_store';
 

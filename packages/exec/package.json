@@ -12,7 +12,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
+  "dependencies": {
+    "@orchestrator/shared": "workspace:*"
+  },
   "devDependencies": {
+    "@types/node": "^25.1.0",
     "typescript": "^5.3.3"
   }
 }

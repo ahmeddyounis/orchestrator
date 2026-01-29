@@ -76,7 +76,7 @@ export class SafeCommandRunner {
     return this.exec(req, policy, stdoutPath, stderrPath);
   }
 
-  private async exec(
+  protected async exec(
     req: ToolRunRequest,
     policy: ToolPolicy,
     stdoutPath: string,

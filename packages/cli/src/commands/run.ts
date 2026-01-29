@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry, CostTracker, PatchStore } from '@orchestrator/core';
+import { ConfigLoader, ProviderRegistry, CostTracker, PatchStore, ToolRunTracker } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
 import {
@@ -8,6 +8,7 @@ import {
   JsonlLogger,
   ProviderCapabilities,
   ProviderConfig,
+  OrchestratorEvent,
 } from '@orchestrator/shared';
 import path from 'path';
 import * as fs from 'fs/promises';
@@ -103,6 +104,7 @@ export function registerRunCommand(program: Command) {
         ConfigLoader.writeEffectiveConfig(config, artifacts.root);
 
         const costTracker = new CostTracker(config);
+        const toolTracker = new ToolRunTracker();
 
         // Initialize Registry and wiring
         const registry = new ProviderRegistry(config, costTracker);
@@ -126,6 +128,11 @@ export function registerRunCommand(program: Command) {
         registry.registerFactory('mock', stubFactory);
         registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
 
+        const emitEvent = async (e: OrchestratorEvent) => {
+          await logger.log(e);
+          toolTracker.handleEvent(e);
+        };
+
         if (config.defaults?.planner && config.defaults?.executor && config.defaults?.reviewer) {
           await registry.resolveRoleProviders(
             {
@@ -133,7 +140,7 @@ export function registerRunCommand(program: Command) {
               executorId: config.defaults.executor,
               reviewerId: config.defaults.reviewer,
             },
-            { eventBus: { emit: (e) => logger.log(e) }, runId },
+            { eventBus: { emit: emitEvent }, runId },
           );
         } else {
           // If missing roles, we might want to warn or error, but for now we follow existing logic
@@ -162,7 +169,12 @@ export function registerRunCommand(program: Command) {
         });
 
         const costSummary = costTracker.getSummary();
-        await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
+        const toolRunSummary = toolTracker.getSummary();
+        const fullSummary = {
+          ...costSummary,
+          toolRuns: toolRunSummary,
+        };
+        await fs.writeFile(artifacts.summary, JSON.stringify(fullSummary, null, 2));
 
         // Save final diff
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
