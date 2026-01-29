@@ -55,7 +55,7 @@ describe('SafeCommandRunner Flags', () => {
     const policy = { ...defaultPolicy, requireConfirmation: true, interactive: false };
     const req: ToolRunRequest = { command: 'echo hello', reason: 'test', cwd: '/tmp' }; // Not allowlisted
 
-    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(/non-interactive mode/);
+    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(ConfirmationDeniedError);
     expect(mockUi.confirm).not.toHaveBeenCalled();
   });
 
