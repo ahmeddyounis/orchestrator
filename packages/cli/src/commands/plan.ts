@@ -86,7 +86,7 @@ export function registerPlanCommand(program: Command) {
           retryOptions: { maxRetries: 3 },
         };
 
-        const planSteps = await planService.generatePlan(goal, { planner }, ctx, artifacts.root);
+        const planSteps = await planService.generatePlan(goal, { planner }, ctx, artifacts.root, repoRoot);
 
         // plan.json is written by PlanService
 

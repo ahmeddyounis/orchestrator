@@ -109,6 +109,9 @@ importers:
       '@orchestrator/adapters':
         specifier: workspace:*
         version: link:../adapters
+      '@orchestrator/repo':
+        specifier: workspace:*
+        version: link:../repo
       '@orchestrator/shared':
         specifier: workspace:*
         version: link:../shared

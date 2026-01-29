@@ -9,12 +9,25 @@ vi.mock('fs/promises', () => ({
   writeFile: vi.fn(),
 }));
 
+vi.mock('@orchestrator/repo', () => ({
+  SearchService: class {
+    search = () => Promise.resolve({ matches: [] });
+  },
+  SnippetExtractor: class {
+    extractSnippets = () => Promise.resolve([]);
+  },
+  SimpleContextPacker: class {
+    pack = () => ({ items: [], estimatedTokens: 0 });
+  },
+}));
+
 describe('PlanService', () => {
   let eventBus: EventBus;
   let planner: ProviderAdapter;
   let ctx: AdapterContext;
   let service: PlanService;
   const artifactsDir = '/mock/artifacts';
+  const repoRoot = '/mock/repo';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,7 +58,7 @@ describe('PlanService', () => {
       text: JSON.stringify({ steps: mockSteps }),
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual(mockSteps);
     expect(fs.writeFile).toHaveBeenCalledWith(
@@ -70,7 +83,7 @@ describe('PlanService', () => {
       text: JSON.stringify(mockSteps),
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual(mockSteps);
     expect(fs.writeFile).toHaveBeenCalledWith(
@@ -85,7 +98,7 @@ describe('PlanService', () => {
       text: '```json\n{"steps": ["Step X"]}\n```',
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual(mockSteps);
   });
@@ -96,7 +109,7 @@ describe('PlanService', () => {
       text: rawText,
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual(['Step One', 'Step Two']);
     expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
@@ -112,7 +125,7 @@ describe('PlanService', () => {
       text: rawText,
     } as ModelResponse);
 
-    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir);
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual([]);
     expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
