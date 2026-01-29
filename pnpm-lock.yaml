@@ -60,6 +60,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@orchestrator/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@orchestrator/core':
         specifier: workspace:*
         version: link:../core
@@ -88,6 +91,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@orchestrator/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@orchestrator/shared':
         specifier: workspace:*
         version: link:../shared

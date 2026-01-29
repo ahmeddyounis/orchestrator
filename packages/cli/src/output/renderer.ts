@@ -6,7 +6,7 @@ export interface OutputResult {
   artifactsDir?: string;
   providers?: Record<string, string | undefined>;
   nextSteps?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export class OutputRenderer {
@@ -28,7 +28,7 @@ export class OutputRenderer {
     if (data.artifactsDir) console.log(`Artifacts: ${data.artifactsDir}`);
 
     if (data.providers) {
-      const activeProviders = Object.entries(data.providers).filter(([_, provider]) => !!provider);
+      const activeProviders = Object.entries(data.providers).filter(([, provider]) => !!provider);
 
       if (activeProviders.length > 0) {
         console.log('Selected Providers:');

@@ -1,3 +1,5 @@
+import { ProviderCapabilities } from './llm';
+
 export interface BaseEvent {
   schemaVersion: number;
   timestamp: string;
@@ -99,6 +101,15 @@ export interface ConfirmationResolved extends BaseEvent {
   };
 }
 
+export interface ProviderSelected extends BaseEvent {
+  type: 'ProviderSelected';
+  payload: {
+    role: 'planner' | 'executor' | 'reviewer';
+    providerId: string;
+    capabilities: ProviderCapabilities;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanCreated
@@ -110,4 +121,5 @@ export type OrchestratorEvent =
   | RunFinished
   | MemoryWrite
   | ConfirmationRequested
-  | ConfirmationResolved;
+  | ConfirmationResolved
+  | ProviderSelected;

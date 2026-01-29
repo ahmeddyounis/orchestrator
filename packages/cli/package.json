@@ -27,6 +27,7 @@
     "@orchestrator/core": "workspace:*",
     "@orchestrator/repo": "workspace:*",
     "@orchestrator/shared": "workspace:*",
+    "@orchestrator/adapters": "workspace:*",
     "@types/inquirer": "^8.2.12",
     "commander": "^14.0.2",
     "inquirer": "^8.2.7"

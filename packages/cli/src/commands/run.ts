@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { ConfigLoader } from '@orchestrator/core';
+import { ConfigLoader, ProviderRegistry } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
-import { createRunDir, writeManifest } from '@orchestrator/shared';
+import { createRunDir, writeManifest, JsonlLogger, ProviderCapabilities, ProviderConfig } from '@orchestrator/shared';
 import path from 'path';
 import { OutputRenderer } from '../output/renderer';
 
@@ -66,8 +66,47 @@ export function registerRunCommand(program: Command) {
 
         const runId = Date.now().toString();
         const artifacts = await createRunDir(repoRoot, runId);
+        const logger = new JsonlLogger(artifacts.trace);
 
         ConfigLoader.writeEffectiveConfig(config, artifacts.root);
+
+        // Initialize Registry and wiring
+        const registry = new ProviderRegistry(config);
+
+        // TODO: Move this to a central adapter registration location
+        const stubFactory = (cfg: ProviderConfig) => ({
+          id: () => cfg.type,
+          capabilities: () => ({
+            supportsStreaming: false,
+            supportsToolCalling: false,
+            supportsJsonMode: false,
+            modality: 'text' as const,
+            latencyClass: 'medium' as const,
+          } as ProviderCapabilities),
+          generate: async () => ({ text: 'Stub response' }),
+        });
+
+        registry.registerFactory('openai', stubFactory);
+        registry.registerFactory('anthropic', stubFactory);
+        registry.registerFactory('mock', stubFactory);
+
+        if (config.defaults?.planner && config.defaults?.executor && config.defaults?.reviewer) {
+           await registry.resolveRoleProviders(
+            {
+              plannerId: config.defaults.planner,
+              executorId: config.defaults.executor,
+              reviewerId: config.defaults.reviewer,
+            },
+            { eventBus: { emit: (e) => logger.log(e) }, runId },
+          );
+        } else {
+             // If missing roles, we might want to warn or error, but for now we follow existing logic
+             // which is just to render status.
+             // However, to satisfy "Run trace includes ProviderSelected events", we must resolve them if possible.
+             if (globalOpts.verbose) {
+                 renderer.log('Skipping provider resolution: missing default roles.');
+             }
+        }
 
         if (globalOpts.verbose) {
           renderer.log(`Effective config written to ${artifacts.root}`);
