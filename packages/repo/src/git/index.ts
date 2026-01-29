@@ -88,4 +88,32 @@ ${stderr}`),
     // 'diff HEAD' shows changes in working directory vs HEAD.
     return this.exec(['diff', 'HEAD']);
   }
+
+  async createCheckpoint(label: string): Promise<string> {
+    // We use git commit as the checkpoint mechanism.
+    // 1. Check if there are changes to commit.
+    const status = await this.getStatusPorcelain();
+    if (!status) {
+      // Nothing to commit, return current HEAD
+      return this.getHeadSha();
+    }
+
+    // 2. Stage all changes
+    await this.stageAll();
+
+    // 3. Commit with a structured message
+    const message = `Checkpoint: ${label}`;
+    await this.commit(message);
+
+    // 4. Return new HEAD
+    return this.getHeadSha();
+  }
+
+  async rollbackToCheckpoint(checkpointRef: string): Promise<void> {
+    // Reset hard to the checkpoint ref
+    await this.exec(['reset', '--hard', checkpointRef]);
+
+    // Also clean any untracked files that might have been created since then
+    await this.exec(['clean', '-fd']);
+  }
 }

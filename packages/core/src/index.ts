@@ -3,3 +3,4 @@ export * from './registry';
 export * from './config/loader';
 export * from './cost/tracker';
 export * from './plan/service';
+export * from './exec/service';

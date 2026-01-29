@@ -115,4 +115,64 @@ describe('GitService', () => {
     const diff = await gitService.diffToHead();
     expect(diff).toContain('diff --git a/file.txt b/file.txt');
   });
+
+  it('creates a checkpoint', async () => {
+    await run('git', ['commit', '--allow-empty', '-m', 'Initial commit'], tmpDir);
+    await fs.writeFile(path.join(tmpDir, 'file.txt'), 'content');
+
+    const checkpointSha = await gitService.createCheckpoint('My Checkpoint');
+
+    // Should have created a commit
+    const head = await gitService.getHeadSha();
+    expect(checkpointSha).toBe(head);
+
+    const status = await gitService.getStatusPorcelain();
+    expect(status).toBe(''); // Clean after checkpoint
+  });
+
+  it('rolls back to checkpoint', async () => {
+    await run('git', ['commit', '--allow-empty', '-m', 'Initial commit'], tmpDir);
+    const initialSha = await gitService.getHeadSha();
+
+    // Make some changes
+    await fs.writeFile(path.join(tmpDir, 'file.txt'), 'content');
+    const checkpointSha = await gitService.createCheckpoint('Checkpoint 1');
+    expect(checkpointSha).not.toBe(initialSha);
+
+    // Make more changes
+    await fs.writeFile(path.join(tmpDir, 'file2.txt'), 'content2');
+
+    // Rollback to checkpoint 1
+    await gitService.rollbackToCheckpoint(checkpointSha);
+
+    const currentSha = await gitService.getHeadSha();
+    expect(currentSha).toBe(checkpointSha);
+
+    // File 2 should be gone (clean -fd)
+    const file2Exists = await fs
+      .access(path.join(tmpDir, 'file2.txt'))
+      .then(() => true)
+      .catch(() => false);
+    expect(file2Exists).toBe(false);
+
+    // File 1 should exist
+    const file1Exists = await fs
+      .access(path.join(tmpDir, 'file.txt'))
+      .then(() => true)
+      .catch(() => false);
+    expect(file1Exists).toBe(true);
+
+    // Rollback to initial
+    await gitService.rollbackToCheckpoint(initialSha);
+
+    const currentSha2 = await gitService.getHeadSha();
+    expect(currentSha2).toBe(initialSha);
+
+    // File 1 should be gone
+    const file1Exists2 = await fs
+      .access(path.join(tmpDir, 'file.txt'))
+      .then(() => true)
+      .catch(() => false);
+    expect(file1Exists2).toBe(false);
+  });
 });

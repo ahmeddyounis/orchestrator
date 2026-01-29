@@ -19,18 +19,18 @@ You can configure context generation in your `.orchestrator.yaml` or `~/.orchest
 context:
   # Maximum number of tokens to include in the context (default: 10000)
   tokenBudget: 20000
-  
+
   # Glob patterns to exclude from scanning (in addition to .gitignore)
   exclude:
-    - "coverage/**"
-    - "legacy-code/**"
-    
+    - 'coverage/**'
+    - 'legacy-code/**'
+
   # Glob patterns to include (currently supported via negative excludes in .orchestratorignore)
-  # include: [] 
-  
+  # include: []
+
   # Path to ripgrep executable (default: 'rg')
   # Useful if rg is not in your PATH
-  rgPath: "/usr/local/bin/rg"
+  rgPath: '/usr/local/bin/rg'
 ```
 
 ## Ignore Rules
@@ -46,8 +46,8 @@ The scanner respects the following ignore sources in order:
 
 For every run, the Orchestrator saves the generated context in the run directory (`.orchestrator/runs/<run-id>/`):
 
--   `context_pack.txt`: A human-readable text file containing all the code snippets sent to the LLM.
--   `context_pack.json`: A structured JSON file with metadata about the selected snippets, scores, and excluded candidates.
+- `context_pack.txt`: A human-readable text file containing all the code snippets sent to the LLM.
+- `context_pack.json`: A structured JSON file with metadata about the selected snippets, scores, and excluded candidates.
 
 You can inspect these files to verify exactly what code the agent is seeing.
 
@@ -58,6 +58,7 @@ You can inspect these files to verify exactly what code the agent is seeing.
 The Orchestrator prefers `ripgrep` for fast searching. If `rg` is not in your PATH, it falls back to a slower JavaScript implementation.
 
 **Fixes:**
+
 1.  Install ripgrep: `brew install ripgrep` (macOS) or see [ripgrep installation](https://github.com/BurntSushi/ripgrep#installation).
 2.  Specify the path explicitly in config: `context.rgPath: "/path/to/rg"`.
 
@@ -66,6 +67,7 @@ The Orchestrator prefers `ripgrep` for fast searching. If `rg` is not in your PA
 If the context pack is too large, it might consume too many tokens or confuse the model.
 
 **Fixes:**
+
 1.  Reduce `context.tokenBudget` in your config.
 2.  Add irrelevant directories to `.orchestratorignore` or `context.exclude`.
 
