@@ -2,7 +2,11 @@ import * as fs from 'fs/promises';
 import { OrchestratorEvent } from '../types/events';
 import { redact } from './redactor';
 
-export class JsonlLogger {
+export interface Logger {
+  log(event: OrchestratorEvent): Promise<void>;
+}
+
+export class JsonlLogger implements Logger {
   private filePath: string;
 
   constructor(filePath: string) {
