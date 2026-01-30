@@ -1,10 +1,10 @@
 export interface DiffParsed {
-    diffText: string;
-    confidence: number;
+  diffText: string;
+  confidence: number;
 }
 export interface PlanParsed {
-    steps: string[];
-    confidence: number;
+  steps: string[];
+  confidence: number;
 }
 /**
  * Strips ANSI escape codes and normalizes line endings.

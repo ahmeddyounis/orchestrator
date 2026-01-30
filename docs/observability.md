@@ -62,7 +62,8 @@ This file provides a quick overview of the run.
   "llmRequests": "number"
 }
 ```
-*Schema is illustrative and may be subject to minor changes.*
+
+_Schema is illustrative and may be subject to minor changes._
 
 ### `manifest.json` Schema
 
@@ -93,6 +94,7 @@ node packages/cli/dist/index.js report --runId <run_id>
 ```
 
 The report provides a summary of the run, including:
+
 - Status and duration.
 - A list of modified files.
 - Cost and token usage.
@@ -104,23 +106,13 @@ Cost is calculated based on token usage for each LLM provider. The pricing data 
 
 This helps you monitor expenses and optimize your agent's configuration for cost-effectiveness.
 
-
-
 ## Example: Debugging a Failed Run in a Monorepo
-
-
 
 Imagine the orchestrator fails during a `pnpm test` command in a large monorepo. Here’s how you’d investigate:
 
-
-
 1.  **Find the Run ID**: Note the `runId` from the CLI output or find the latest directory in `.orchestrator/runs/`. Let's say it's `171234567890`.
 
-
-
 2.  **Check the Summary**: Open `.orchestrator/runs/171234567890/summary.json`. You see `"status": "failed"`.
-
-
 
 3.  **Use the Report Command**: For a quick overview of the error, run:
 
@@ -132,14 +124,8 @@ Imagine the orchestrator fails during a `pnpm test` command in a large monorepo.
 
     The report shows a `ToolRun` error for the `pnpm test` command.
 
-
-
 4.  **Inspect Tool Logs**: To see the raw output, navigate to the tool logs directory: `.orchestrator/runs/171234567890/tool_logs/`. Look for files corresponding to the failed tool call. You might find a file named `tool_1_pnpm_test_stderr.log`.
 
-
-
 5.  **Examine the Log**: Open the log file. You'll see the full `stderr` output from `pnpm test`, revealing the exact test that failed and why.
-
-
 
 6.  **Review the Trace**: For even deeper context, you can inspect `trace.jsonl`. Search for the `spanId` of the failed tool run to see the events that led up to it, such as the agent's reasoning and the exact parameters of the command.

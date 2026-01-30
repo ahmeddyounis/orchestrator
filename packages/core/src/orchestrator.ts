@@ -8,7 +8,7 @@ import {
   RetrievalIntent,
   RunSummary,
   SummaryWriter,
-} from '@orchestrator/shared'
+} from '@orchestrator/shared';
 import {
   ContextSignal,
   GitService,
@@ -19,24 +19,24 @@ import {
   SnippetExtractor,
   getIndexStatus,
   IndexUpdater,
-} from '@orchestrator/repo'
+} from '@orchestrator/repo';
 import {
   MemoryEntry,
   createMemoryStore,
   ProceduralMemory,
   ProceduralMemoryEntry,
   ProceduralMemoryQuery,
-} from '@orchestrator/memory'
-import { ProviderRegistry, EventBus } from './registry'
-import { PatchStore } from './exec/patch_store'
-import { PlanService } from './plan/service'
-import { ExecutionService } from './exec/service'
-import { UserInterface } from '@orchestrator/exec'
-import { VerificationRunner } from './verify/runner'
-import { VerificationProfile } from './verify/types'
-import { MemoryWriter } from './memory'
-import type { RepoState } from './memory/types'
-import type { VerificationReport } from './verify/types'
+} from '@orchestrator/memory';
+import { ProviderRegistry, EventBus } from './registry';
+import { PatchStore } from './exec/patch_store';
+import { PlanService } from './plan/service';
+import { ExecutionService } from './exec/service';
+import { UserInterface } from '@orchestrator/exec';
+import { VerificationRunner } from './verify/runner';
+import { VerificationProfile } from './verify/types';
+import { MemoryWriter } from './memory';
+import type { RepoState } from './memory/types';
+import type { VerificationReport } from './verify/types';
 import path from 'path';
 import fs from 'fs/promises';
 import * as fsSync from 'fs';
@@ -314,20 +314,20 @@ export class Orchestrator {
   private async writeEpisodicMemory(
     summary: RunSummary,
     args: {
-      artifactsRoot: string
-      patchPaths?: string[]
-      extraArtifactPaths?: string[]
-      verificationReport?: VerificationReport
+      artifactsRoot: string;
+      patchPaths?: string[];
+      extraArtifactPaths?: string[];
+      verificationReport?: VerificationReport;
     },
     eventBus?: EventBus,
   ): Promise<void> {
-    if (this.suppressEpisodicMemoryWrite || !this.shouldWriteEpisodicMemory()) return
+    if (this.suppressEpisodicMemoryWrite || !this.shouldWriteEpisodicMemory()) return;
 
-    let gitSha = ''
+    let gitSha = '';
     try {
-      gitSha = await this.git.getHeadSha()
+      gitSha = await this.git.getHeadSha();
     } catch {
-      gitSha = 'unknown'
+      gitSha = 'unknown';
     }
 
     const repoState: RepoState = {
@@ -340,10 +340,10 @@ export class Orchestrator {
         args.patchPaths ?? [],
         args.extraArtifactPaths ?? [],
       ),
-    }
+    };
 
     try {
-      const writer = new MemoryWriter(eventBus, summary.runId)
+      const writer = new MemoryWriter(eventBus, summary.runId);
       await writer.extractEpisodic(
         {
           runId: summary.runId,
@@ -353,7 +353,7 @@ export class Orchestrator {
         },
         repoState,
         args.verificationReport,
-      )
+      );
     } catch {
       // Non-fatal: don't fail the run if memory persistence fails.
     }
@@ -367,14 +367,14 @@ export class Orchestrator {
     options: RunOptions,
     runResult: Partial<RunResult>,
     artifacts: {
-      root: string
-      trace: string
-      summary: string
-      patchesDir: string
-      manifest: string
+      root: string;
+      trace: string;
+      summary: string;
+      patchesDir: string;
+      manifest: string;
     },
   ): Promise<RunSummary> {
-    const finishedAt = new Date()
+    const finishedAt = new Date();
     const patchStats = runResult.filesChanged
       ? {
           filesChanged: runResult.filesChanged.length,
@@ -385,9 +385,9 @@ export class Orchestrator {
               ? runResult.patchPaths[runResult.patchPaths.length - 1]
               : undefined,
         }
-      : undefined
+      : undefined;
 
-    const costSummary = this.costTracker?.getSummary()
+    const costSummary = this.costTracker?.getSummary();
 
     return {
       schemaVersion: 1,
@@ -450,19 +450,19 @@ export class Orchestrator {
         contextPaths: [], // Not yet implemented
         toolLogPaths: [], // Not yet implemented
       },
-    }
+    };
   }
 
   async runL0(goal: string, runId: string): Promise<RunResult> {
-    const startTime = Date.now()
+    const startTime = Date.now();
     // 1. Setup Artifacts
-    const artifacts = await createRunDir(this.repoRoot, runId)
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root)
-    const logger = new JsonlLogger(artifacts.trace)
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
+    const logger = new JsonlLogger(artifacts.trace);
 
     const emitEvent = async (e: OrchestratorEvent) => {
-      await logger.log(e)
-    }
+      await logger.log(e);
+    };
 
     await emitEvent({
       type: 'RunStarted',
@@ -470,7 +470,7 @@ export class Orchestrator {
       timestamp: new Date().toISOString(),
       runId,
       payload: { taskId: runId, goal },
-    })
+    });
 
     // Initialize manifest
     await writeManifest(artifacts.manifest, {
@@ -484,49 +484,49 @@ export class Orchestrator {
       effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
       patchPaths: [],
       toolLogPaths: [],
-    })
+    });
 
     // 2. Build Minimal Context
-    const scanner = new RepoScanner()
-    const searchService = new SearchService()
+    const scanner = new RepoScanner();
+    const searchService = new SearchService();
 
     // Wire up search events to logger
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     searchService.on('RepoSearchStarted', (_e) => {
       /* log if needed */
-    })
+    });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     searchService.on('RepoSearchFinished', (_e) => {
       /* log if needed */
-    })
+    });
 
     // Scan repo structure
-    const snapshot = await scanner.scan(this.repoRoot)
-    const fileList = snapshot.files.map((f) => f.path).join('\n')
+    const snapshot = await scanner.scan(this.repoRoot);
+    const fileList = snapshot.files.map((f) => f.path).join('\n');
 
     // Search for keywords (simple tokenization of goal)
     const keywords = goal
       .split(' ')
       .filter((w) => w.length > 3)
-      .slice(0, 5)
-    let searchResults = ''
+      .slice(0, 5);
+    let searchResults = '';
 
     if (keywords.length > 0) {
-      const terms = keywords.slice(0, 3)
+      const terms = keywords.slice(0, 3);
       if (terms.length > 0) {
-        const regex = `(${terms.join('|')})`
+        const regex = `(${terms.join('|')})`;
         try {
           const results = await searchService.search({
             query: regex,
             cwd: this.repoRoot,
             maxMatchesPerFile: 3,
-          })
+          });
 
           searchResults = results.matches
             .map((m) => `${m.path}:${m.line} ${m.matchText.trim()}`)
-            .join('\n')
+            .join('\n');
         } catch {
-          searchResults = '(Search failed)'
+          searchResults = '(Search failed)';
         }
       }
     }
@@ -537,13 +537,13 @@ ${fileList}
 
 SEARCH RESULTS (for keywords: ${keywords.join(', ')}):
 ${searchResults || '(No matches)'}
-`
+`;
 
     // 3. Prompt Executor
-    const executor = this.registry.getAdapter(this.config.defaults?.executor || 'openai')
+    const executor = this.registry.getAdapter(this.config.defaults?.executor || 'openai');
 
     if (!executor) {
-      throw new Error('No executor provider configured')
+      throw new Error('No executor provider configured');
     }
 
     const systemPrompt = `
@@ -568,7 +568,7 @@ diff --git a/file.ts b/file.ts
 -old
 +new
 END_DIFF
-`
+`;
 
     const response = await executor.generate(
       {
@@ -578,26 +578,26 @@ END_DIFF
         ],
       },
       { runId, logger },
-    )
+    );
 
-    const outputText = response.text
+    const outputText = response.text;
 
     if (outputText) {
-      await fs.writeFile(path.join(artifacts.root, 'executor_output.txt'), outputText)
+      await fs.writeFile(path.join(artifacts.root, 'executor_output.txt'), outputText);
     }
 
     // 4. Parse Diff
-    const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/)
+    const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
 
     if (!diffMatch || !diffMatch[1].trim()) {
-      const msg = 'Failed to extract diff from executor output'
+      const msg = 'Failed to extract diff from executor output';
       await emitEvent({
         type: 'RunFinished',
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
         payload: { status: 'failure', summary: msg },
-      })
+      });
 
       const runResult: RunResult = {
         status: 'failure',
@@ -609,11 +609,18 @@ END_DIFF
           passed: false,
           summary: 'Not run',
         },
-      }
+      };
 
-      const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L0' }, runResult, artifacts)
-      await SummaryWriter.write(summary, artifacts.root)
-
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'failure',
+        { thinkLevel: 'L0' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
 
       // Write manifest before returning
       await writeManifest(artifacts.manifest, {
@@ -627,7 +634,7 @@ END_DIFF
         effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
         patchPaths: [],
         toolLogPaths: [],
-      })
+      });
 
       await this.writeEpisodicMemory(
         summary,
@@ -635,30 +642,30 @@ END_DIFF
           artifactsRoot: artifacts.root,
         },
         { emit: emitEvent },
-      )
+      );
 
-      return { status: 'failure', runId, summary: msg }
+      return { status: 'failure', runId, summary: msg };
     }
 
-    const rawDiffContent = diffMatch[1]
+    const rawDiffContent = diffMatch[1];
     // Remove completely empty leading/trailing lines (no characters at all)
     // but preserve lines with spaces (which are valid diff context for blank lines)
-    const lines = rawDiffContent.split('\n')
-    const firstContentIdx = lines.findIndex((l) => l !== '')
-    let lastContentIdx = -1
+    const lines = rawDiffContent.split('\n');
+    const firstContentIdx = lines.findIndex((l) => l !== '');
+    let lastContentIdx = -1;
     for (let i = lines.length - 1; i >= 0; i--) {
       if (lines[i] !== '') {
-        lastContentIdx = i
-        break
+        lastContentIdx = i;
+        break;
       }
     }
     const diffContent =
-      firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n')
+      firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
     // 5. Apply Patch
-    const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest)
-    const patchPath = await patchStore.saveSelected(0, diffContent)
-    await patchStore.saveFinalDiff(diffContent)
+    const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+    const patchPath = await patchStore.saveSelected(0, diffContent);
+    await patchStore.saveFinalDiff(diffContent);
 
     await emitEvent({
       type: 'PatchProposed',
@@ -669,17 +676,17 @@ END_DIFF
         diffPreview: diffContent,
         filePaths: [],
       },
-    })
+    });
 
-    const applier = new PatchApplier()
-    const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n'
+    const applier = new PatchApplier();
+    const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
     const result = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
       maxFilesChanged: this.config.patch?.maxFilesChanged,
       maxLinesTouched: this.config.patch?.maxLinesChanged,
       allowBinary: this.config.patch?.allowBinary,
-    })
+    });
 
-    let runResult: RunResult
+    let runResult: RunResult;
 
     if (result.applied) {
       await emitEvent({
@@ -692,7 +699,7 @@ END_DIFF
           filesChanged: result.filesChanged,
           success: true,
         },
-      })
+      });
 
       await emitEvent({
         type: 'RunFinished',
@@ -703,7 +710,7 @@ END_DIFF
           status: 'success',
           summary: 'Patch applied successfully',
         },
-      })
+      });
 
       runResult = {
         status: 'success',
@@ -717,9 +724,9 @@ END_DIFF
           passed: false,
           summary: 'Not run',
         },
-      }
+      };
     } else {
-      const msg = result.error?.message || 'Unknown error'
+      const msg = result.error?.message || 'Unknown error';
       await emitEvent({
         type: 'PatchApplyFailed',
         schemaVersion: 1,
@@ -729,7 +736,7 @@ END_DIFF
           error: msg,
           details: result.error?.details,
         },
-      })
+      });
 
       await emitEvent({
         type: 'RunFinished',
@@ -737,7 +744,7 @@ END_DIFF
         timestamp: new Date().toISOString(),
         runId,
         payload: { status: 'failure', summary: 'Patch application failed' },
-      })
+      });
 
       runResult = {
         status: 'failure',
@@ -750,11 +757,19 @@ END_DIFF
           passed: false,
           summary: 'Not run',
         },
-      }
+      };
     }
 
-    const summary = await this._buildRunSummary(runId, goal, startTime, runResult.status, { thinkLevel: 'L0' }, runResult, artifacts)
-    await SummaryWriter.write(summary, artifacts.root)
+    const summary = await this._buildRunSummary(
+      runId,
+      goal,
+      startTime,
+      runResult.status,
+      { thinkLevel: 'L0' },
+      runResult,
+      artifacts,
+    );
+    await SummaryWriter.write(summary, artifacts.root);
 
     // Write manifest
     await writeManifest(artifacts.manifest, {
@@ -768,7 +783,7 @@ END_DIFF
       effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
       patchPaths: [patchPath],
       toolLogPaths: [],
-    })
+    });
 
     await this.writeEpisodicMemory(
       summary,
@@ -777,20 +792,20 @@ END_DIFF
         patchPaths: runResult.patchPaths,
       },
       { emit: emitEvent },
-    )
+    );
 
-    return runResult
+    return runResult;
   }
 
   async runL1(goal: string, runId: string): Promise<RunResult> {
-    const startTime = Date.now()
-    const artifacts = await createRunDir(this.repoRoot, runId)
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root)
-    const logger = new JsonlLogger(artifacts.trace)
+    const startTime = Date.now();
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
+    const logger = new JsonlLogger(artifacts.trace);
 
     const eventBus: EventBus = {
       emit: async (e) => await logger.log(e),
-    }
+    };
 
     await eventBus.emit({
       type: 'RunStarted',
@@ -798,7 +813,7 @@ END_DIFF
       timestamp: new Date().toISOString(),
       runId,
       payload: { taskId: runId, goal },
-    })
+    });
 
     // Initialize manifest
     await writeManifest(artifacts.manifest, {
@@ -813,24 +828,24 @@ END_DIFF
       patchPaths: [],
       contextPaths: [],
       toolLogPaths: [],
-    })
+    });
 
-    const plannerId = this.config.defaults?.planner || 'openai'
-    const executorId = this.config.defaults?.executor || 'openai'
-    const reviewerId = this.config.defaults?.reviewer || 'openai'
+    const plannerId = this.config.defaults?.planner || 'openai';
+    const executorId = this.config.defaults?.executor || 'openai';
+    const reviewerId = this.config.defaults?.reviewer || 'openai';
 
     const providers = await this.registry.resolveRoleProviders(
       { plannerId, executorId, reviewerId },
       { eventBus, runId },
-    )
+    );
 
-    const planService = new PlanService(eventBus)
+    const planService = new PlanService(eventBus);
 
     const context = {
       runId,
       config: this.config,
       logger,
-    }
+    };
 
     const steps = await planService.generatePlan(
       goal,
@@ -839,17 +854,17 @@ END_DIFF
       artifacts.root,
       this.repoRoot,
       this.config,
-    )
+    );
 
     if (steps.length === 0) {
-      const msg = 'Planning failed to produce any steps.'
+      const msg = 'Planning failed to produce any steps.';
       await eventBus.emit({
         type: 'RunFinished',
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
         payload: { status: 'failure', summary: msg },
-      })
+      });
 
       const runResult: RunResult = {
         status: 'failure',
@@ -861,10 +876,18 @@ END_DIFF
           passed: false,
           summary: 'Not run',
         },
-      }
-      
-      const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L1' }, runResult, artifacts)
-      await SummaryWriter.write(summary, artifacts.root)
+      };
+
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'failure',
+        { thinkLevel: 'L1' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
         summary,
@@ -872,9 +895,9 @@ END_DIFF
           artifactsRoot: artifacts.root,
         },
         eventBus,
-      )
+      );
 
-      return runResult
+      return runResult;
     }
 
     const executionService = new ExecutionService(
@@ -884,19 +907,19 @@ END_DIFF
       runId,
       this.repoRoot,
       this.config,
-    )
+    );
 
     // Budget & Loop State
-    const budget = { ...DEFAULT_BUDGET, ...this.config.budget }
+    const budget = { ...DEFAULT_BUDGET, ...this.config.budget };
 
-    let stepsCompleted = 0
-    const patchPaths: string[] = []
-    const contextPaths: string[] = []
-    const touchedFiles = new Set<string>()
+    let stepsCompleted = 0;
+    const patchPaths: string[] = [];
+    const contextPaths: string[] = [];
+    const touchedFiles = new Set<string>();
 
-    let consecutiveInvalidDiffs = 0
-    let consecutiveApplyFailures = 0
-    let lastApplyErrorHash = ''
+    let consecutiveInvalidDiffs = 0;
+    let consecutiveApplyFailures = 0;
+    let lastApplyErrorHash = '';
 
     const finish = async (
       status: 'success' | 'failure',
@@ -910,7 +933,7 @@ END_DIFF
           timestamp: new Date().toISOString(),
           runId,
           payload: { reason: stopReason, details: summaryMsg },
-        })
+        });
       }
 
       await eventBus.emit({
@@ -919,7 +942,7 @@ END_DIFF
         timestamp: new Date().toISOString(),
         runId,
         payload: { status, summary: summaryMsg },
-      })
+      });
 
       await writeManifest(artifacts.manifest, {
         runId,
@@ -933,7 +956,7 @@ END_DIFF
         patchPaths,
         contextPaths,
         toolLogPaths: [],
-      })
+      });
 
       const runResult: RunResult = {
         status,
@@ -948,11 +971,18 @@ END_DIFF
           passed: false,
           summary: 'Not run',
         },
-      }
+      };
 
-      const summary = await this._buildRunSummary(runId, goal, startTime, status, { thinkLevel: 'L1' }, runResult, artifacts)
-      await SummaryWriter.write(summary, artifacts.root)
-
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        status,
+        { thinkLevel: 'L1' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
 
       await writeManifest(artifacts.manifest, {
         runId,
@@ -966,7 +996,7 @@ END_DIFF
         patchPaths,
         contextPaths,
         toolLogPaths: [],
-      })
+      });
 
       await this.writeEpisodicMemory(
         summary,
@@ -976,24 +1006,24 @@ END_DIFF
           extraArtifactPaths: contextPaths,
         },
         eventBus,
-      )
+      );
 
-      return runResult
-    }
+      return runResult;
+    };
 
     for (const step of steps) {
       // 1. Budget Checks
-      const elapsed = Date.now() - startTime
+      const elapsed = Date.now() - startTime;
       if (budget.time !== undefined && elapsed > budget.time) {
-        return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`)
+        return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`);
       }
       if (budget.iter !== undefined && stepsCompleted >= budget.iter) {
-        return finish('failure', 'budget_exceeded', `Iteration budget exceeded (${budget.iter})`)
+        return finish('failure', 'budget_exceeded', `Iteration budget exceeded (${budget.iter})`);
       }
       if (budget.cost !== undefined && this.costTracker) {
-        const summary = this.costTracker.getSummary()
+        const summary = this.costTracker.getSummary();
         if (summary.total.estimatedCostUsd && summary.total.estimatedCostUsd > budget.cost) {
-          return finish('failure', 'budget_exceeded', `Cost budget exceeded ($${budget.cost})`)
+          return finish('failure', 'budget_exceeded', `Cost budget exceeded ($${budget.cost})`);
         }
       }
 
@@ -1003,24 +1033,24 @@ END_DIFF
         timestamp: new Date().toISOString(),
         runId,
         payload: { step, index: stepsCompleted, total: steps.length },
-      })
+      });
 
-      let contextPack
+      let contextPack;
       try {
-        const scanner = new RepoScanner()
+        const scanner = new RepoScanner();
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const snapshot = await scanner.scan(this.repoRoot, {
           excludes: this.config.context?.exclude,
-        })
+        });
 
-        const searchService = new SearchService(this.config.context?.rgPath)
+        const searchService = new SearchService(this.config.context?.rgPath);
         const searchResults = await searchService.search({
           query: step,
           cwd: this.repoRoot,
           maxMatchesPerFile: 5,
-        })
+        });
 
-        const extraMatches = []
+        const extraMatches = [];
         for (const touched of touchedFiles) {
           extraMatches.push({
             path: touched,
@@ -1029,19 +1059,19 @@ END_DIFF
             matchText: 'PREVIOUSLY_TOUCHED',
             lineText: '',
             score: 1000,
-          })
+          });
         }
 
-        const extractor = new SnippetExtractor()
+        const extractor = new SnippetExtractor();
         const candidates = await extractor.extractSnippets(
           [...searchResults.matches, ...extraMatches],
           { cwd: this.repoRoot },
-        )
+        );
 
-        const packer = new SimpleContextPacker()
+        const packer = new SimpleContextPacker();
         contextPack = packer.pack(step, [], candidates, {
           tokenBudget: this.config.context?.tokenBudget || 8000,
-        })
+        });
       } catch {
         // Ignore context errors
       }
@@ -1056,17 +1086,17 @@ END_DIFF
           intent: 'implementation',
         },
         eventBus,
-      )
+      );
 
-      const fuser = new SimpleContextFuser()
+      const fuser = new SimpleContextFuser();
       const fusionBudgets = {
         maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
         maxMemoryChars: this.config.memory?.maxChars ?? 2000,
         maxSignalsChars: 1000,
-      }
+      };
 
       // TODO: Plumb real signals
-      const signals: ContextSignal[] = []
+      const signals: ContextSignal[] = [];
 
       const fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nCurrent Step: ${step}`,
@@ -1074,30 +1104,30 @@ END_DIFF
         memoryHits,
         signals,
         budgets: fusionBudgets,
-      })
+      });
 
-      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_')
+      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
       const fusedJsonPath = path.join(
         artifacts.root,
         `fused_context_step_${stepsCompleted}_${stepSlug}.json`,
-      )
+      );
       const fusedTxtPath = path.join(
         artifacts.root,
         `fused_context_step_${stepsCompleted}_${stepSlug}.txt`,
-      )
+      );
 
-      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2))
-      await fs.writeFile(fusedTxtPath, fusedContext.prompt)
-      contextPaths.push(fusedJsonPath, fusedTxtPath)
+      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
+      await fs.writeFile(fusedTxtPath, fusedContext.prompt);
+      contextPaths.push(fusedJsonPath, fusedTxtPath);
 
-      const contextText = fusedContext.prompt
+      const contextText = fusedContext.prompt;
 
-      let attempt = 0
-      let success = false
-      let lastError = ''
+      let attempt = 0;
+      let success = false;
+      let lastError = '';
 
       while (attempt < 2 && !success) {
-        attempt++
+        attempt++;
 
         let systemPrompt = `You are an expert software engineer.
 Your task is to implement the current step: "${step}"
@@ -1111,12 +1141,12 @@ INSTRUCTIONS:
 2. Produce a unified diff that implements the changes for THIS STEP ONLY.
 3. Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 4. Do not include any explanations outside the markers.
-`
+`;
 
         if (attempt > 1) {
           systemPrompt += `
 
-PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again.`
+PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again.`;
         }
 
         const response = await providers.executor.generate(
@@ -1127,78 +1157,78 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
             ],
           },
           { runId, logger },
-        )
+        );
 
-        const outputText = response.text
+        const outputText = response.text;
 
         if (outputText) {
-          const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_')
+          const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
           await fs.writeFile(
             path.join(
               artifacts.root,
               `step_${stepsCompleted}_${stepSlug}_attempt_${attempt}_output.txt`,
             ),
             outputText,
-          )
+          );
         }
 
-        const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/)
+        const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
 
         if (!diffMatch || !diffMatch[1].trim()) {
-          lastError = 'Failed to extract diff from executor output'
-          consecutiveInvalidDiffs++
+          lastError = 'Failed to extract diff from executor output';
+          consecutiveInvalidDiffs++;
           if (consecutiveInvalidDiffs >= 2) {
             return finish(
               'failure',
               'invalid_output',
               'Executor produced invalid output twice consecutively',
-            )
+            );
           }
-          continue
+          continue;
         } else {
-          consecutiveInvalidDiffs = 0
+          consecutiveInvalidDiffs = 0;
         }
 
-        const rawDiffContent = diffMatch[1]
+        const rawDiffContent = diffMatch[1];
         // Remove completely empty leading/trailing lines (no characters at all)
         // but preserve lines with spaces (which are valid diff context for blank lines)
-        const lines = rawDiffContent.split('\n')
-        const firstContentIdx = lines.findIndex((l) => l !== '')
-        let lastContentIdx = -1
+        const lines = rawDiffContent.split('\n');
+        const firstContentIdx = lines.findIndex((l) => l !== '');
+        let lastContentIdx = -1;
         for (let i = lines.length - 1; i >= 0; i--) {
           if (lines[i] !== '') {
-            lastContentIdx = i
-            break
+            lastContentIdx = i;
+            break;
           }
         }
         const diffContent =
-          firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n')
+          firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
         if (diffContent.length === 0) {
-          return finish('failure', 'invalid_output', 'Executor produced empty patch')
+          return finish('failure', 'invalid_output', 'Executor produced empty patch');
         }
 
-        const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest)
-        const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent)
-        if (attempt === 1) patchPaths.push(patchPath)
+        const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+        const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
+        if (attempt === 1) patchPaths.push(patchPath);
 
-        const result = await executionService.applyPatch(diffContent, step)
+        const result = await executionService.applyPatch(diffContent, step);
 
         if (result.success) {
-          success = true
+          success = true;
           if (result.filesChanged) {
-            result.filesChanged.forEach((f) => touchedFiles.add(f))
+            result.filesChanged.forEach((f) => touchedFiles.add(f));
           }
-          consecutiveApplyFailures = 0
-          lastApplyErrorHash = ''
+          consecutiveApplyFailures = 0;
+          lastApplyErrorHash = '';
         } else {
-          lastError = result.error || 'Unknown apply error'
-          const errorHash = createHash('sha256').update(lastError).digest('hex')
+          lastError = result.error || 'Unknown apply error';
+          const errorHash = createHash('sha256').update(lastError).digest('hex');
           if (lastApplyErrorHash === errorHash) {
-            consecutiveApplyFailures++
+            consecutiveApplyFailures++;
           } else {
-            consecutiveApplyFailures = 1
-            lastApplyErrorHash = errorHash
+            consecutiveApplyFailures = 1;
+            lastApplyErrorHash = errorHash;
           }
 
           if (consecutiveApplyFailures >= 2) {
@@ -1206,20 +1236,20 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
               'failure',
               'repeated_failure',
               `Repeated patch apply failure: ${lastError}`,
-            )
+            );
           }
         }
       }
 
       if (success) {
-        stepsCompleted++
+        stepsCompleted++;
         await eventBus.emit({
           type: 'StepFinished',
           schemaVersion: 1,
           timestamp: new Date().toISOString(),
           runId,
           payload: { step, success: true },
-        })
+        });
       } else {
         await eventBus.emit({
           type: 'StepFinished',
@@ -1227,52 +1257,52 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           timestamp: new Date().toISOString(),
           runId,
           payload: { step, success: false, error: lastError },
-        })
+        });
 
         return finish(
           'failure',
           'repeated_failure',
           `Step failed after retries: ${step}. Error: ${lastError}`,
-        )
+        );
       }
     }
 
-    return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`)
+    return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
 
   private async searchMemoryHits(
     args: {
-      query: string
-      runId: string
-      stepId: number
-      artifactsRoot: string
-      intent: RetrievalIntent
-      failureSignature?: string
+      query: string;
+      runId: string;
+      stepId: number;
+      artifactsRoot: string;
+      intent: RetrievalIntent;
+      failureSignature?: string;
     },
     eventBus: EventBus,
   ): Promise<MemoryEntry[]> {
-    const memConfig = this.config.memory
+    const memConfig = this.config.memory;
     if (!memConfig?.enabled) {
-      return []
+      return [];
     }
 
-    const dbPath = this.resolveMemoryDbPath()
+    const dbPath = this.resolveMemoryDbPath();
     if (!dbPath) {
-      return []
+      return [];
     }
 
-    const store = createMemoryStore()
+    const store = createMemoryStore();
     try {
-      store.init(dbPath)
+      store.init(dbPath);
 
-      const { query } = args
-      const topK = memConfig.retrieval.topK ?? 5
+      const { query } = args;
+      const topK = memConfig.retrieval.topK ?? 5;
       const hits = store.search(this.repoRoot, query, {
         topK,
         intent: args.intent,
         staleDownrank: memConfig.retrieval.staleDownrank ?? true,
         failureSignature: args.failureSignature,
-      })
+      });
 
       await eventBus.emit({
         type: 'MemorySearched',
@@ -1285,43 +1315,51 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           hitsCount: hits.length,
           intent: args.intent,
         },
-      })
+      });
 
       if (hits.length === 0) {
-        return []
+        return [];
       }
 
-      const artifactPath = path.join(args.artifactsRoot, `memory_hits_step_${args.stepId}.json`)
-      await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2))
+      const artifactPath = path.join(args.artifactsRoot, `memory_hits_step_${args.stepId}.json`);
+      await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2));
 
-      return hits
+      return hits;
     } catch (err) {
       // Log but don't fail
-      console.error('Memory search failed:', err)
-      return []
+      console.error('Memory search failed:', err);
+      return [];
     } finally {
-      store.close()
+      store.close();
     }
   }
 
   async runL2(goal: string, runId: string): Promise<RunResult> {
-    const startTime = Date.now()
+    const startTime = Date.now();
     // 1. Initial Plan & Execute (L1)
-    this.suppressEpisodicMemoryWrite = true
-    let l1Result: RunResult
+    this.suppressEpisodicMemoryWrite = true;
+    let l1Result: RunResult;
     try {
-      l1Result = await this.runL1(goal, runId)
+      l1Result = await this.runL1(goal, runId);
     } finally {
-      this.suppressEpisodicMemoryWrite = false
+      this.suppressEpisodicMemoryWrite = false;
     }
 
     if (l1Result.stopReason === 'budget_exceeded') {
-      const artifacts = await createRunDir(this.repoRoot, runId)
-      const logger = new JsonlLogger(artifacts.trace)
+      const artifacts = await createRunDir(this.repoRoot, runId);
+      const logger = new JsonlLogger(artifacts.trace);
       const eventBus: EventBus = {
         emit: async (e) => await logger.log(e),
-      }
-      const summary = await this._buildRunSummary(runId, goal, startTime, l1Result.status, { thinkLevel: 'L2' }, l1Result, artifacts)
+      };
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        l1Result.status,
+        { thinkLevel: 'L2' },
+        l1Result,
+        artifacts,
+      );
       await this.writeEpisodicMemory(
         summary,
         {
@@ -1329,18 +1367,26 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           patchPaths: l1Result.patchPaths,
         },
         eventBus,
-      )
-      return l1Result
+      );
+      return l1Result;
     }
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
-      const artifacts = await createRunDir(this.repoRoot, runId)
-      const logger = new JsonlLogger(artifacts.trace)
+      const artifacts = await createRunDir(this.repoRoot, runId);
+      const logger = new JsonlLogger(artifacts.trace);
       const eventBus: EventBus = {
         emit: async (e) => await logger.log(e),
-      }
-      const summary = await this._buildRunSummary(runId, goal, startTime, l1Result.status, { thinkLevel: 'L2' }, l1Result, artifacts)
+      };
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        l1Result.status,
+        { thinkLevel: 'L2' },
+        l1Result,
+        artifacts,
+      );
       await this.writeEpisodicMemory(
         summary,
         {
@@ -1348,28 +1394,28 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           patchPaths: l1Result.patchPaths,
         },
         eventBus,
-      )
+      );
       return {
         ...l1Result,
         summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
-      }
+      };
     }
 
     // Re-use run dir structure
-    const artifacts = await createRunDir(this.repoRoot, runId)
-    const logger = new JsonlLogger(artifacts.trace)
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    const logger = new JsonlLogger(artifacts.trace);
     const eventBus: EventBus = {
       emit: async (e) => await logger.log(e),
-    }
+    };
 
-    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot)
+    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
     const verificationRunner = new VerificationRunner(
       proceduralMemory,
       this.toolPolicy,
       this.ui,
       eventBus,
       this.repoRoot,
-    )
+    );
 
     // Construct Profile
     const profile: VerificationProfile = {
@@ -1383,7 +1429,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         testScope: this.config.verification?.auto?.testScope || 'targeted',
         maxCommandsPerIteration: this.config.verification?.auto?.maxCommandsPerIteration ?? 5,
       },
-    }
+    };
 
     // 3. Initial Verification
     let verification = await verificationRunner.run(
@@ -1391,11 +1437,11 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       profile.mode,
       { touchedFiles: l1Result.filesChanged },
       { runId },
-    )
+    );
 
-    const initialReportPath = path.join(artifacts.root, 'verification_report_initial.json')
-    await fs.writeFile(initialReportPath, JSON.stringify(verification, null, 2))
-    const reportPaths = [initialReportPath]
+    const initialReportPath = path.join(artifacts.root, 'verification_report_initial.json');
+    await fs.writeFile(initialReportPath, JSON.stringify(verification, null, 2));
+    const reportPaths = [initialReportPath];
 
     if (verification.passed) {
       await eventBus.emit({
@@ -1404,7 +1450,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         timestamp: new Date().toISOString(),
         runId,
         payload: { status: 'success', summary: 'L2 Verified Success' },
-      })
+      });
 
       const runResult: RunResult = {
         ...l1Result,
@@ -1417,10 +1463,18 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           summary: verification.summary,
           reportPaths,
         },
-      }
+      };
 
-      const summary = await this._buildRunSummary(runId, goal, startTime, 'success', { thinkLevel: 'L2' }, runResult, artifacts)
-      await SummaryWriter.write(summary, artifacts.root)
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'success',
+        { thinkLevel: 'L2' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
         summary,
@@ -1431,25 +1485,25 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           verificationReport: verification,
         },
         eventBus,
-      )
+      );
 
-      return runResult
+      return runResult;
     }
 
     // 4. Repair Loop
-    const maxIterations = 5
-    let iterations = 0
-    let failureSignature = verification.failureSignature
-    let consecutiveSameSignature = 0
+    const maxIterations = 5;
+    let iterations = 0;
+    let failureSignature = verification.failureSignature;
+    let consecutiveSameSignature = 0;
 
-    const patchPaths = l1Result.patchPaths || []
-    const touchedFiles = new Set(l1Result.filesChanged)
+    const patchPaths = l1Result.patchPaths || [];
+    const touchedFiles = new Set(l1Result.filesChanged);
 
-    const executorId = this.config.defaults?.executor || 'openai'
-    const executor = this.registry.getAdapter(executorId)
+    const executorId = this.config.defaults?.executor || 'openai';
+    const executor = this.registry.getAdapter(executorId);
 
     while (iterations < maxIterations) {
-      iterations++
+      iterations++;
 
       await eventBus.emit({
         type: 'IterationStarted',
@@ -1457,11 +1511,11 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, goal },
-      })
+      });
 
       // Stop Conditions checks (Signature)
       if (failureSignature && verification.failureSignature === failureSignature) {
-        consecutiveSameSignature++
+        consecutiveSameSignature++;
         if (consecutiveSameSignature >= 2) {
           // Non-improving -> Stop
           await eventBus.emit({
@@ -1473,7 +1527,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
               reason: 'non_improving',
               details: 'Verification failure signature unchanged for 2 iterations',
             },
-          })
+          });
 
           const runResult: RunResult = {
             ...l1Result,
@@ -1491,10 +1545,18 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
               reportPaths,
             },
             lastFailureSignature: verification.failureSignature,
-          }
+          };
 
-          const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L2' }, runResult, artifacts)
-          await SummaryWriter.write(summary, artifacts.root)
+          const summary = await this._buildRunSummary(
+            runId,
+            goal,
+            startTime,
+            'failure',
+            { thinkLevel: 'L2' },
+            runResult,
+            artifacts,
+          );
+          await SummaryWriter.write(summary, artifacts.root);
 
           await this.writeEpisodicMemory(
             summary,
@@ -1505,13 +1567,13 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
               verificationReport: verification,
             },
             eventBus,
-          )
+          );
 
-          return runResult
+          return runResult;
         }
       } else {
-        consecutiveSameSignature = 0
-        failureSignature = verification.failureSignature
+        consecutiveSameSignature = 0;
+        failureSignature = verification.failureSignature;
       }
 
       // Search memory for similar failures
@@ -1525,21 +1587,21 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           failureSignature: verification.failureSignature,
         },
         eventBus,
-      )
+      );
 
       // Generate Repair
       const verificationSummary = `Verification Failed.\n${verification.summary}\nFailed Checks: ${verification.checks
         .filter((c) => !c.passed)
         .map((c) => c.name)
-        .join(', ')}\n`
+        .join(', ')}\n`;
 
-      let errorDetails = ''
+      let errorDetails = '';
       for (const check of verification.checks) {
         if (!check.passed) {
           if (check.stderrPath) {
             try {
-              const errContent = await fs.readFile(check.stderrPath, 'utf8')
-              errorDetails += `\nCommand '${check.command}' failed:\n${errContent.slice(-2000)}\n`
+              const errContent = await fs.readFile(check.stderrPath, 'utf8');
+              errorDetails += `\nCommand '${check.command}' failed:\n${errContent.slice(-2000)}\n`;
             } catch {
               /* ignore */
             }
@@ -1547,7 +1609,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         }
       }
 
-      const fuser = new SimpleContextFuser()
+      const fuser = new SimpleContextFuser();
       const fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nTask: Fix verification errors.`,
         repoPack: { items: [], totalChars: 0, estimatedTokens: 0 }, // No repo context for repairs yet
@@ -1558,7 +1620,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           maxMemoryChars: 4000,
           maxSignalsChars: 1000,
         },
-      })
+      });
 
       const repairPrompt = `
 The previous attempt failed verification.
@@ -1575,7 +1637,7 @@ ${fusedContext.prompt}
 
 Please analyze the errors and produce a unified diff to fix them.
 Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
-`
+`;
 
       const response = await executor.generate(
         {
@@ -1585,18 +1647,18 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           ],
         },
         { runId, logger },
-      )
+      );
 
-      const outputText = response.text
+      const outputText = response.text;
 
       if (outputText) {
         await fs.writeFile(
           path.join(artifacts.root, `repair_iter_${iterations}_output.txt`),
           outputText,
-        )
+        );
       }
 
-      const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/)
+      const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
 
       if (!diffMatch) {
         // Fail iteration (no diff)
@@ -1606,29 +1668,29 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           timestamp: new Date().toISOString(),
           runId,
           payload: { iteration: iterations, patchPath: 'none (no-diff)' },
-        })
-        continue
+        });
+        continue;
       }
 
-      const rawDiffContent = diffMatch[1]
+      const rawDiffContent = diffMatch[1];
       // Remove completely empty leading/trailing lines (no characters at all)
       // but preserve lines with spaces (which are valid diff context for blank lines)
-      const lines = rawDiffContent.split('\n')
-      const firstContentIdx = lines.findIndex((l) => l !== '')
-      let lastContentIdx = -1
+      const lines = rawDiffContent.split('\n');
+      const firstContentIdx = lines.findIndex((l) => l !== '');
+      let lastContentIdx = -1;
       for (let i = lines.length - 1; i >= 0; i--) {
         if (lines[i] !== '') {
-          lastContentIdx = i
-          break
+          lastContentIdx = i;
+          break;
         }
       }
       const diffContent =
-        firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n')
+        firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
       // Apply Patch
-      const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest)
-      const patchPath = await patchStore.saveSelected(100 + iterations, diffContent)
-      patchPaths.push(patchPath)
+      const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+      const patchPath = await patchStore.saveSelected(100 + iterations, diffContent);
+      patchPaths.push(patchPath);
 
       await eventBus.emit({
         type: 'RepairAttempted',
@@ -1636,17 +1698,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, patchPath },
-      })
+      });
 
-      const applier = new PatchApplier()
-      const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n'
+      const applier = new PatchApplier();
+      const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
 
       const applyResult = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
         maxFilesChanged: 5,
-      })
+      });
 
       if (applyResult.applied) {
-        applyResult.filesChanged?.forEach((f) => touchedFiles.add(f))
+        applyResult.filesChanged?.forEach((f) => touchedFiles.add(f));
         await eventBus.emit({
           type: 'PatchApplied',
           schemaVersion: 1,
@@ -1657,7 +1719,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             filesChanged: applyResult.filesChanged || [],
             success: true,
           },
-        })
+        });
       } else {
         await eventBus.emit({
           type: 'PatchApplyFailed',
@@ -1668,7 +1730,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             error: applyResult.error?.message || 'Unknown apply error',
             details: applyResult.error,
           },
-        })
+        });
         // Continue loop to try again? Or verify existing state?
         // If patch failed, verify result is likely same, so signature check will catch it.
       }
@@ -1679,16 +1741,16 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         profile.mode,
         { touchedFiles: Array.from(touchedFiles) },
         { runId },
-      )
+      );
 
-      const reportPath = path.join(artifacts.root, `verification_report_iter_${iterations}.json`)
-      await fs.writeFile(reportPath, JSON.stringify(verification, null, 2))
-      reportPaths.push(reportPath)
+      const reportPath = path.join(artifacts.root, `verification_report_iter_${iterations}.json`);
+      await fs.writeFile(reportPath, JSON.stringify(verification, null, 2));
+      reportPaths.push(reportPath);
 
       await fs.writeFile(
         path.join(artifacts.root, `verification_summary_iter_${iterations}.txt`),
         verification.summary,
-      )
+      );
 
       if (verification.passed) {
         await eventBus.emit({
@@ -1697,7 +1759,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           timestamp: new Date().toISOString(),
           runId,
           payload: { iteration: iterations, result: 'success' },
-        })
+        });
 
         await eventBus.emit({
           type: 'RunFinished',
@@ -1708,7 +1770,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             status: 'success',
             summary: `L2 Verified Success after ${iterations} iterations`,
           },
-        })
+        });
 
         // Save Summary
         const runResult: RunResult = {
@@ -1724,13 +1786,21 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             summary: verification.summary,
             reportPaths,
           },
-        }
+        };
 
-        const summary = await this._buildRunSummary(runId, goal, startTime, 'success', { thinkLevel: 'L2' }, runResult, artifacts)
-        await SummaryWriter.write(summary, artifacts.root)
+        const summary = await this._buildRunSummary(
+          runId,
+          goal,
+          startTime,
+          'success',
+          { thinkLevel: 'L2' },
+          runResult,
+          artifacts,
+        );
+        await SummaryWriter.write(summary, artifacts.root);
 
         await this.writeEpisodicMemory(
-         summary,
+          summary,
           {
             artifactsRoot: artifacts.root,
             patchPaths: runResult.patchPaths,
@@ -1738,9 +1808,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             verificationReport: verification,
           },
           eventBus,
-        )
+        );
 
-        return runResult
+        return runResult;
       }
 
       await eventBus.emit({
@@ -1749,18 +1819,18 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         timestamp: new Date().toISOString(),
         runId,
         payload: { iteration: iterations, result: 'failure' },
-      })
+      });
     }
 
     // Budget exceeded
-    const failureSummary = `L2 failed to converge after ${iterations} iterations`
+    const failureSummary = `L2 failed to converge after ${iterations} iterations`;
     await eventBus.emit({
       type: 'RunFinished',
       schemaVersion: 1,
       timestamp: new Date().toISOString(),
       runId,
       payload: { status: 'failure', summary: failureSummary },
-    })
+    });
 
     const runResult: RunResult = {
       status: 'failure',
@@ -1778,10 +1848,18 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         reportPaths,
       },
       lastFailureSignature: verification.failureSignature,
-    }
+    };
 
-    const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L2' }, runResult, artifacts)
-    await SummaryWriter.write(summary, artifacts.root)
+    const summary = await this._buildRunSummary(
+      runId,
+      goal,
+      startTime,
+      'failure',
+      { thinkLevel: 'L2' },
+      runResult,
+      artifacts,
+    );
+    await SummaryWriter.write(summary, artifacts.root);
 
     await this.writeEpisodicMemory(
       summary,
@@ -1792,8 +1870,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         verificationReport: verification,
       },
       eventBus,
-    )
+    );
 
-    return runResult
+    return runResult;
   }
 }

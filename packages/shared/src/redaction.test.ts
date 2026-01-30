@@ -61,11 +61,7 @@ describe('redactForLogs', () => {
 
   it('should handle arrays correctly', () => {
     const obj = {
-      items: [
-        { api_key: '123' },
-        { someKey: 'value' },
-        'a'.repeat(5000),
-      ],
+      items: [{ api_key: '123' }, { someKey: 'value' }, 'a'.repeat(5000)],
     };
     const redacted = redaction.redactForLogs(obj) as any;
     expect(redacted.items[0].api_key).toBe('[REDACTED]');

@@ -29,7 +29,6 @@ export interface ProceduralMemory {
   updatedAt: Date;
 }
 
-
 export interface PatchStats {
   filesChanged: string[];
   insertions: number;

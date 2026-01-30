@@ -1,9 +1,4 @@
-const SENSITIVE_KEYS = new Set([
-  'api_key',
-  'token',
-  'secret',
-  'authorization',
-]);
+const SENSITIVE_KEYS = new Set(['api_key', 'token', 'secret', 'authorization']);
 
 const MAX_STRING_LENGTH = 4096;
 const TRUNCATION_MESSAGE = '[TRUNCATED]';
@@ -59,7 +54,6 @@ export function redactForLogs(obj: unknown): unknown {
     }
     newObj.env = redactedEnv;
   }
-
 
   return newObj;
 }

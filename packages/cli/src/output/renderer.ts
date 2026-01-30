@@ -9,18 +9,18 @@ export interface OutputResult {
     providers: Record<
       string,
       {
-        inputTokens: number
-        outputTokens: number
-        totalTokens: number
-        estimatedCostUsd?: number | null
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        estimatedCostUsd?: number | null;
       }
-    >
+    >;
     total: {
-      inputTokens: number
-      outputTokens: number
-      totalTokens: number
-      estimatedCostUsd?: number | null
-    }
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      estimatedCostUsd?: number | null;
+    };
   };
   nextSteps?: string[];
   verification?: {
