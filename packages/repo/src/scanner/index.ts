@@ -1,10 +1,18 @@
-import fs from 'node:fs/promises';
+import nodeFs from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
 import { RepoSnapshot, RepoFileMeta } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
 
+type Fs = typeof nodeFs;
+
 export class RepoScanner {
+  private fs: Fs;
+
+  constructor(fs: Fs = nodeFs) {
+    this.fs = fs;
+  }
+
   async scan(repoRoot: string, options: { excludes?: string[] } = {}): Promise<RepoSnapshot> {
     const ig = ignore();
 
@@ -14,7 +22,7 @@ export class RepoScanner {
     // 2. Add .gitignore
     try {
       const gitignorePath = path.join(repoRoot, '.gitignore');
-      const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8');
+      const gitignoreContent = await this.fs.readFile(gitignorePath, 'utf-8');
       ig.add(gitignoreContent);
     } catch {
       // ignore missing .gitignore
@@ -23,7 +31,7 @@ export class RepoScanner {
     // 3. Add .orchestratorignore
     try {
       const orchIgnorePath = path.join(repoRoot, '.orchestratorignore');
-      const orchIgnoreContent = await fs.readFile(orchIgnorePath, 'utf-8');
+      const orchIgnoreContent = await this.fs.readFile(orchIgnorePath, 'utf-8');
       ig.add(orchIgnoreContent);
     } catch {
       // ignore missing .orchestratorignore
@@ -40,7 +48,7 @@ export class RepoScanner {
     const walk = async (dir: string, relativeDir: string) => {
       let entries;
       try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
+        entries = await this.fs.readdir(dir, { withFileTypes: true });
       } catch {
         // Access denied or deleted during scan
         return;
@@ -62,11 +70,11 @@ export class RepoScanner {
           const absPath = path.join(dir, entryName);
           let stats;
           try {
-            stats = await fs.stat(absPath);
+            stats = await this.fs.stat(absPath);
           } catch {
             continue; // Skip if stat fails
           }
-          const isText = !(await isBinaryFile(absPath));
+          const isText = !(await isBinaryFile(absPath, this.fs));
           const ext = path.extname(entryName);
 
           files.push({

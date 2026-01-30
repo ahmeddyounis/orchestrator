@@ -1,7 +1,9 @@
-import fs from 'node:fs/promises';
+import nodeFs from 'node:fs/promises';
 import isBinaryPath from 'is-binary-path';
 
-export async function isBinaryFile(filePath: string): Promise<boolean> {
+type Fs = typeof nodeFs;
+
+export async function isBinaryFile(filePath: string, fs: Fs = nodeFs): Promise<boolean> {
   // 1. Check extension
   if (isBinaryPath(filePath)) {
     return true;
