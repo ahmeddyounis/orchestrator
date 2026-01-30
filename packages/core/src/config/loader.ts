@@ -1,15 +1,47 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { Config, ConfigSchema } from '@orchestrator/shared';
+import { Config, ConfigSchema, OrchestratorConfig } from '@orchestrator/shared';
 import os from 'os';
 import { DEFAULT_BUDGET } from './budget';
+import { findRepoRoot } from '@orchestrator/repo';
 
 export interface ConfigOptions {
   configPath?: string; // CLI override
   flags?: Partial<Config>; // CLI flags
   cwd?: string; // Current working directory (for repo config)
   env?: NodeJS.ProcessEnv; // Environment variables
+}
+
+export type LoadedConfig = OrchestratorConfig & {
+  configPath: string | undefined;
+  effective: OrchestratorConfig;
+};
+
+export async function getOrchestratorConfig(
+  configPath?: string,
+  flags?: Partial<Config>,
+): Promise<LoadedConfig> {
+  const repoRoot = await findRepoRoot();
+  const config = ConfigLoader.load({
+    configPath,
+    flags,
+    cwd: repoRoot,
+  });
+  const orchestratorDir = path.join(repoRoot, '.orchestrator');
+
+  const loadedConfig: LoadedConfig = {
+    ...config,
+    rootDir: repoRoot,
+    orchestratorDir,
+    configPath: configPath,
+    effective: {
+      ...config,
+      rootDir: repoRoot,
+      orchestratorDir,
+    },
+  };
+  return loadedConfig;
 }
 
 export class ConfigLoader {

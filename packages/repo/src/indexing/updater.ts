@@ -33,7 +33,7 @@ export class IndexUpdater {
   async update(repoRoot: string): Promise<IndexUpdateResult> {
     const existingIndex = loadIndex(this.indexPath);
     if (!existingIndex) {
-      throw new IndexNotFoundError("Index file not found. Please build the index first.");
+      throw new IndexNotFoundError('Index file not found. Please build the index first.');
     }
 
     const scanResult = await this.repoScanner.scan(repoRoot);
@@ -76,7 +76,7 @@ export class IndexUpdater {
     for (const deletedPath of oldRecords.keys()) {
       removed.push(deletedPath);
     }
-    
+
     // Deep copy and update stats
     const newStats = JSON.parse(JSON.stringify(existingIndex.stats));
     newStats.fileCount = scanResult.files.length;
@@ -99,7 +99,7 @@ export class IndexUpdater {
       rehashedCount,
     };
   }
-  
+
   private async createRecord(repoRoot: string, fileMeta: RepoFileMeta): Promise<IndexRecord> {
     const record: IndexRecord = {
       path: fileMeta.path,

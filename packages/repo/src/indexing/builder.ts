@@ -1,4 +1,3 @@
-
 import { RepoScanner } from '../scanner';
 import { Index, IndexFile, IndexStats } from './types';
 import { createHash } from 'crypto';
@@ -69,7 +68,7 @@ export class IndexBuilder {
         }
         files.push(indexFile);
       } else {
-         files.push({
+        files.push({
           path: file.path,
           sizeBytes: file.sizeBytes,
           mtimeMs: (await this.fs.stat(resolve(repoRoot, file.path))).mtimeMs,

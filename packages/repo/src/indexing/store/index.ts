@@ -1,20 +1,20 @@
-import fs from "node:fs";
-import path from "node:path";
-import { INDEX_SCHEMA_VERSION, type IndexFile } from "./types";
+import fs from 'node:fs';
+import path from 'node:path';
+import { INDEX_SCHEMA_VERSION, type IndexFile } from './types';
 
-export { INDEX_SCHEMA_VERSION } from "./types";
-export type { IndexFile } from "./types";
+export { INDEX_SCHEMA_VERSION } from './types';
+export type { IndexFile } from './types';
 
 export class IndexCorruptedError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "IndexCorruptedError";
+    this.name = 'IndexCorruptedError';
   }
 }
 
 export function validateIndex(indexFile: unknown): asserts indexFile is IndexFile {
-  if (typeof indexFile !== "object" || indexFile === null) {
-    throw new IndexCorruptedError("Index is not an object.");
+  if (typeof indexFile !== 'object' || indexFile === null) {
+    throw new IndexCorruptedError('Index is not an object.');
   }
 
   const { schemaVersion } = indexFile as IndexFile;
@@ -31,7 +31,7 @@ export function loadIndex(indexPath: string): IndexFile | null {
     return null;
   }
 
-  const content = fs.readFileSync(indexPath, "utf-8");
+  const content = fs.readFileSync(indexPath, 'utf-8');
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);

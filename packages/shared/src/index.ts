@@ -8,3 +8,6 @@ export * from './config/schema';
 export * from './types/llm';
 export * from './types/patch';
 export * from './types/tools';
+export * from './types/config';
+
+export * from './config/schema';

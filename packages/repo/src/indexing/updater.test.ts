@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { IndexUpdater, IndexNotFoundError } from './updater';
 import { IndexFile, saveIndexAtomic, loadIndex } from './store';
@@ -70,10 +69,24 @@ describe('IndexUpdater', () => {
   });
 
   it('should detect an added file', async () => {
-    const newFile: RepoFileMeta = { path: 'file3.txt', absPath: `${REPO_ROOT}/file3.txt`, sizeBytes: 30, mtimeMs: 3000, isText: true, ext: '.txt' };
-    const currentFiles = [...baseIndex.files, newFile].map(f => ({...f, absPath: `${REPO_ROOT}/${f.path}`, ext: '.txt'}));
-    
-    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({ repoRoot: REPO_ROOT, files: currentFiles });
+    const newFile: RepoFileMeta = {
+      path: 'file3.txt',
+      absPath: `${REPO_ROOT}/file3.txt`,
+      sizeBytes: 30,
+      mtimeMs: 3000,
+      isText: true,
+      ext: '.txt',
+    };
+    const currentFiles = [...baseIndex.files, newFile].map((f) => ({
+      ...f,
+      absPath: `${REPO_ROOT}/${f.path}`,
+      ext: '.txt',
+    }));
+
+    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({
+      repoRoot: REPO_ROOT,
+      files: currentFiles,
+    });
 
     const result = await updater.update(REPO_ROOT);
 
@@ -85,12 +98,19 @@ describe('IndexUpdater', () => {
     expect(mockedSaveIndexAtomic).toHaveBeenCalledOnce();
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
     expect(savedIndex.files).toHaveLength(3);
-    expect(savedIndex.files.find(f => f.path === 'file3.txt')).toBeDefined();
+    expect(savedIndex.files.find((f) => f.path === 'file3.txt')).toBeDefined();
   });
 
   it('should detect a removed file', async () => {
-    const currentFiles = [baseIndex.files[0]].map(f => ({...f, absPath: `${REPO_ROOT}/${f.path}`, ext: '.txt'}));
-    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({ repoRoot: REPO_ROOT, files: currentFiles });
+    const currentFiles = [baseIndex.files[0]].map((f) => ({
+      ...f,
+      absPath: `${REPO_ROOT}/${f.path}`,
+      ext: '.txt',
+    }));
+    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({
+      repoRoot: REPO_ROOT,
+      files: currentFiles,
+    });
 
     const result = await updater.update(REPO_ROOT);
 
@@ -102,13 +122,26 @@ describe('IndexUpdater', () => {
     expect(mockedSaveIndexAtomic).toHaveBeenCalledOnce();
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
     expect(savedIndex.files).toHaveLength(1);
-    expect(savedIndex.files.find(f => f.path === 'file2.txt')).toBeUndefined();
+    expect(savedIndex.files.find((f) => f.path === 'file2.txt')).toBeUndefined();
   });
 
   it('should detect a changed file (mtimeMs changed)', async () => {
-    const changedFile: RepoFileMeta = { path: 'file1.txt', absPath: `${REPO_ROOT}/file1.txt`, sizeBytes: 10, mtimeMs: 1001, isText: true, ext: '.txt' };
-    const currentFiles = [changedFile, {...baseIndex.files[1], absPath: `${REPO_ROOT}/${baseIndex.files[1].path}`, ext: '.txt' }];
-    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({ repoRoot: REPO_ROOT, files: currentFiles });
+    const changedFile: RepoFileMeta = {
+      path: 'file1.txt',
+      absPath: `${REPO_ROOT}/file1.txt`,
+      sizeBytes: 10,
+      mtimeMs: 1001,
+      isText: true,
+      ext: '.txt',
+    };
+    const currentFiles = [
+      changedFile,
+      { ...baseIndex.files[1], absPath: `${REPO_ROOT}/${baseIndex.files[1].path}`, ext: '.txt' },
+    ];
+    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({
+      repoRoot: REPO_ROOT,
+      files: currentFiles,
+    });
 
     const result = await updater.update(REPO_ROOT);
 
@@ -120,29 +153,49 @@ describe('IndexUpdater', () => {
     expect(mockedHashFile).toHaveBeenCalledWith(path.join(REPO_ROOT, 'file1.txt'));
     expect(mockedSaveIndexAtomic).toHaveBeenCalledOnce();
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
-    const updatedRecord = savedIndex.files.find(f => f.path === 'file1.txt');
+    const updatedRecord = savedIndex.files.find((f) => f.path === 'file1.txt');
     expect(updatedRecord?.sha256).toBe('new-hash');
     expect(updatedRecord?.mtimeMs).toBe(1001);
   });
-  
-    it('should detect a changed file (sizeBytes changed)', async () => {
-    const changedFile: RepoFileMeta = { path: 'file1.txt', absPath: `${REPO_ROOT}/file1.txt`, sizeBytes: 11, mtimeMs: 1000, isText: true, ext: '.txt' };
-    const currentFiles = [changedFile, {...baseIndex.files[1], absPath: `${REPO_ROOT}/${baseIndex.files[1].path}`, ext: '.txt' }];
-    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({ repoRoot: REPO_ROOT, files: currentFiles });
+
+  it('should detect a changed file (sizeBytes changed)', async () => {
+    const changedFile: RepoFileMeta = {
+      path: 'file1.txt',
+      absPath: `${REPO_ROOT}/file1.txt`,
+      sizeBytes: 11,
+      mtimeMs: 1000,
+      isText: true,
+      ext: '.txt',
+    };
+    const currentFiles = [
+      changedFile,
+      { ...baseIndex.files[1], absPath: `${REPO_ROOT}/${baseIndex.files[1].path}`, ext: '.txt' },
+    ];
+    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({
+      repoRoot: REPO_ROOT,
+      files: currentFiles,
+    });
 
     const result = await updater.update(REPO_ROOT);
 
     expect(result.changed).toEqual(['file1.txt']);
     expect(result.rehashedCount).toBe(1);
-    
+
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
-    const updatedRecord = savedIndex.files.find(f => f.path === 'file1.txt');
+    const updatedRecord = savedIndex.files.find((f) => f.path === 'file1.txt');
     expect(updatedRecord?.sizeBytes).toBe(11);
   });
 
   it('should not rehash unchanged files', async () => {
-    const currentFiles = baseIndex.files.map(f => ({...f, absPath: `${REPO_ROOT}/${f.path}`, ext: '.txt'}));
-    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({ repoRoot: REPO_ROOT, files: currentFiles });
+    const currentFiles = baseIndex.files.map((f) => ({
+      ...f,
+      absPath: `${REPO_ROOT}/${f.path}`,
+      ext: '.txt',
+    }));
+    vi.mocked(mockedRepoScanner.prototype.scan).mockResolvedValue({
+      repoRoot: REPO_ROOT,
+      files: currentFiles,
+    });
 
     const result = await updater.update(REPO_ROOT);
 

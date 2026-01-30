@@ -24,14 +24,15 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "@orchestrator/core": "workspace:*",
-    "@orchestrator/repo": "workspace:*",
-    "@orchestrator/exec": "workspace:*",
-    "@orchestrator/shared": "workspace:*",
     "@orchestrator/adapters": "workspace:*",
+    "@orchestrator/core": "workspace:*",
+    "@orchestrator/exec": "workspace:*",
+    "@orchestrator/memory": "workspace:*",
+    "@orchestrator/repo": "workspace:*",
+    "@orchestrator/shared": "workspace:*",
     "@types/inquirer": "^8.2.12",
+    "cli-table3": "^0.6.5",
     "commander": "^14.0.2",
-    "inquirer": "^8.2.7",
-    "@orchestrator/memory": "workspace:*"
+    "inquirer": "^8.2.7"
   }
 }

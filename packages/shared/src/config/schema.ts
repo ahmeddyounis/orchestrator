@@ -6,6 +6,7 @@ export const IndexingConfigSchema = z.object({
   mode: z.enum(['off', 'on-demand', 'full']).default('on-demand'),
   hashAlgorithm: z.enum(['sha256']).default('sha256'),
   maxFileSizeBytes: z.number().default(2_000_000),
+  ignore: z.array(z.string()).optional(),
 });
 
 export const ProviderConfigSchema = z

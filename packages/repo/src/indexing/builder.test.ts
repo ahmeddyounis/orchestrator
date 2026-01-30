@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { IndexBuilder } from './builder';
 import { vol, fs } from 'memfs';
@@ -27,25 +26,27 @@ describe('IndexBuilder', () => {
     expect(index.files).toHaveLength(5);
 
     // Files should be sorted
-    expect(index.files.map(f => f.path)).toEqual([
-        '.gitignore',
-        'package.json',
-        'README.md',
-        'src/data.json',
-        'src/index.ts',
+    expect(index.files.map((f) => f.path)).toEqual([
+      '.gitignore',
+      'package.json',
+      'README.md',
+      'src/data.json',
+      'src/index.ts',
     ]);
-    
-    const indexTs = index.files.find(f => f.path === 'src/index.ts');
+
+    const indexTs = index.files.find((f) => f.path === 'src/index.ts');
     expect(indexTs).toBeDefined();
 
     if (indexTs) {
-        expect(indexTs.isText).toBe(true);
-        expect(indexTs.languageHint).toBe('typescript');
-        expect(indexTs.sha256).toBe('3781f94ea812bb33437de9049e04bc3af41a0e7397164b057379c08c3b0ac489');
-        expect(indexTs.sizeBytes).toBe(21);
+      expect(indexTs.isText).toBe(true);
+      expect(indexTs.languageHint).toBe('typescript');
+      expect(indexTs.sha256).toBe(
+        '3781f94ea812bb33437de9049e04bc3af41a0e7397164b057379c08c3b0ac489',
+      );
+      expect(indexTs.sizeBytes).toBe(21);
     }
 
-    expect(index.stats.fileCount).toBe(5); 
+    expect(index.stats.fileCount).toBe(5);
     expect(index.stats.textFileCount).toBe(5);
     expect(index.stats.hashedCount).toBe(5);
     expect(index.stats.byLanguage['typescript']).toEqual({ count: 1, bytes: 21 });
@@ -54,13 +55,17 @@ describe('IndexBuilder', () => {
   });
 
   it('should not hash files larger than maxFileSizeBytes', async () => {
-    const builder = new IndexBuilder({ maxFileSizeBytes: 10, fs: fs.promises as any, fsSync: fs as any });
+    const builder = new IndexBuilder({
+      maxFileSizeBytes: 10,
+      fs: fs.promises as any,
+      fsSync: fs as any,
+    });
     const index = await builder.build(repoRoot);
 
-    const indexTs = index.files.find(f => f.path === 'src/index.ts');
+    const indexTs = index.files.find((f) => f.path === 'src/index.ts');
     expect(indexTs).toBeDefined();
     if (indexTs) {
-        expect(indexTs.sha256).toBeUndefined();
+      expect(indexTs.sha256).toBeUndefined();
     }
     expect(index.stats.hashedCount).toBe(0); // All files are larger than 10 bytes
   });
