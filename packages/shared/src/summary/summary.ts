@@ -1,5 +1,6 @@
 import path from 'node:path'
 import {atomicWrite} from '../fs/io.js'
+import { redactForLogs } from '../redaction';
 
 /**
  * Schema version for the run summary.
@@ -99,7 +100,8 @@ export class SummaryWriter {
     const summaryPath = path.join(runDir, 'summary.json')
     // The summary object can be large, so we stringify it with indentation
     // to make it human-readable.
-    const summaryJson = JSON.stringify(summary, null, 2)
+    const redactedSummary = redactForLogs(summary);
+    const summaryJson = JSON.stringify(redactedSummary, null, 2)
     await atomicWrite(summaryPath, summaryJson)
     return summaryPath
   }

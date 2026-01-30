@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import { OrchestratorEvent } from '../types/events';
-import { redact } from '../redaction';
+import { redactForLogs } from '../redaction';
 
 export interface Logger {
   log(event: OrchestratorEvent): Promise<void>;
@@ -14,7 +14,7 @@ export class JsonlLogger implements Logger {
   }
 
   async log(event: OrchestratorEvent): Promise<void> {
-    const redactedEvent = redact(event);
+    const redactedEvent = redactForLogs(event);
     const line = JSON.stringify(redactedEvent) + '\n';
     try {
       await fs.appendFile(this.filePath, line, 'utf8');

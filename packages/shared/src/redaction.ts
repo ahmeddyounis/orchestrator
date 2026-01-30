@@ -1,70 +1,65 @@
-const REDACTION_PLACEHOLDER = '[REDACTED]';
+const SENSITIVE_KEYS = new Set([
+  'api_key',
+  'token',
+  'secret',
+  'authorization',
+]);
 
-// Common API key prefixes and patterns
-const apiKeyPatterns = [
-  /sk-[a-zA-Z0-9]{20,}/g, // OpenAI style
-  /sk-ant-[a-zA-Z0-9-]{20,}/g, // Anthropic style
-  /gh[pousr]_[a-zA-Z0-9]{20,}/g, // GitHub token
-];
+const MAX_STRING_LENGTH = 4096;
+const TRUNCATION_MESSAGE = '[TRUNCATED]';
 
-// Patterns for environment variables
-const envVarPatterns = [/(?:TOKEN|SECRET|API_KEY)\s*=\s*['"]?([a-zA-Z0-9_-]+)['"]?/g];
+// Basic allowlist for env vars that are safe to log.
+// In a real scenario, this should be more robust.
+const ALLOWED_ENV_VARS = new Set([
+  'NODE_ENV',
+  'DEBUG',
+  'CI',
+  // Add other safe-to-log env vars here
+]);
 
-// Pattern for private keys
-const privateKeyPattern = /-----BEGIN PRIVATE KEY-----(?:.|\n|\r)*?-----END PRIVATE KEY-----/g;
+export function redactForLogs(obj: unknown): unknown {
+  if (typeof obj === 'string' && obj.length > MAX_STRING_LENGTH) {
+    return obj.substring(0, MAX_STRING_LENGTH) + TRUNCATION_MESSAGE;
+  }
 
-const allPatterns = [...apiKeyPatterns, ...envVarPatterns, privateKeyPattern];
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
 
-export function redactString(input: string): {
-  redacted: string;
-  redactionCount: number;
-} {
-  let redacted = input;
-  let redactionCount = 0;
+  if (Array.isArray(obj)) {
+    return obj.map(redactForLogs);
+  }
 
-  for (const pattern of allPatterns) {
-    const matches = redacted.match(pattern);
-    if (matches) {
-      redactionCount += matches.length;
-      redacted = redacted.replace(pattern, REDACTION_PLACEHOLDER);
+  const newObj: { [key: string]: any } = {};
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      newObj[key] = '[REDACTED]';
+      continue;
+    }
+
+    if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {
+      newObj[key] = value.substring(0, MAX_STRING_LENGTH) + TRUNCATION_MESSAGE;
+    } else if (typeof value === 'object') {
+      newObj[key] = redactForLogs(value);
+    } else {
+      newObj[key] = value;
     }
   }
 
-  return { redacted, redactionCount };
-}
-
-export function redactUnknown(input: unknown): {
-  redacted: unknown;
-  redactionCount: number;
-} {
-  if (typeof input === 'string') {
-    return redactString(input);
-  }
-
-  if (Array.isArray(input)) {
-    let totalRedactions = 0;
-    const redactedArray = input.map((item) => {
-      const { redacted, redactionCount } = redactUnknown(item);
-      totalRedactions += redactionCount;
-      return redacted;
-    });
-    return { redacted: redactedArray, redactionCount: totalRedactions };
-  }
-
-  if (typeof input === 'object' && input !== null) {
-    let totalRedactions = 0;
-    const redactedObj: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(input)) {
-      const { redacted, redactionCount } = redactUnknown(value);
-      totalRedactions += redactionCount;
-      redactedObj[key] = redacted;
+  // Redact environment variables if present
+  if ('env' in newObj && typeof newObj.env === 'object' && newObj.env) {
+    const redactedEnv: { [key: string]: any } = {};
+    for (const [envKey, envValue] of Object.entries(newObj.env)) {
+      if (ALLOWED_ENV_VARS.has(envKey)) {
+        redactedEnv[envKey] = envValue;
+      } else {
+        redactedEnv[envKey] = '[REDACTED]';
+      }
     }
-    return { redacted: redactedObj, redactionCount: totalRedactions };
+    newObj.env = redactedEnv;
   }
 
-  return { redacted: input, redactionCount: 0 };
-}
 
-export function redact(input: unknown): unknown {
-  return redactUnknown(input).redacted;
+  return newObj;
 }

@@ -8,6 +8,7 @@ import {
   SpanStartEvent,
   SpanEndEvent,
 } from './types';
+import { redactForLogs } from '../redaction';
 
 type InFlightSpan = {
   spanId: string;
@@ -37,7 +38,7 @@ export class TraceWriter {
       ts: Date.now(),
       level,
       eventType,
-      payload,
+      payload: redactForLogs(payload) as object,
     };
     return new Promise((resolve, reject) => {
       this.traceStream.write(JSON.stringify(event) + '\n', (err) => {
@@ -61,7 +62,7 @@ export class TraceWriter {
     const payload: SpanStartEvent = {
       spanId,
       name,
-      attrs,
+      attrs: redactForLogs(attrs) as Record<string, unknown>,
     };
     if (parentSpanId) {
       payload.parentSpanId = parentSpanId;
@@ -91,7 +92,7 @@ export class TraceWriter {
       name: span.name,
       status,
       durationMs,
-      attrs,
+      attrs: redactForLogs(attrs) as Record<string, unknown>,
     };
 
     await this.writeEvent('info', 'span.end', payload);
