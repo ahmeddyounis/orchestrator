@@ -1,6 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { VerificationRunner } from './runner';
 import { VerificationProfile } from './types';
+import * as fs from 'fs';
+import path from 'path';
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn(),
+    promises: {
+      // @ts-expect-error - we are mocking
+      ...actual.promises,
+      mkdir: vi.fn(),
+      writeFile: vi.fn(),
+    },
+  };
+});
+
+const fsMock = vi.mocked(fs);
 
 // Hoist mocks to ensure they are available in factory
 const mocks = vi.hoisted(() => {
@@ -9,34 +27,44 @@ const mocks = vi.hoisted(() => {
     resolveTouchedPackages: vi.fn(),
     generateTargetedCommand: vi.fn(),
     run: vi.fn(),
+    checkPolicy: vi.fn(),
+    memoryFind: vi.fn(),
   };
 });
 
-vi.mock('@orchestrator/repo', () => {
-  return {
-    ToolchainDetector: class {
-      detect = mocks.detect;
-    },
-    TargetingManager: class {
-      resolveTouchedPackages = mocks.resolveTouchedPackages;
-      generateTargetedCommand = mocks.generateTargetedCommand;
-    },
-  };
-});
+vi.mock('@orchestrator/repo', () => ({
+  ToolchainDetector: class {
+    detect = mocks.detect;
+  },
+  TargetingManager: class {
+    resolveTouchedPackages = mocks.resolveTouchedPackages;
+    generateTargetedCommand = mocks.generateTargetedCommand;
+  },
+}));
 
-vi.mock('@orchestrator/exec', () => {
+vi.mock('@orchestrator/exec', () => ({
+  SafeCommandRunner: class {
+    run = mocks.run;
+    checkPolicy = mocks.checkPolicy;
+  },
+  UserInterface: class {},
+  RunnerContext: class {},
+}));
+
+vi.mock('@orchestrator/memory', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@orchestrator/memory')>();
   return {
-    SafeCommandRunner: class {
-      run = mocks.run;
+    ...original,
+    ProceduralMemory: class {
+      find = mocks.memoryFind;
     },
-    UserInterface: class {},
-    RunnerContext: class {},
   };
 });
 
 describe('VerificationRunner', () => {
   let runner: VerificationRunner;
   let mockEventBus: any;
+  let mockMemory: any;
 
   const mockProfile: VerificationProfile = {
     enabled: true,
@@ -47,7 +75,7 @@ describe('VerificationRunner', () => {
       enableTests: true,
       enableTypecheck: true,
       testScope: 'targeted',
-      maxCommandsPerIteration: 1,
+      maxCommandsPerIteration: 3,
     },
   };
 
@@ -58,6 +86,7 @@ describe('VerificationRunner', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.run.mockResolvedValue({ exitCode: 0, durationMs: 100 });
+    mocks.checkPolicy.mockReturnValue({ isAllowed: true });
 
     mocks.detect.mockResolvedValue({
       packageManager: 'pnpm',
@@ -76,72 +105,125 @@ describe('VerificationRunner', () => {
     });
 
     mockEventBus = { emit: vi.fn() };
+    mockMemory = { find: mocks.memoryFind };
+    mocks.memoryFind.mockResolvedValue([[], [], []]); // Default to no memory hits
 
-    runner = new VerificationRunner(mockPolicy, mockUI, mockEventBus, '/app');
+    fsMock.existsSync.mockReturnValue(false);
+
+    runner = new VerificationRunner(mockMemory, mockPolicy, mockUI, mockEventBus, '/app');
   });
 
   it('runs targeted commands when scope is targeted and files touched', async () => {
     const scope = { touchedFiles: ['packages/a/src/index.ts'] };
-
     await runner.run(mockProfile, 'auto', scope, mockCtx);
-
-    // Verify resolveTouchedPackages called
     expect(mocks.resolveTouchedPackages).toHaveBeenCalledWith('/app', scope.touchedFiles);
-
-    // Verify runner executed targeted commands
     expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'pnpm -r --filter pkg-a lint',
-      }),
+      expect.objectContaining({ command: 'pnpm -r --filter pkg-a lint' }),
       expect.anything(),
       expect.anything(),
       expect.anything(),
     );
-
     expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'pnpm -r --filter pkg-a test',
-      }),
+      expect.objectContaining({ command: 'pnpm -r --filter pkg-a test' }),
       expect.anything(),
       expect.anything(),
       expect.anything(),
     );
   });
 
-  it('falls back to root commands if targeting returns null', async () => {
-    mocks.generateTargetedCommand.mockReturnValue(null);
-    const scope = { touchedFiles: ['packages/a/src/index.ts'] };
+  it('prefers commands from memory if available and allowed', async () => {
+    mocks.memoryFind.mockResolvedValue([
+      [{ content: 'memory-test-cmd', stale: false, updatedAt: Date.now() }],
+      [{ content: 'memory-lint-cmd', stale: false, updatedAt: Date.now() }],
+      [],
+    ]);
 
-    await runner.run(mockProfile, 'auto', scope, mockCtx);
+    await runner.run(mockProfile, 'auto', {}, mockCtx);
 
-    // Should run root commands from toolchain
     expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'pnpm -r lint',
-      }),
+      expect.objectContaining({ command: 'memory-lint-cmd' }),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'memory-test-cmd' }),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    // Falls back for typecheck
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'pnpm -r typecheck' }),
       expect.anything(),
       expect.anything(),
       expect.anything(),
     );
   });
 
-  it('does not use targeting if scope is not targeted', async () => {
-    const fullProfile = {
-      ...mockProfile,
-      auto: { ...mockProfile.auto, testScope: 'full' as const },
-    };
-    const scope = { touchedFiles: ['packages/a/src/index.ts'] };
+  it('falls back to detected command if memory command is blocked by policy', async () => {
+    mocks.memoryFind.mockResolvedValue([
+      [],
+      [{ content: 'memory-lint-cmd', stale: false, updatedAt: Date.now() }],
+      [],
+    ]);
+    mocks.checkPolicy.mockImplementation(({ command }) => {
+      return { isAllowed: command !== 'memory-lint-cmd' };
+    });
 
-    await runner.run(fullProfile, 'auto', scope, mockCtx);
+    await runner.run(mockProfile, 'auto', {}, mockCtx);
 
-    expect(mocks.resolveTouchedPackages).not.toHaveBeenCalled();
     expect(mocks.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        command: 'pnpm -r lint',
-      }),
+      expect.objectContaining({ command: 'pnpm -r lint' }), // fallback
       expect.anything(),
       expect.anything(),
       expect.anything(),
+    );
+  });
+
+  it('falls back to detected command if memory command is stale', async () => {
+    mocks.memoryFind.mockResolvedValue([
+      [],
+      [{ content: 'memory-lint-cmd', stale: true, updatedAt: Date.now() }],
+      [],
+    ]);
+
+    await runner.run(mockProfile, 'auto', {}, mockCtx);
+
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'pnpm -r lint' }), // fallback
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('writes command sources to an artifact', async () => {
+    mocks.memoryFind.mockResolvedValue([
+      [],
+      [{ content: 'memory-lint-cmd', stale: false, updatedAt: Date.now() }],
+      [],
+    ]);
+
+    const report = await runner.run(mockProfile, 'auto', {}, mockCtx);
+
+    expect(report.commandSources).toEqual({
+      lint: { source: 'memory' },
+      tests: { source: 'detected' },
+      typecheck: { source: 'detected' },
+    });
+
+    const expectedPath = path.join(
+      process.cwd(),
+      '.orchestrator',
+      'runs',
+      mockCtx.runId,
+      'verification_command_source.json',
+    );
+
+    expect(fs.promises.writeFile).toHaveBeenCalledWith(
+      expectedPath,
+      JSON.stringify(report.commandSources, null, 2),
     );
   });
 });

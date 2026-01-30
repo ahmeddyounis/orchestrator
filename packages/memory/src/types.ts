@@ -25,3 +25,13 @@ export interface MemoryStatus {
   staleCount: number;
   lastUpdatedAt: number | null;
 }
+
+export interface ProceduralMemoryQuery {
+  titleContains?: string;
+}
+
+export type ProceduralMemoryEntry = MemoryEntry;
+
+export interface ProceduralMemory {
+  find(queries: ProceduralMemoryQuery[], limit: number): Promise<ProceduralMemoryEntry[][]>;
+}

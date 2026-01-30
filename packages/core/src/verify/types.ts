@@ -22,12 +22,18 @@ export interface FailureSummary {
   suggestedNextActions: string[]; // Heuristic suggestions
 }
 
+export interface CommandSourceInfo {
+  source: 'memory' | 'detected' | 'custom';
+  fallbackReason?: string;
+}
+
 export interface VerificationReport {
   passed: boolean;
   checks: CheckResult[];
   summary: string;
   failureSignature?: string;
   failureSummary?: FailureSummary;
+  commandSources: Record<string, CommandSourceInfo>;
 }
 
 export interface VerificationScope {

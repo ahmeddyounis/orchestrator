@@ -5,6 +5,7 @@ import {
   writeManifest,
   JsonlLogger,
   ToolPolicy,
+  RetrievalIntent,
 } from '@orchestrator/shared';
 import {
   ContextSignal,
@@ -17,8 +18,13 @@ import {
   getIndexStatus,
   IndexUpdater,
 } from '@orchestrator/repo';
-import { MemoryEntry, createMemoryStore } from '@orchestrator/memory';
-import { RetrievalIntent } from '@orchestrator/shared';
+import {
+  MemoryEntry,
+  createMemoryStore,
+  ProceduralMemory,
+  ProceduralMemoryEntry,
+  ProceduralMemoryQuery,
+} from '@orchestrator/memory';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -76,6 +82,38 @@ export interface RunResult {
 export interface RunOptions {
   thinkLevel: 'L0' | 'L1' | 'L2';
   runId?: string;
+}
+
+class ProceduralMemoryImpl implements ProceduralMemory {
+  constructor(
+    private dbPath: string | undefined,
+    private repoId: string,
+  ) {}
+
+  async find(queries: ProceduralMemoryQuery[], limit: number): Promise<ProceduralMemoryEntry[][]> {
+    if (!this.dbPath) {
+      return queries.map(() => []);
+    }
+    const store = createMemoryStore();
+    try {
+      store.init(this.dbPath);
+      const allProcedural = store.list(this.repoId, 'procedural');
+
+      const results: ProceduralMemoryEntry[][] = [];
+      for (const query of queries) {
+        const filtered = allProcedural.filter((entry) => {
+          if (query.titleContains && !entry.title.includes(query.titleContains)) {
+            return false;
+          }
+          return true;
+        });
+        results.push(filtered.slice(0, limit));
+      }
+      return results;
+    } finally {
+      store.close();
+    }
+  }
 }
 
 export class Orchestrator {
@@ -176,7 +214,7 @@ export class Orchestrator {
         payload: {
           filesAdded: result.added.length,
           filesRemoved: result.removed.length,
-          filesChanged: result.changed,
+          filesChanged: result.changed.length,
         },
       });
 
@@ -261,6 +299,7 @@ export class Orchestrator {
         /^step_.*_output\.txt$/.test(n) ||
         /^repair_iter_\d+_output\.txt$/.test(n) ||
         /^verification_report_.*\.json$/.test(n) ||
+        /^verification_command_source.json$/.test(n) ||
         /^verification_summary_.*\.txt$/.test(n) ||
         /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
         /^fused_context_.*\.(json|txt)$/.test(n),
@@ -1235,7 +1274,9 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       emit: async (e) => await logger.log(e),
     };
 
+    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
     const verificationRunner = new VerificationRunner(
+      proceduralMemory,
       this.toolPolicy,
       this.ui,
       eventBus,

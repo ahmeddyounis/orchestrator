@@ -371,8 +371,24 @@ export interface MemorySearched extends BaseEvent {
 export interface MemoryStalenessReconciled extends BaseEvent {
   type: 'MemoryStalenessReconciled';
   payload: {
-    markedStale: number;
-    clearedStale: number;
+    details: string;
+  };
+}
+
+export interface IndexAutoUpdateStarted extends BaseEvent {
+  type: 'IndexAutoUpdateStarted';
+  payload: {
+    fileCount: number;
+    reason: string;
+  };
+}
+
+export interface IndexAutoUpdateFinished extends BaseEvent {
+  type: 'IndexAutoUpdateFinished';
+  payload: {
+    filesAdded: number;
+    filesRemoved: number;
+    filesChanged: number;
   };
 }
 
@@ -397,6 +413,8 @@ export type OrchestratorEvent =
   | MemoryRedaction
   | MemorySearched
   | MemoryStalenessReconciled
+  | IndexAutoUpdateStarted
+  | IndexAutoUpdateFinished
   | ConfirmationRequested
   | ConfirmationResolved
   | ProviderSelected

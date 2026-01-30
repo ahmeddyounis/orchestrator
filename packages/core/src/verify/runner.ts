@@ -1,9 +1,18 @@
 import { createHash } from 'crypto';
 import path from 'path';
-import fs from 'fs';
+import * as fs from 'fs';
 import { SafeCommandRunner, RunnerContext, UserInterface } from '@orchestrator/exec';
+import {
+  ProceduralMemory,
+  ProceduralMemoryEntry,
+  ProceduralMemoryQuery,
+} from '@orchestrator/memory';
 import { ToolPolicy } from '@orchestrator/shared';
-import { ToolchainDetector, TargetingManager } from '@orchestrator/repo';
+import {
+  ToolchainDetector,
+  TargetingManager,
+  ToolchainProfile as Toolchain,
+} from '@orchestrator/repo';
 import {
   VerificationReport,
   VerificationProfile,
@@ -11,14 +20,23 @@ import {
   VerificationScope,
   CheckResult,
   FailureSummary,
+  CommandSourceInfo,
 } from './types';
 import { FailureSummarizer } from './summarizer';
 import { EventBus } from '../registry';
+
+type CommandTask = 'lint' | 'typecheck' | 'test';
+interface CommandToRun {
+  name: string;
+  command: string;
+  timeoutMs?: number;
+}
 
 export class VerificationRunner {
   private runner: SafeCommandRunner;
 
   constructor(
+    private memory: ProceduralMemory,
     private toolPolicy: ToolPolicy,
     private ui: UserInterface,
     private eventBus: EventBus,
@@ -33,7 +51,8 @@ export class VerificationRunner {
     scope: VerificationScope,
     ctx: RunnerContext,
   ): Promise<VerificationReport> {
-    const commandsToRun: Array<{ name: string; command: string; timeoutMs?: number }> = [];
+    const commandsToRun: CommandToRun[] = [];
+    const commandSources: Record<string, CommandSourceInfo> = {};
     const runMode = mode === 'custom' ? 'custom' : profile.mode;
 
     await this.eventBus.emit({
@@ -46,59 +65,70 @@ export class VerificationRunner {
 
     if (runMode === 'custom') {
       for (const step of profile.steps) {
-        if (step.required) {
-          // TODO: Handle required flag logic if needed, currently treating all steps in list as to-be-run
-          commandsToRun.push({
-            name: step.name,
-            command: step.command,
-            timeoutMs: step.timeoutMs,
-          });
-        }
+        commandsToRun.push({
+          name: step.name,
+          command: step.command,
+          timeoutMs: step.timeoutMs,
+        });
+        commandSources[step.name] = { source: 'custom' };
       }
     } else {
       // Auto mode
+      const memoryCommands = await this.getCommandsFromMemory();
+
       const detector = new ToolchainDetector();
-      const targeting = new TargetingManager();
       const toolchain = await detector.detect(this.repoRoot);
 
-      // Determine touched packages if targeting is requested
-      let touchedPackages: Set<string> | null = null;
-      if (
-        profile.auto.testScope === 'targeted' &&
-        scope.touchedFiles &&
-        scope.touchedFiles.length > 0
-      ) {
-        touchedPackages = await targeting.resolveTouchedPackages(this.repoRoot, scope.touchedFiles);
-      }
+      const getDetectedCommand = await this.createCommandDetector(toolchain, profile, scope);
 
-      // Helper to select command (targeted -> root fallback)
-      const getCommand = (task: 'lint' | 'typecheck' | 'test'): string | undefined => {
-        // 1. Try targeted
-        if (touchedPackages && touchedPackages.size > 0) {
-          const targetedCmd = targeting.generateTargetedCommand(toolchain, touchedPackages, task);
-          if (targetedCmd) return targetedCmd;
+      const tasks: { name: CommandTask; enabled: boolean }[] = [
+        { name: 'lint', enabled: profile.auto.enableLint },
+        { name: 'typecheck', enabled: profile.auto.enableTypecheck },
+        { name: 'test', enabled: profile.auto.enableTests },
+      ];
+
+      for (const task of tasks) {
+        if (!task.enabled) continue;
+
+        const taskName = task.name === 'test' ? 'tests' : task.name;
+        let command: string | undefined;
+        let sourceInfo: CommandSourceInfo | undefined;
+
+        const memCmd = memoryCommands[task.name];
+        if (memCmd) {
+          const { isAllowed } = this.runner.checkPolicy(
+            { command: memCmd, classification: 'test' },
+            this.toolPolicy,
+          );
+          if (isAllowed) {
+            command = memCmd;
+            sourceInfo = { source: 'memory' };
+          } else {
+            sourceInfo = {
+              source: 'memory',
+              fallbackReason: 'Command from memory was blocked by tool policy.',
+            };
+          }
         }
 
-        // 2. Fallback to root command
-        if (task === 'lint') return toolchain.commands.lintCmd;
-        if (task === 'typecheck') return toolchain.commands.typecheckCmd;
-        if (task === 'test') return toolchain.commands.testCmd;
-        return undefined;
-      };
+        if (!command) {
+          const detectedCmd = getDetectedCommand(task.name);
+          if (detectedCmd) {
+            command = detectedCmd;
+            // if sourceInfo is already set, it means memory failed and we are falling back
+            if (sourceInfo) {
+              sourceInfo.fallbackReason =
+                (sourceInfo.fallbackReason ?? '') + ' Falling back to detected command.';
+            } else {
+              sourceInfo = { source: 'detected' };
+            }
+          }
+        }
 
-      if (profile.auto.enableLint) {
-        const cmd = getCommand('lint');
-        if (cmd) commandsToRun.push({ name: 'lint', command: cmd });
-      }
-
-      if (profile.auto.enableTypecheck) {
-        const cmd = getCommand('typecheck');
-        if (cmd) commandsToRun.push({ name: 'typecheck', command: cmd });
-      }
-
-      if (profile.auto.enableTests) {
-        const cmd = getCommand('test');
-        if (cmd) commandsToRun.push({ name: 'tests', command: cmd });
+        if (command && sourceInfo) {
+          commandsToRun.push({ name: taskName, command });
+          commandSources[taskName] = sourceInfo;
+        }
       }
     }
 
@@ -114,7 +144,7 @@ export class VerificationRunner {
             reason: `Verification: ${cmd.name}`,
             classification: 'test',
           },
-          this.toolPolicy, // Use the injected policy
+          this.toolPolicy,
           this.ui,
           ctx,
         );
@@ -133,7 +163,6 @@ export class VerificationRunner {
           truncated: result.truncated,
         });
       } catch {
-        // Runner error (policy, timeout, etc.)
         allPassed = false;
         checkResults.push({
           name: cmd.name,
@@ -157,6 +186,7 @@ export class VerificationRunner {
       failureSummary = await summarizer.summarize(checkResults);
       await this.saveFailureSummary(failureSummary, ctx);
     }
+    await this.saveCommandSources(commandSources, ctx);
 
     const summary = this.generateSummary(checkResults);
 
@@ -177,7 +207,88 @@ export class VerificationRunner {
       summary,
       failureSignature,
       failureSummary,
+      commandSources,
     };
+  }
+
+  private async createCommandDetector(
+    toolchain: Toolchain,
+    profile: VerificationProfile,
+    scope: VerificationScope,
+  ): Promise<(task: CommandTask) => string | undefined> {
+    const targeting = new TargetingManager();
+    let touchedPackages: Set<string> | null = null;
+    if (
+      profile.auto.testScope === 'targeted' &&
+      scope.touchedFiles &&
+      scope.touchedFiles.length > 0
+    ) {
+      touchedPackages = await targeting.resolveTouchedPackages(this.repoRoot, scope.touchedFiles);
+    }
+
+    return (task: CommandTask): string | undefined => {
+      if (touchedPackages && touchedPackages.size > 0) {
+        const targetedCmd = targeting.generateTargetedCommand(toolchain, touchedPackages, task);
+        if (targetedCmd) return targetedCmd;
+      }
+
+      if (task === 'lint') return toolchain.commands.lintCmd;
+      if (task === 'typecheck') return toolchain.commands.typecheckCmd;
+      if (task === 'test') return toolchain.commands.testCmd;
+      return undefined;
+    };
+  }
+
+  private async getCommandsFromMemory(): Promise<Partial<Record<CommandTask, string>>> {
+    const queries: ProceduralMemoryQuery[] = [
+      { titleContains: 'How to run tests' },
+      { titleContains: 'How to run lint' },
+      { titleContains: 'How to run typecheck' },
+    ];
+
+    const results = await this.memory.find(queries, 1);
+    const commands: Partial<Record<CommandTask, string>> = {};
+
+    const findBest = (
+      entries: ProceduralMemoryEntry[] | undefined,
+    ): ProceduralMemoryEntry | undefined => {
+      if (!entries || entries.length === 0) return undefined;
+      return entries.sort((a, b) => {
+        if (a.stale !== b.stale) return a.stale ? 1 : -1;
+        return b.updatedAt - a.updatedAt;
+      })[0];
+    };
+
+    const testEntry = findBest(results[0]);
+    if (testEntry && !testEntry.stale) commands.test = testEntry.content;
+
+    const lintEntry = findBest(results[1]);
+    if (lintEntry && !lintEntry.stale) commands.lint = lintEntry.content;
+
+    const typecheckEntry = findBest(results[2]);
+    if (typecheckEntry && !typecheckEntry.stale) commands.typecheck = typecheckEntry.content;
+
+    return commands;
+  }
+
+  private async saveCommandSources(
+    sources: Record<string, CommandSourceInfo>,
+    ctx: RunnerContext,
+  ): Promise<void> {
+    try {
+      const runId = ctx.runId;
+      const projectRoot = process.cwd();
+      const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId);
+
+      if (!fs.existsSync(runsDir)) {
+        await fs.promises.mkdir(runsDir, { recursive: true });
+      }
+
+      const jsonPath = path.join(runsDir, 'verification_command_source.json');
+      await fs.promises.writeFile(jsonPath, JSON.stringify(sources, null, 2));
+    } catch {
+      // ignore
+    }
   }
 
   private async saveFailureSummary(summary: FailureSummary, ctx: RunnerContext): Promise<void> {

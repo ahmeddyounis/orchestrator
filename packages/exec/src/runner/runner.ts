@@ -17,15 +17,17 @@ export interface UserInterface {
 }
 
 export class SafeCommandRunner {
-  async run(
-    req: ToolRunRequest,
+  checkPolicy(
+    req: Pick<ToolRunRequest, 'command' | 'classification'>,
     policy: ToolPolicy,
-    ui: UserInterface,
-    ctx: RunnerContext,
-  ): Promise<ToolRunResult> {
+  ): { isAllowed: boolean; needsConfirmation: boolean; reason?: string } {
     // 1. Policy Check: Enabled
     if (!policy.enabled) {
-      throw new PolicyDeniedError('Tool execution is disabled by policy');
+      return {
+        isAllowed: false,
+        needsConfirmation: false,
+        reason: 'Tool execution is disabled by policy',
+      };
     }
 
     // 2. Policy Check: Denylist
@@ -33,30 +35,47 @@ export class SafeCommandRunner {
       new RegExp(pattern).test(req.command),
     );
     if (isDenied) {
-      throw new PolicyDeniedError(`Command matched denylist pattern: ${req.command}`);
+      return {
+        isAllowed: false,
+        needsConfirmation: false,
+        reason: `Command matched denylist pattern: ${req.command}`,
+      };
     }
 
     // 3. Policy Check: Confirmation
-    const isAllowed = policy.allowlistPrefixes.some((prefix) => req.command.startsWith(prefix));
+    const isAllowlisted = policy.allowlistPrefixes.some((prefix) => req.command.startsWith(prefix));
 
     let needsConfirmation = policy.requireConfirmation;
 
-    if (isAllowed) {
+    if (isAllowlisted) {
       needsConfirmation = false;
     }
 
     // Force confirmation for destructive commands unless explicitly allowlisted
-    if (req.classification === 'destructive' && !isAllowed) {
+    if (req.classification === 'destructive' && !isAllowlisted) {
       needsConfirmation = true;
     }
 
     // Auto-approve overrides confirmation needs (except denylist which is already checked)
-    // Corresponds to --yes flag
     if (policy.autoApprove) {
       needsConfirmation = false;
     }
 
-    if (needsConfirmation) {
+    return { isAllowed: true, needsConfirmation };
+  }
+
+  async run(
+    req: ToolRunRequest,
+    policy: ToolPolicy,
+    ui: UserInterface,
+    ctx: RunnerContext,
+  ): Promise<ToolRunResult> {
+    const policyResult = this.checkPolicy(req, policy);
+    if (!policyResult.isAllowed) {
+      throw new PolicyDeniedError(policyResult.reason || 'Command denied by policy');
+    }
+
+    if (policyResult.needsConfirmation) {
       // Check for non-interactive mode
       // Corresponds to --non-interactive flag
       if (policy.interactive === false) {
