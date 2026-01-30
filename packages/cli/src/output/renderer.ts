@@ -5,6 +5,23 @@ export interface OutputResult {
   runId?: string;
   artifactsDir?: string;
   providers?: Record<string, string | undefined>;
+  cost?: {
+    providers: Record<
+      string,
+      {
+        inputTokens: number
+        outputTokens: number
+        totalTokens: number
+        estimatedCostUsd?: number | null
+      }
+    >
+    total: {
+      inputTokens: number
+      outputTokens: number
+      totalTokens: number
+      estimatedCostUsd?: number | null
+    }
+  };
   nextSteps?: string[];
   verification?: {
     enabled: boolean;
@@ -62,6 +79,34 @@ export class OutputRenderer {
         activeProviders.forEach(([role, provider]) => {
           console.log(`  - ${role}: ${provider}`);
         });
+      }
+    }
+
+    if (data.cost) {
+      const providers = Object.entries(data.cost.providers ?? {}).sort(([a], [b]) =>
+        a.localeCompare(b),
+      );
+      if (providers.length > 0 || data.cost.total) {
+        console.log('\nCosts:');
+        for (const [id, stats] of providers) {
+          const costStr =
+            typeof stats.estimatedCostUsd === 'number'
+              ? ` ($${stats.estimatedCostUsd.toFixed(4)})`
+              : '';
+          console.log(
+            `  - ${id}: ${stats.totalTokens} tok (in ${stats.inputTokens}, out ${stats.outputTokens})${costStr}`,
+          );
+        }
+
+        if (data.cost.total) {
+          const totalCostStr =
+            typeof data.cost.total.estimatedCostUsd === 'number'
+              ? ` ($${data.cost.total.estimatedCostUsd.toFixed(4)})`
+              : '';
+          console.log(
+            `  Total: ${data.cost.total.totalTokens} tok (in ${data.cost.total.inputTokens}, out ${data.cost.total.outputTokens})${totalCostStr}`,
+          );
+        }
       }
     }
 

@@ -4,6 +4,7 @@ export * from './logger/jsonlLogger';
 export * from './logger';
 export * from './redaction';
 export * from './fs/artifacts';
+export { ManifestManager, MANIFEST_FILENAME, MANIFEST_VERSION } from './artifacts';
 export * from './config/schema';
 export * from './types/memory';
 export * from './types/llm';

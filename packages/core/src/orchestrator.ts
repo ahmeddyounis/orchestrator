@@ -435,11 +435,12 @@ export class Orchestrator {
         autoUpdated: false, // Deferring detailed stats for now
       },
       costs: {
-        perProvider: costSummary?.perProvider || {},
+        perProvider: costSummary?.providers || {},
         totals: {
-          promptTokens: costSummary?.total.promptTokens || 0,
-          completionTokens: costSummary?.total.completionTokens || 0,
-          cost: costSummary?.total.estimatedCostUsd || 0,
+          inputTokens: costSummary?.total.inputTokens || 0,
+          outputTokens: costSummary?.total.outputTokens || 0,
+          totalTokens: costSummary?.total.totalTokens || 0,
+          estimatedCostUsd: costSummary?.total.estimatedCostUsd ?? null,
         },
       },
       artifacts: {

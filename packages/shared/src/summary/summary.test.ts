@@ -47,9 +47,10 @@ describe('SummaryWriter', () => {
       costs: {
         perProvider: {},
         totals: {
-          promptTokens: 0,
-          completionTokens: 0,
-          cost: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: null,
         },
       },
       artifacts: {

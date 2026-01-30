@@ -65,18 +65,16 @@ export interface RunSummary {
     };
     costs: {
         perProvider: Record<string, {
-            total: number;
-            details: Array<{
-                model: string;
-                promptTokens: number;
-                completionTokens: number;
-                cost: number;
-            }>;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            estimatedCostUsd: number | null;
         }>;
         totals: {
-            promptTokens: number;
-            completionTokens: number;
-            cost: number;
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            estimatedCostUsd: number | null;
         };
     };
     artifacts: {

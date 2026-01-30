@@ -4,8 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SummaryWriter = exports.RUN_SUMMARY_SCHEMA_VERSION = void 0;
-const promises_1 = require("fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
+const io_js_1 = require("../fs/io.js");
 /**
  * Schema version for the run summary.
  *
@@ -18,7 +18,7 @@ class SummaryWriter {
         // The summary object can be large, so we stringify it with indentation
         // to make it human-readable.
         const summaryJson = JSON.stringify(summary, null, 2);
-        await (0, promises_1.writeFile)(summaryPath, summaryJson);
+        await (0, io_js_1.atomicWrite)(summaryPath, summaryJson);
         return summaryPath;
     }
 }
