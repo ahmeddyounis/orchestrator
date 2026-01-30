@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ExecutionService, ConfirmationProvider } from './service';
 import { EventBus } from '../registry';
 import { GitService, PatchApplier } from '@orchestrator/repo';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 
 // Mock dependencies
 const mockGit = {
@@ -23,10 +23,12 @@ describe('ExecutionService', () => {
   let eventBus: EventBus;
   const repoRoot = '/test/repo';
   const runId = 'test-run';
+  const memory = ConfigSchema.parse({}).memory;
   const config: Config = {
     verification: {} as any,
     configVersion: 1,
     thinkLevel: 'L1',
+    memory,
     patch: {
       maxFilesChanged: 5,
       maxLinesChanged: 100,

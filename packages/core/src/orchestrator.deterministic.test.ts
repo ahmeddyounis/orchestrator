@@ -5,7 +5,7 @@ import { execSync } from 'child_process';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
 import { GitService } from '@orchestrator/repo';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 import { SubprocessProviderAdapter } from '@orchestrator/adapters';
 
 // Helper to copy recursively
@@ -77,6 +77,7 @@ describe('Orchestrator Deterministic E2E', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L0',
+      memory: ConfigSchema.parse({}).memory,
       defaults: { executor: 'fake-cli' },
       providers: {
         'fake-cli': {
@@ -112,6 +113,7 @@ describe('Orchestrator Deterministic E2E', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory: ConfigSchema.parse({}).memory,
       defaults: {
         planner: 'fake-planner',
         executor: 'fake-executor',
@@ -157,6 +159,7 @@ describe('Orchestrator Deterministic E2E', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory: ConfigSchema.parse({}).memory,
       defaults: {
         planner: 'fake-planner',
         executor: 'fake-executor',

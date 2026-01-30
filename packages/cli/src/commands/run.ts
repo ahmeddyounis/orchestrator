@@ -5,10 +5,11 @@ import {
   CostTracker,
   parseBudget,
   Orchestrator,
+  type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
-import { ProviderCapabilities, ProviderConfig, ToolPolicy } from '@orchestrator/shared';
+import { ProviderCapabilities, ProviderConfig, ToolPolicy, type Config } from '@orchestrator/shared';
 import { OutputRenderer } from '../output/renderer';
 import { ConsoleUI } from '../ui/console';
 
@@ -50,6 +51,9 @@ export function registerRunCommand(program: Command) {
     .option('--no-lint', 'Disable automatic linting')
     .option('--no-typecheck', 'Disable automatic typechecking')
     .option('--no-tests', 'Disable automatic testing')
+    .option('--memory <mode>', 'Memory: on|off')
+    .option('--memory-path <path>', 'Override memory storage path')
+    .option('--memory-topk <n>', 'Override memory retrieval topK (integer >= 1)')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -101,6 +105,28 @@ export function registerRunCommand(program: Command) {
           verification.auto = autoVerification;
         }
 
+        const memory: DeepPartial<Config['memory']> = {};
+        if (options.memory) {
+          if (options.memory !== 'on' && options.memory !== 'off') {
+            renderer.error(`Invalid --memory "${options.memory}". Must be on or off.`);
+            process.exit(2);
+          }
+          memory.enabled = options.memory === 'on';
+        }
+        if (options.memoryPath) {
+          memory.storage = { path: options.memoryPath };
+        }
+        if (options.memoryTopk !== undefined) {
+          const topK = Number(options.memoryTopk);
+          if (!Number.isInteger(topK) || topK < 1) {
+            renderer.error(
+              `Invalid --memory-topk "${options.memoryTopk}". Must be an integer >= 1.`,
+            );
+            process.exit(2);
+          }
+          memory.retrieval = { topK };
+        }
+
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
@@ -124,6 +150,8 @@ export function registerRunCommand(program: Command) {
               sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
             verification: Object.keys(verification).length > 0 ? verification : undefined,
           },
         });

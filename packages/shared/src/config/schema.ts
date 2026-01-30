@@ -55,10 +55,57 @@ export const BudgetSchema = z.object({
   time: z.number().optional(),
 });
 
+export const MemoryConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    scope: z.enum(['repo']).default('repo'),
+    storage: z
+      .object({
+        backend: z.enum(['sqlite']).default('sqlite'),
+        path: z.string().default('.orchestrator/memory.sqlite'),
+        encryptAtRest: z.boolean().default(false),
+      })
+      .default({
+        backend: 'sqlite',
+        path: '.orchestrator/memory.sqlite',
+        encryptAtRest: false,
+      }),
+    retrieval: z
+      .object({
+        mode: z.enum(['lexical']).default('lexical'),
+        topK: z.number().int().min(1).default(8),
+        staleDownrank: z.boolean().default(true),
+      })
+      .default({
+        mode: 'lexical',
+        topK: 8,
+        staleDownrank: true,
+      }),
+    writePolicy: z
+      .object({
+        enabled: z.boolean().optional(),
+        storeProcedures: z.boolean().default(true),
+        storeEpisodes: z.boolean().default(true),
+        requireEvidence: z.boolean().default(true),
+        redactSecrets: z.boolean().default(true),
+      })
+      .default({
+        storeProcedures: true,
+        storeEpisodes: true,
+        requireEvidence: true,
+        redactSecrets: true,
+      }),
+  })
+  .transform((cfg) => ({
+    ...cfg,
+    writePolicy: { ...cfg.writePolicy, enabled: cfg.writePolicy.enabled ?? cfg.enabled },
+  }));
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2']).default('L1'),
   budget: BudgetSchema.optional(),
+  memory: MemoryConfigSchema.default(MemoryConfigSchema.parse({})),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),
   defaults: z
     .object({

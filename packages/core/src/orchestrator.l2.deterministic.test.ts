@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
-import { Config, ProviderCapabilities, ToolPolicy } from '@orchestrator/shared';
+import { Config, ConfigSchema, ProviderCapabilities, ToolPolicy } from '@orchestrator/shared';
 import { GitService } from '@orchestrator/repo';
 
 vi.mock('@orchestrator/repo', async (importOriginal) => {
@@ -111,6 +111,7 @@ describe('Orchestrator L2 Deterministic', () => {
   const baseConfig: Config = {
     configVersion: 1,
     thinkLevel: 'L2',
+    memory: ConfigSchema.parse({}).memory,
     defaults: { 
       planner: 'fake-executor',
       executor: 'fake-executor',

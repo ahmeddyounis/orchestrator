@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 import { createRunDir, writeManifest, JsonlLogger } from '@orchestrator/shared';
 import { RepoScanner, SearchService, PatchApplier, GitService } from '@orchestrator/repo';
 import { PatchStore } from './exec/patch_store';
@@ -85,10 +85,12 @@ describe('Orchestrator', () => {
     getAdapter: vi.fn(),
     resolveRoleProviders: vi.fn(),
   };
+  const memory = ConfigSchema.parse({}).memory;
   const config: Config = {
     verification: {} as any,
     configVersion: 1,
     thinkLevel: 'L0',
+    memory,
     defaults: { executor: 'mock' },
     patch: {
       maxFilesChanged: 10,

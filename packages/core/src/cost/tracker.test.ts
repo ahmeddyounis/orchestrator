@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { CostTracker } from './tracker';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 
 describe('CostTracker', () => {
+  const memory = ConfigSchema.parse({}).memory;
+
   it('should start with empty stats', () => {
-    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1' };
+    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1', memory };
     const tracker = new CostTracker(config);
     const summary = tracker.getSummary();
 
@@ -14,7 +16,7 @@ describe('CostTracker', () => {
   });
 
   it('should track usage without pricing', () => {
-    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1' };
+    const config: Config = { verification: {} as any, configVersion: 1, thinkLevel: 'L1', memory };
     const tracker = new CostTracker(config);
 
     tracker.recordUsage('gpt-4', {
@@ -40,6 +42,7 @@ describe('CostTracker', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         'gpt-4': {
           type: 'openai',
@@ -74,6 +77,7 @@ describe('CostTracker', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         'expensive-model': {
           type: 'openai',
@@ -114,6 +118,7 @@ describe('CostTracker', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         'gpt-4': {
           type: 'openai',

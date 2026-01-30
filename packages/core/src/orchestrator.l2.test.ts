@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 import { createRunDir, writeManifest, JsonlLogger } from '@orchestrator/shared';
 import { RepoScanner, SearchService, PatchApplier, GitService } from '@orchestrator/repo';
 import { PatchStore } from './exec/patch_store';
@@ -110,6 +110,7 @@ describe('Orchestrator L2', () => {
     timeoutMs: 1000,
   };
 
+  const memory = ConfigSchema.parse({}).memory;
   const config: Config = {
     verification: {
       enabled: true,
@@ -125,6 +126,7 @@ describe('Orchestrator L2', () => {
     },
     configVersion: 1,
     thinkLevel: 'L2',
+    memory,
     defaults: { executor: 'mock' },
     patch: {
       maxFilesChanged: 10,

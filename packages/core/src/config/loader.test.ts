@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import path from 'path';
 import os from 'os';
 import yaml from 'js-yaml';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 
 vi.mock('fs');
 vi.mock('os');
@@ -27,11 +27,13 @@ describe('ConfigLoader', () => {
 
   describe('load', () => {
     it('should load default config when no files exist', () => {
+      const memory = ConfigSchema.parse({}).memory;
       const config = ConfigLoader.load({ cwd: mockCwd });
       expect(config).toEqual({
         configVersion: 1,
         thinkLevel: 'L1',
         budget: DEFAULT_BUDGET,
+        memory,
         verification: {
           enabled: true,
           mode: 'auto',

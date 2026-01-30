@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ProviderRegistry, EventBus, RegistryError } from './registry';
-import { Config, ProviderCapabilities, ModelResponse } from '@orchestrator/shared';
+import { Config, ConfigSchema, ProviderCapabilities, ModelResponse } from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
 
 class MockAdapter implements ProviderAdapter {
@@ -25,6 +25,8 @@ const mockCapabilities: ProviderCapabilities = {
 };
 
 describe('ProviderRegistry', () => {
+  const memory = ConfigSchema.parse({}).memory;
+
   it('registers and retrieves adapters', () => {
     const config: Config = {
       verification: {} as any,
@@ -48,6 +50,7 @@ describe('ProviderRegistry', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {},
     });
     expect(() => registry.getAdapter('non-existent')).toThrow("Provider 'non-existent' not found");
@@ -58,6 +61,7 @@ describe('ProviderRegistry', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         'my-provider': { type: 'unknown-type', model: 'gpt-4' },
       },
@@ -81,6 +85,7 @@ describe('ProviderRegistry', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         'my-provider': { type: 'mock-type', model: 'gpt-4', api_key_env: 'MISSING_ENV_VAR' },
       },
@@ -105,6 +110,7 @@ describe('ProviderRegistry', () => {
       verification: {} as any,
       configVersion: 1,
       thinkLevel: 'L1',
+      memory,
       providers: {
         p1: { type: 'mock-type', model: 'm1' },
         p2: { type: 'mock-type', model: 'm1' },

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry, CostTracker, PlanService } from '@orchestrator/core';
+import { ConfigLoader, ProviderRegistry, CostTracker, PlanService, type DeepPartial } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
-import { createRunDir, writeManifest, JsonlLogger, OrchestratorEvent } from '@orchestrator/shared';
+import { createRunDir, writeManifest, JsonlLogger, OrchestratorEvent, type Config } from '@orchestrator/shared';
 import { OpenAIAdapter, AnthropicAdapter, ClaudeCodeAdapter } from '@orchestrator/adapters';
 import { OutputRenderer } from '../output/renderer';
 import * as fs from 'fs/promises';
@@ -13,6 +13,9 @@ export function registerPlanCommand(program: Command) {
     .argument('<goal>', 'The goal to plan')
     .description('Plan a task based on a goal')
     .option('--planner <providerId>', 'Override planner provider')
+    .option('--memory <mode>', 'Memory: on|off')
+    .option('--memory-path <path>', 'Override memory storage path')
+    .option('--memory-topk <n>', 'Override memory retrieval topK (integer >= 1)')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -22,12 +25,36 @@ export function registerPlanCommand(program: Command) {
       try {
         const repoRoot = await findRepoRoot();
 
+        const memory: DeepPartial<Config['memory']> = {};
+        if (options.memory) {
+          if (options.memory !== 'on' && options.memory !== 'off') {
+            renderer.error(`Invalid --memory "${options.memory}". Must be on or off.`);
+            process.exit(2);
+          }
+          memory.enabled = options.memory === 'on';
+        }
+        if (options.memoryPath) {
+          memory.storage = { path: options.memoryPath };
+        }
+        if (options.memoryTopk !== undefined) {
+          const topK = Number(options.memoryTopk);
+          if (!Number.isInteger(topK) || topK < 1) {
+            renderer.error(
+              `Invalid --memory-topk "${options.memoryTopk}". Must be an integer >= 1.`,
+            );
+            process.exit(2);
+          }
+          memory.retrieval = { topK };
+        }
+
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
             defaults: {
               planner: options.planner,
             },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
           },
         });
 
@@ -118,7 +145,10 @@ export function registerPlanCommand(program: Command) {
         });
 
         const costSummary = costTracker.getSummary();
-        await fs.writeFile(artifacts.summary, JSON.stringify(costSummary, null, 2));
+        await fs.writeFile(
+          artifacts.summary,
+          JSON.stringify({ memory: config.memory, cost: costSummary }, null, 2),
+        );
 
         const planPath = path.join(artifacts.root, 'plan.json');
         renderer.render({
@@ -138,6 +168,9 @@ export function registerPlanCommand(program: Command) {
         } else {
           renderer.error('An unknown error occurred');
           console.error(err);
+        }
+        if (err instanceof Error && err.message.includes('Configuration validation failed')) {
+          process.exit(2);
         }
         process.exit(1);
       }

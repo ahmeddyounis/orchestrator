@@ -5,10 +5,11 @@ import {
   CostTracker,
   parseBudget,
   Orchestrator,
+  type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
-import { ProviderCapabilities, ProviderConfig } from '@orchestrator/shared';
+import { ProviderCapabilities, ProviderConfig, type Config } from '@orchestrator/shared';
 import { OutputRenderer } from '../output/renderer';
 
 function parseBudgetFlag(value: string, previous: unknown) {
@@ -44,6 +45,9 @@ export function registerFixCommand(program: Command) {
     .option('--no-tools', 'Force tools disabled')
     .option('--yes', 'Auto-approve confirmations except denylist')
     .option('--non-interactive', 'Deny by default if confirmation required')
+    .option('--memory <mode>', 'Memory: on|off')
+    .option('--memory-path <path>', 'Override memory storage path')
+    .option('--memory-topk <n>', 'Override memory retrieval topK (integer >= 1)')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -59,11 +63,35 @@ export function registerFixCommand(program: Command) {
           process.exit(2);
         }
 
+        const memory: DeepPartial<Config['memory']> = {};
+        if (options.memory) {
+          if (options.memory !== 'on' && options.memory !== 'off') {
+            renderer.error(`Invalid --memory "${options.memory}". Must be on or off.`);
+            process.exit(2);
+          }
+          memory.enabled = options.memory === 'on';
+        }
+        if (options.memoryPath) {
+          memory.storage = { path: options.memoryPath };
+        }
+        if (options.memoryTopk !== undefined) {
+          const topK = Number(options.memoryTopk);
+          if (!Number.isInteger(topK) || topK < 1) {
+            renderer.error(
+              `Invalid --memory-topk "${options.memoryTopk}". Must be an integer >= 1.`,
+            );
+            process.exit(2);
+          }
+          memory.retrieval = { topK };
+        }
+
         const config = ConfigLoader.load({
           configPath: globalOpts.config,
           flags: {
             thinkLevel,
             budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
             defaults: {
               planner: options.planner,
               executor: options.executor,

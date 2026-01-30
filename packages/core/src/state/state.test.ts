@@ -4,13 +4,14 @@ import { RunStateManager } from './manager';
 import { serializeRunState } from './serialization';
 import { RunState, Budget } from './types';
 import { CostTracker } from '../cost/tracker';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 import { BudgetExceededError } from './errors';
 
 const mockConfig: Config = {
   verification: {} as any,
   configVersion: 1,
   thinkLevel: 'L1',
+  memory: ConfigSchema.parse({}).memory,
   providers: {
     mock: {
       type: 'mock',

@@ -1,8 +1,9 @@
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 
 export const minimalConfigForTest: Config = {
   configVersion: 1,
   thinkLevel: 'L1',
+  memory: ConfigSchema.parse({}).memory,
   verification: {
     enabled: false,
     mode: 'custom',

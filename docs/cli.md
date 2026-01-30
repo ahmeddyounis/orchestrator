@@ -43,6 +43,9 @@ orchestrator run <goal> [options]
 - `--executor <providerId>`: Override the configured executor provider.
 - `--reviewer <providerId>`: Override the configured reviewer provider.
 - `--allow-large-diff`: Allow large diffs without user confirmation. Useful for non-interactive runs.
+- `--memory <on|off>`: Enable/disable memory (default: `off`).
+- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
+- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
 
 **Examples:**
 
@@ -100,6 +103,9 @@ orchestrator fix <goal> [options]
 
 - `--think <level>`: Set thinking level (`L0`, `L1`). Defaults to `L1`.
 - `--budget <key=value>`: Set budget limits.
+- `--memory <on|off>`: Enable/disable memory (default: `off`).
+- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
+- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
 
 **Examples:**
 
@@ -128,6 +134,13 @@ orchestrator plan <goal> [options]
 **Arguments:**
 
 - `<goal>`: The goal to plan for.
+
+**Options:**
+
+- `--planner <providerId>`: Override the configured planner provider.
+- `--memory <on|off>`: Enable/disable memory (default: `off`).
+- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
+- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
 
 **Examples:**
 

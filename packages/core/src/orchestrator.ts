@@ -52,6 +52,7 @@ export interface RunResult {
     | 'error'
     | 'non_improving';
   recommendations?: string;
+  memory?: Config['memory'];
   verification?: {
     enabled: boolean;
     passed: boolean;
@@ -246,6 +247,7 @@ END_DIFF
         status: 'failure',
         runId,
         summary: msg,
+        memory: this.config.memory,
         verification: {
           enabled: false,
           passed: false,
@@ -341,6 +343,7 @@ END_DIFF
         summary: 'Patch applied successfully',
         filesChanged: result.filesChanged,
         patchPaths: [patchPath],
+        memory: this.config.memory,
         verification: {
           enabled: false,
           passed: false,
@@ -373,6 +376,7 @@ END_DIFF
         runId,
         summary: `Patch application failed: ${msg}`,
         patchPaths: [patchPath],
+        memory: this.config.memory,
         verification: {
           enabled: false,
           passed: false,
@@ -472,6 +476,7 @@ END_DIFF
         status: 'failure',
         runId,
         summary: msg,
+        memory: this.config.memory,
         verification: {
           enabled: false,
           passed: false,
@@ -549,6 +554,7 @@ END_DIFF
         filesChanged: Array.from(touchedFiles),
         patchPaths,
         stopReason,
+        memory: this.config.memory,
         verification: {
           enabled: false,
           passed: false,
@@ -885,6 +891,7 @@ INSTRUCTIONS:
         ...l1Result,
         status: 'success',
         summary: 'L2 Verified Success',
+        memory: this.config.memory,
         verification: {
           enabled: profile.enabled,
           passed: true,
@@ -943,6 +950,7 @@ INSTRUCTIONS:
             summary: 'Verification failure signature unchanged for 2 iterations',
             filesChanged: Array.from(touchedFiles),
             patchPaths,
+            memory: this.config.memory,
             verification: {
               enabled: profile.enabled,
               passed: false,
@@ -1134,6 +1142,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           summary: `L2 Verified Success after ${iterations} iterations`,
           filesChanged: Array.from(touchedFiles),
           patchPaths,
+          memory: this.config.memory,
           verification: {
             enabled: profile.enabled,
             passed: true,
@@ -1173,6 +1182,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       filesChanged: Array.from(touchedFiles),
       patchPaths,
       stopReason: 'budget_exceeded',
+      memory: this.config.memory,
       verification: {
         enabled: profile.enabled,
         passed: false,

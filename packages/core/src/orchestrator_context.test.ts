@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigSchema } from '@orchestrator/shared';
 import { createRunDir, writeManifest } from '@orchestrator/shared';
 import { GitService, SnippetExtractor, SimpleContextPacker } from '@orchestrator/repo';
 import fs from 'fs/promises';
@@ -96,10 +96,12 @@ describe('Orchestrator Context Integration', () => {
     getAdapter: vi.fn(),
     resolveRoleProviders: vi.fn(),
   };
+  const memory = ConfigSchema.parse({}).memory;
   const config: Config = {
     verification: {} as any,
     configVersion: 1,
     thinkLevel: 'L1',
+    memory,
     defaults: { executor: 'mock' },
     context: {
       tokenBudget: 1000,
