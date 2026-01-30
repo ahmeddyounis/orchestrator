@@ -10,9 +10,9 @@ Memory is stored locally in a SQLite database file within your project's `.orche
 
 When the Orchestrator retrieves memories to build context for a task, it doesn't treat all memories equally. A ranking system prioritizes memories based on several factors to ensure the most relevant information is used.
 
--   **Relevance Boosts:** Memories that are semantically related to the user's prompt or the files being worked on receive a significant score boost.
--   **Procedural Boosts:** Procedural memories, such as learned command sequences, are given a higher base score because they often represent established workflows.
--   **Stale Down-ranking:** Memories decay over time. Older, less frequently accessed memories will have their scores reduced, making them less likely to be included in the context. This "stale down-ranking" helps prevent the agent from relying on outdated information.
+- **Relevance Boosts:** Memories that are semantically related to the user's prompt or the files being worked on receive a significant score boost.
+- **Procedural Boosts:** Procedural memories, such as learned command sequences, are given a higher base score because they often represent established workflows.
+- **Stale Down-ranking:** Memories decay over time. Older, less frequently accessed memories will have their scores reduced, making them less likely to be included in the context. This "stale down-ranking" helps prevent the agent from relying on outdated information.
 
 You can inspect how memories were scored and selected for a given run by examining the `provenance.json` artifact. See the [Context Fusion](./context-fusion.md) documentation for more details.
 

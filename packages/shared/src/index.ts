@@ -13,4 +13,6 @@ export * from './types/patch';
 export * from './types/tools';
 export * from './types/config';
 
+export * from './observability';
+
 export * from './config/schema';

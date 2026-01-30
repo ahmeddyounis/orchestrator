@@ -36,8 +36,8 @@ If you frequently encounter this warning, you can either increase the limit or m
 
 You can manually control the indexing process using the following commands:
 
-| Command                     | Description                                         |
-| :-------------------------- | :-------------------------------------------------- |
+| Command                       | Description                                         |
+| :---------------------------- | :-------------------------------------------------- |
 | `orchestrator index re-index` | Performs a full scan and rebuilds the entire index. |
 | `orchestrator index status`   | Shows the current status of the index.              |
 | `orchestrator index search`   | (Future) Searches the index for a given query.      |

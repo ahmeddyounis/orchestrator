@@ -18,9 +18,21 @@ const execAsync = promisify(exec);
 const TEMP_DIR = path.resolve(__dirname, '../../../../.tmp/memory-context-integration-tests');
 
 class FakeSimpleExecutor implements ProviderAdapter {
-  id() { return 'fake-simple-executor'; }
-  capabilities() { return { supportsStreaming: false, supportsToolCalling: false, supportsJsonMode: false, modality: 'text', latencyClass: 'fast' }; }
-  async generate() { return { text: '{"steps": ["Step 1: Do nothing"]}' }; }
+  id() {
+    return 'fake-simple-executor';
+  }
+  capabilities() {
+    return {
+      supportsStreaming: false,
+      supportsToolCalling: false,
+      supportsJsonMode: false,
+      modality: 'text',
+      latencyClass: 'fast',
+    };
+  }
+  async generate() {
+    return { text: '{"steps": ["Step 1: Do nothing"]}' };
+  }
 }
 
 describe('Orchestrator Memory/Context Integration', () => {
@@ -42,7 +54,7 @@ describe('Orchestrator Memory/Context Integration', () => {
     await execAsync('git init', { cwd: testRepoPath });
     await execAsync('git config user.email "test@example.com"', { cwd: testRepoPath });
     await execAsync('git config user.name "Test User"', { cwd: testRepoPath });
-    
+
     baseConfig = {
       configVersion: 1,
       thinkLevel: 'L2',
@@ -124,7 +136,7 @@ describe('Orchestrator Memory/Context Integration', () => {
     } finally {
       store.close();
     }
-    
+
     // 2. Setup Orchestrator
     const mockRegistry = new ProviderRegistry(baseConfig);
     mockRegistry.registerFactory('fake-simple-executor', () => new FakeSimpleExecutor());
@@ -143,15 +155,15 @@ describe('Orchestrator Memory/Context Integration', () => {
 
     expect(result.status).toBe('success');
     expect(result.verification).toBeDefined();
-    
+
     const verification = result.verification!;
     expect(verification.passed).toBe(true);
 
     const checks = verification.checks;
-    const testCheck = checks.find(c => c.name === 'tests');
+    const testCheck = checks.find((c) => c.name === 'tests');
     expect(testCheck).toBeDefined();
     expect(testCheck!.command).toBe('echo "Tests from memory!"');
-    
+
     const sources = verification.commandSources;
     expect(sources?.['tests']?.source).toBe('memory');
   });
@@ -193,7 +205,6 @@ describe('Orchestrator Memory/Context Integration', () => {
     // 3. Run and Verify
     const result = await orchestrator.run('A simple change', { runId, thinkLevel: 'L2' });
 
-
     expect(result.status).toBe('success');
     expect(result.verification).toBeDefined();
 
@@ -201,7 +212,7 @@ describe('Orchestrator Memory/Context Integration', () => {
     expect(verification.passed).toBe(true);
 
     const checks = verification.checks;
-    const testCheck = checks.find(c => c.name === 'tests');
+    const testCheck = checks.find((c) => c.name === 'tests');
     expect(testCheck).toBeDefined();
     expect(testCheck!.command).toBe('npm test'); // Should be the detected command
 

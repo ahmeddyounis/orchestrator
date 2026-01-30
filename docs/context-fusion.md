@@ -28,8 +28,8 @@ The Orchestrator is designed for transparency. After each run, it saves detailed
 
 Key artifacts include:
 
--   `fused_context.json`: A JSON file containing the final, fully assembled context that was sent to the AI. This is the "source of truth" for what the agent knew.
--   `provenance.json`: A detailed report that explains *why* each piece of information was included in the context. It shows the source of each item, its original score, and any truncation that was applied.
+- `fused_context.json`: A JSON file containing the final, fully assembled context that was sent to the AI. This is the "source of truth" for what the agent knew.
+- `provenance.json`: A detailed report that explains _why_ each piece of information was included in the context. It shows the source of each item, its original score, and any truncation that was applied.
 
 ### Example: Verifying Memory Usage
 
