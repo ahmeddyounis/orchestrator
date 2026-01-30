@@ -11,4 +11,5 @@ export * from './exec/tool_tracker';
 export * from './exec/patch_store';
 export * from './verify';
 export * from './state';
+export * from './memory';
 export * from './orchestrator';
