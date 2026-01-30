@@ -22,5 +22,6 @@ export interface MemoryStatus {
     semantic: number;
     total: number;
   };
+  staleCount: number;
   lastUpdatedAt: number | null;
 }

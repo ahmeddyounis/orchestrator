@@ -44,6 +44,7 @@ async function status(options: { json?: boolean }) {
   console.log(`    Episodic: ${status.entryCounts.episodic}`);
   console.log(`    Semantic: ${status.entryCounts.semantic}`);
   console.log(`    Total: ${status.entryCounts.total}`);
+  console.log(`    Stale: ${status.staleCount}`);
   console.log(
     `  Last Updated: ${
       status.lastUpdatedAt ? new Date(status.lastUpdatedAt).toISOString() : 'Never'
@@ -55,10 +56,15 @@ async function list(options: {
   type?: 'procedural' | 'episodic' | 'semantic';
   limit?: number;
   json?: boolean;
+  staleOnly?: boolean;
 }) {
   const store = getMemoryStore();
   const repoId = await findRepoRoot();
-  const entries = store.list(repoId, options.type, options.limit);
+  let entries = store.list(repoId, options.type, options.limit);
+
+  if (options.staleOnly) {
+    entries = entries.filter(entry => entry.stale);
+  }
 
   if (options.json) {
     console.log(JSON.stringify(entries, null, 2));
@@ -67,10 +73,11 @@ async function list(options: {
 
   console.log('Memory Entries:');
   entries.forEach((entry: MemoryEntry) => {
+    const staleMarker = entry.stale ? ' (stale)' : '';
     console.log(
       `  - [${entry.type}] ${entry.id}: ${entry.title} (updated: ${new Date(
         entry.updatedAt,
-      ).toISOString()})`,
+      ).toISOString()})${staleMarker}`,
     );
   });
 }
@@ -98,6 +105,13 @@ async function show(id: string, options: { json?: boolean }) {
   console.log(`Updated At: ${new Date(entry.updatedAt).toISOString()}`);
   console.log(`Stale: ${entry.stale}`);
   console.log(`Git SHA: ${entry.gitSha || 'N/A'}`);
+  if (entry.fileRefsJson) {
+    const fileRefs = JSON.parse(entry.fileRefsJson) as string[];
+    if (fileRefs.length > 0) {
+      console.log('File Refs:');
+      fileRefs.forEach(ref => console.log(`  - ${ref}`));
+    }
+  }
   console.log(`Content:\n${entry.content}`);
   if (entry.evidenceJson) {
     console.log(`Evidence:\n${JSON.stringify(JSON.parse(entry.evidenceJson), null, 2)}`);
@@ -142,6 +156,7 @@ export function registerMemoryCommand(program: Command) {
     .description('List memory entries.')
     .option('--type <type>', 'Filter by type (procedural, episodic, semantic).')
     .option('--limit <n>', 'Limit number of results.', parseInt)
+    .option('--stale-only', 'Only show stale entries.')
     .option('--json', 'Output as JSON.')
     .action(list);
 

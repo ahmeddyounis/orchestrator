@@ -164,6 +164,11 @@ export function createMemoryStore(): MemoryStore {
       | { lastUpdatedAt: number | null }
       | undefined;
 
+    const staleStmt = db.prepare(
+      'SELECT COUNT(*) as count FROM memory_entries WHERE repoId = ? AND stale = 1',
+    );
+    const staleRow = staleStmt.get(repoId) as { count: number } | undefined;
+
     const entryCounts: MemoryStatus['entryCounts'] = {
       procedural: 0,
       episodic: 0,
@@ -178,6 +183,7 @@ export function createMemoryStore(): MemoryStore {
 
     return {
       entryCounts,
+      staleCount: staleRow?.count ?? 0,
       lastUpdatedAt: lastUpdatedRow?.lastUpdatedAt ?? null,
     };
   };
