@@ -4,6 +4,8 @@ import ignore from 'ignore';
 import { RepoSnapshot, RepoFileMeta } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
 
+export * from './types';
+
 type Fs = typeof nodeFs;
 
 export class RepoScanner {
