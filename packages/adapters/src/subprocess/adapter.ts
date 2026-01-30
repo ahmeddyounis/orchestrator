@@ -34,6 +34,23 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     };
   }
 
+  /**
+   * Detects if a chunk of text from a subprocess indicates it is idle and waiting for a prompt.
+   * Subclasses can override this to provide more specific detection logic.
+   * @param text The text to inspect.
+   * @returns True if the text is a prompt marker.
+   */
+  protected isPrompt(text: string): boolean {
+    const trimmed = text.trim();
+    // Check for common prompt markers
+    return (
+      trimmed.endsWith('>') ||
+      trimmed.endsWith('$') ||
+      trimmed.endsWith('#') ||
+      trimmed.endsWith('%')
+    );
+  }
+
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
     const pm = new ProcessManager({
       logger: ctx.logger,
@@ -87,16 +104,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       timedOut = true;
     });
 
-    const isPrompt = (text: string) => {
-      const trimmed = text.trim();
-      // Check for common prompt markers
-      return (
-        trimmed.endsWith('>') ||
-        trimmed.endsWith('$') ||
-        trimmed.endsWith('#') ||
-        trimmed.endsWith('%')
-      );
-    };
+    const isPrompt = (text: string) => this.isPrompt(text);
 
     try {
       await pm.spawn(this.config.command, cwd, env, false, shouldInherit);

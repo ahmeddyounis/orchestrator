@@ -27,6 +27,10 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
     return 'claude_code';
   }
 
+  protected override isPrompt(text: string): boolean {
+    return text.trim().endsWith('Claude>');
+  }
+
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
     // Inject prompt wrapper
     const systemMessage: ChatMessage = {
