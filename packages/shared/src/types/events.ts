@@ -1,4 +1,5 @@
 import { ProviderCapabilities } from './llm';
+import type { RetrievalIntent } from './memory';
 
 export interface BaseEvent {
   schemaVersion: number;
@@ -363,6 +364,7 @@ export interface MemorySearched extends BaseEvent {
     query: string;
     topK: number;
     hitsCount: number;
+    intent: RetrievalIntent;
   };
 }
 

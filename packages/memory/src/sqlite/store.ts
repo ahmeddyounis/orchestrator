@@ -2,12 +2,13 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
+import { rerank, RerankOptions } from '../ranking';
 import type { MemoryEntry, MemoryEntryType, MemoryStatus } from '../types';
 
 export interface MemoryStore {
   init(dbPath: string): void;
   upsert(entry: MemoryEntry): void;
-  search(repoId: string, query: string, topK?: number): MemoryEntry[];
+  search(repoId: string, query: string, options: RerankOptions & { topK?: number }): MemoryEntry[];
   get(id: string): MemoryEntry | null;
   list(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
   listEntriesForRepo(repoId: string): MemoryEntry[];
@@ -186,9 +187,14 @@ export function createMemoryStore(): MemoryStore {
     };
   };
 
-  const search = (repoId: string, query: string, topK = 10): MemoryEntry[] => {
+  const search = (
+    repoId: string,
+    query: string,
+    options: RerankOptions & { topK?: number },
+  ): MemoryEntry[] => {
     if (!db) throw new Error('Database not initialized');
 
+    const topK = options.topK ?? 10;
     const stmt = db.prepare(
       `
       SELECT me.*
@@ -201,8 +207,12 @@ export function createMemoryStore(): MemoryStore {
     `,
     );
 
-    const rows = stmt.all(query, repoId, topK) as unknown as MemoryEntryDbRow[];
-    return rows.map(rowToEntry);
+    const rows = stmt.all(query, repoId, topK * 2) as unknown as MemoryEntryDbRow[]; // Fetch more to allow for deduping
+    const entries = rows.map(rowToEntry);
+
+    const rerankedEntries = rerank(entries, options);
+
+    return rerankedEntries.slice(0, topK);
   };
 
   const wipe = (repoId: string): void => {

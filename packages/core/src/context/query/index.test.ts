@@ -44,7 +44,9 @@ describe('buildQueries', () => {
     expect(repoQueries).toContain("type 'string' is not assignable to type 'number'.");
     expect(repoQueries).toContain('string');
     expect(repoQueries).toContain('number');
-    expect(memoryQueries[0]).toContain("src/components/avatar.ts(12,5): error ts2322: type 'string' is not assignable to type 'number'.");
+    expect(memoryQueries[0]).toContain(
+      "src/components/avatar.ts(12,5): error ts2322: type 'string' is not assignable to type 'number'.",
+    );
   });
 
   it('should generate queries from an ESLint error', () => {
@@ -140,7 +142,7 @@ describe('buildQueries', () => {
           memoryQueriesCount: 1,
         },
       }),
-      'Built context queries'
+      'Built context queries',
     );
   });
 });

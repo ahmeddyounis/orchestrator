@@ -1,4 +1,3 @@
-
 import { OrchestratorEvent } from '../types/events';
 
 export interface Logger {

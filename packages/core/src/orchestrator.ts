@@ -16,6 +16,7 @@ import {
   SnippetExtractor,
 } from '@orchestrator/repo';
 import { MemoryEntry, createMemoryStore } from '@orchestrator/memory';
+import { RetrievalIntent } from '@orchestrator/shared';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -830,11 +831,11 @@ END_DIFF
       // Memory Search
       const memoryHits = await this.searchMemoryHits(
         {
-          goal,
-          step,
+          query: `${goal} ${step}`,
           runId,
           stepId: stepsCompleted,
           artifactsRoot: artifacts.root,
+          intent: 'implementation',
         },
         eventBus,
       );
@@ -1023,11 +1024,12 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
 
   private async searchMemoryHits(
     args: {
-      goal: string;
-      step: string;
+      query: string;
       runId: string;
       stepId: number;
       artifactsRoot: string;
+      intent: RetrievalIntent;
+      failureSignature?: string;
     },
     eventBus: EventBus,
   ): Promise<MemoryEntry[]> {
@@ -1045,9 +1047,14 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
     try {
       store.init(dbPath);
 
-      const query = `${args.goal} ${args.step}`;
+      const { query } = args;
       const topK = memConfig.retrieval.topK ?? 5;
-      const hits = store.search(this.repoRoot, query, topK);
+      const hits = store.search(this.repoRoot, query, {
+        topK,
+        intent: args.intent,
+        staleDownrank: memConfig.retrieval.staleDownrank ?? true,
+        failureSignature: args.failureSignature,
+      });
 
       await eventBus.emit({
         type: 'MemorySearched',
@@ -1058,6 +1065,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           query,
           topK,
           hitsCount: hits.length,
+          intent: args.intent,
         },
       });
 
@@ -1293,6 +1301,19 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         failureSignature = verification.failureSignature;
       }
 
+      // Search memory for similar failures
+      const memoryHits = await this.searchMemoryHits(
+        {
+          query: `${goal} ${verification.summary}`,
+          runId,
+          stepId: 100 + iterations,
+          artifactsRoot: artifacts.root,
+          intent: 'verification',
+          failureSignature: verification.failureSignature,
+        },
+        eventBus,
+      );
+
       // Generate Repair
       const verificationSummary = `Verification Failed.\n${verification.summary}\nFailed Checks: ${verification.checks
         .filter((c) => !c.passed)
@@ -1313,6 +1334,19 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         }
       }
 
+      const fuser = new SimpleContextFuser();
+      const fusedContext = fuser.fuse({
+        goal: `Goal: ${goal}\nTask: Fix verification errors.`,
+        repoPack: { items: [], totalChars: 0, estimatedTokens: 0 }, // No repo context for repairs yet
+        memoryHits,
+        signals: [],
+        budgets: {
+          maxRepoContextChars: 0,
+          maxMemoryChars: 4000,
+          maxSignalsChars: 1000,
+        },
+      });
+
       const repairPrompt = `
 The previous attempt failed verification.
 Goal: ${goal}
@@ -1322,6 +1356,9 @@ ${verificationSummary}
 
 Error Details:
 ${errorDetails}
+
+CONTEXT FROM MEMORY:
+${fusedContext.prompt}
 
 Please analyze the errors and produce a unified diff to fix them.
 Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.

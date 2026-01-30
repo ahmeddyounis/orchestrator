@@ -250,12 +250,19 @@ describe('SQLite MemoryStore', () => {
     store.upsert(entry2);
     store.upsert(entry3);
 
-    const results = store.search('repo-1', 'cats');
+    const results = store.search('repo-1', 'cats', {
+      intent: 'planning',
+      staleDownrank: false,
+    });
     expect(results.length).toBe(2);
+    // Note: order is not guaranteed by FTS, so we check for inclusion
     expect(results.map((e) => e.id)).toContain('test-2');
     expect(results.map((e) => e.id)).toContain('test-3');
 
-    const results2 = store.search('repo-1', 'Alpha');
+    const results2 = store.search('repo-1', 'Alpha', {
+      intent: 'planning',
+      staleDownrank: false,
+    });
     expect(results2.length).toBe(1);
     expect(results2[0].id).toBe('test-1');
   });

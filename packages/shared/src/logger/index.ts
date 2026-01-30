@@ -1,4 +1,3 @@
-
 import { ConsoleLogger } from './consoleLogger';
 import { JsonlLogger } from './jsonlLogger';
 

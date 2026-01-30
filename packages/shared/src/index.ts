@@ -6,6 +6,8 @@ export * from './logger';
 export * from './redaction';
 export * from './fs/artifacts';
 export * from './config/schema';
+export * from './types/memory';
+
 export * from './types/llm';
 export * from './types/patch';
 export * from './types/tools';

@@ -360,7 +360,12 @@ describe('Orchestrator', () => {
     expect(mockMemoryStore.search).toHaveBeenCalledWith(
       repoRoot,
       'goal that matches memory step 1',
-      5,
+      {
+        topK: 5,
+        intent: 'implementation',
+        staleDownrank: true,
+        failureSignature: undefined,
+      },
     );
 
     const systemPrompt = executorGenerate.mock.calls[0][0].messages[0].content;
