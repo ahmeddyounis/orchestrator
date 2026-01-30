@@ -5,11 +5,18 @@ import {
 } from '../subprocess';
 import { ProviderConfig, ModelRequest, ModelResponse, ChatMessage } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
+import { ConfigError } from '../errors';
 
 export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
+
+    if (!command.length) {
+      throw new ConfigError(
+        `Missing command for ClaudeCode provider. Checked config.command`,
+      );
+    }
 
     super({
       command: [...command, ...args],

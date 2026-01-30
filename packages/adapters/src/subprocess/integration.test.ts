@@ -66,7 +66,7 @@ describe('Subprocess Integration', () => {
 
     await expect(
       adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx),
-    ).rejects.toThrow('TimeoutError');
+    ).rejects.toThrow('Process timed out');
   });
 
   it('should timeout if end marker is missing', async () => {
@@ -78,7 +78,7 @@ describe('Subprocess Integration', () => {
 
     await expect(
       adapter.generate({ messages: [{ role: 'user', content: 'foo' }] }, shortCtx),
-    ).rejects.toThrow('TimeoutError');
+    ).rejects.toThrow('Process timed out');
   });
 
   it('should enforce maxOutputSize via ProcessManager', async () => {

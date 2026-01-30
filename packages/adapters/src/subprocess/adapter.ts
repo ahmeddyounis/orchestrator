@@ -1,3 +1,4 @@
+import { ProcessError, TimeoutError } from '../errors';
 import { ProviderAdapter } from '../adapter';
 import { ProcessManager } from './process-manager';
 import {
@@ -131,7 +132,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       }
 
       if (timedOut) {
-        throw new Error('Process timed out');
+        throw new TimeoutError('Process timed out');
       }
 
       // Strip trailing prompt marker
@@ -143,11 +144,10 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       }
     } catch (e) {
       const err = e as Error;
-      if (err.message && err.message.includes('timed out')) {
-        // Normalize TimeoutError
-        throw new Error(`TimeoutError: ${err.message}`);
+      if (err instanceof TimeoutError) {
+        throw err;
       }
-      throw new Error(`ProcessError: ${err.message}`);
+      throw new ProcessError(`Subprocess execution failed: ${err.message}`);
     } finally {
       pm.kill();
     }

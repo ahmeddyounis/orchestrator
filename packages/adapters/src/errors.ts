@@ -21,3 +21,10 @@ export class TimeoutError extends Error {
     this.name = 'TimeoutError';
   }
 }
+
+export class ProcessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProcessError';
+  }
+}
