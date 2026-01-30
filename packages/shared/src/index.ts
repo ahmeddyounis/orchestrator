@@ -5,6 +5,7 @@ export * from './logger/jsonlLogger';
 export * from './logger';
 export * from './redaction';
 export * from './fs/artifacts';
+export * from './artifacts';
 export * from './config/schema';
 export * from './types/memory';
 

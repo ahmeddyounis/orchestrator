@@ -1,5 +1,5 @@
-import {writeFile} from 'fs/promises'
 import path from 'node:path'
+import {atomicWrite} from '../fs/io.js'
 
 /**
  * Schema version for the run summary.
@@ -102,7 +102,7 @@ export class SummaryWriter {
     // The summary object can be large, so we stringify it with indentation
     // to make it human-readable.
     const summaryJson = JSON.stringify(summary, null, 2)
-    await writeFile(summaryPath, summaryJson)
+    await atomicWrite(summaryPath, summaryJson)
     return summaryPath
   }
 }

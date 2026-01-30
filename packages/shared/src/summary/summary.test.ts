@@ -1,23 +1,22 @@
-import { describe, it, expect, vi, afterAll } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   RUN_SUMMARY_SCHEMA_VERSION,
   RunSummary,
   SummaryWriter,
 } from './summary.js'
-import { writeFile } from 'fs/promises'
-import path from 'node:path'
+import {tmpdir} from 'os'
+import {join} from 'path'
+import {remove, readJson, ensureDir} from 'fs-extra'
 
-vi.mock('fs/promises', () => ({
-  writeFile: vi.fn().mockResolvedValue(undefined),
-}))
 
 describe('SummaryWriter', () => {
-  afterAll(() => {
-    vi.restoreAllMocks()
-  })
+    const TEST_RUN_DIR = join(tmpdir(), 'orchestrator-summary-test', `${Date.now()}`)
+
+    beforeEach(async () => {
+        await ensureDir(TEST_RUN_DIR)
+    })
 
   it('should write a valid summary.json file', async () => {
-    const runDir = '/tmp/test-run'
     const summary: RunSummary = {
       schemaVersion: RUN_SUMMARY_SCHEMA_VERSION,
       runId: 'test-run-123',
@@ -59,14 +58,12 @@ describe('SummaryWriter', () => {
       },
     }
 
-    const expectedPath = path.join(runDir, 'summary.json')
-    const summaryPath = await SummaryWriter.write(summary, runDir)
+    const expectedPath = join(TEST_RUN_DIR, 'summary.json')
+    const summaryPath = await SummaryWriter.write(summary, TEST_RUN_DIR)
 
     expect(summaryPath).toBe(expectedPath)
-    expect(writeFile).toHaveBeenCalledWith(
-      expectedPath,
-      JSON.stringify(summary, null, 2),
-    )
+    const summaryOnDisk = await readJson(summaryPath)
+    expect(summaryOnDisk).toEqual(summary)
   })
 
   it('should have schemaVersion set to the current version', () => {
