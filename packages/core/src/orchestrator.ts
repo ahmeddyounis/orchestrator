@@ -191,6 +191,7 @@ export class Orchestrator {
       extraArtifactPaths?: string[];
       verificationReport?: VerificationReport;
     },
+    eventBus?: EventBus,
   ): Promise<void> {
     if (this.suppressEpisodicMemoryWrite || !this.shouldWriteEpisodicMemory()) return;
 
@@ -221,7 +222,7 @@ export class Orchestrator {
     };
 
     try {
-      const writer = new MemoryWriter();
+      const writer = new MemoryWriter(eventBus, args.runId);
       await writer.extractEpisodic(runSummary, repoState, args.verificationReport);
     } catch {
       // Non-fatal: don't fail the run if memory persistence fails.
@@ -401,13 +402,16 @@ END_DIFF
         toolLogPaths: [],
       });
 
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status: 'failure',
-        stopReason: 'invalid_output',
-        artifactsRoot: artifacts.root,
-      });
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status: 'failure',
+          stopReason: 'invalid_output',
+          artifactsRoot: artifacts.root,
+        },
+        { emit: emitEvent },
+      );
 
       return { status: 'failure', runId, summary: msg };
     }
@@ -540,14 +544,17 @@ END_DIFF
       toolLogPaths: [],
     });
 
-    await this.writeEpisodicMemory({
-      runId,
-      goal,
-      status: runResult.status,
-      stopReason: runResult.status === 'success' ? 'success' : 'error',
-      artifactsRoot: artifacts.root,
-      patchPaths: runResult.patchPaths,
-    });
+    await this.writeEpisodicMemory(
+      {
+        runId,
+        goal,
+        status: runResult.status,
+        stopReason: runResult.status === 'success' ? 'success' : 'error',
+        artifactsRoot: artifacts.root,
+        patchPaths: runResult.patchPaths,
+      },
+      { emit: emitEvent },
+    );
 
     return runResult;
   }
@@ -633,13 +640,16 @@ END_DIFF
       };
       await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status: 'failure',
-        stopReason: 'error',
-        artifactsRoot: artifacts.root,
-      });
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status: 'failure',
+          stopReason: 'error',
+          artifactsRoot: artifacts.root,
+        },
+        eventBus,
+      );
 
       return result;
     }
@@ -734,15 +744,18 @@ END_DIFF
         toolLogPaths: [],
       });
 
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status,
-        stopReason: stopReason ?? 'success',
-        artifactsRoot: artifacts.root,
-        patchPaths,
-        extraArtifactPaths: contextPaths,
-      });
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status,
+          stopReason: stopReason ?? 'success',
+          artifactsRoot: artifacts.root,
+          patchPaths,
+          extraArtifactPaths: contextPaths,
+        },
+        eventBus,
+      );
 
       return result;
     };
@@ -1000,28 +1013,42 @@ INSTRUCTIONS:
 
     if (l1Result.stopReason === 'budget_exceeded') {
       const artifacts = await createRunDir(this.repoRoot, runId);
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status: l1Result.status,
-        stopReason: l1Result.stopReason ?? 'budget_exceeded',
-        artifactsRoot: artifacts.root,
-        patchPaths: l1Result.patchPaths,
-      });
+      const logger = new JsonlLogger(artifacts.trace);
+      const eventBus: EventBus = {
+        emit: async (e) => await logger.log(e),
+      };
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status: l1Result.status,
+          stopReason: l1Result.stopReason ?? 'budget_exceeded',
+          artifactsRoot: artifacts.root,
+          patchPaths: l1Result.patchPaths,
+        },
+        eventBus,
+      );
       return l1Result;
     }
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
       const artifacts = await createRunDir(this.repoRoot, runId);
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status: l1Result.status,
-        stopReason: l1Result.stopReason ?? 'success',
-        artifactsRoot: artifacts.root,
-        patchPaths: l1Result.patchPaths,
-      });
+      const logger = new JsonlLogger(artifacts.trace);
+      const eventBus: EventBus = {
+        emit: async (e) => await logger.log(e),
+      };
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status: l1Result.status,
+          stopReason: l1Result.stopReason ?? 'success',
+          artifactsRoot: artifacts.root,
+          patchPaths: l1Result.patchPaths,
+        },
+        eventBus,
+      );
       return {
         ...l1Result,
         summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
@@ -1092,16 +1119,19 @@ INSTRUCTIONS:
 
       await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
-      await this.writeEpisodicMemory({
-        runId,
-        goal,
-        status: 'success',
-        stopReason: 'success',
-        artifactsRoot: artifacts.root,
-        patchPaths: result.patchPaths,
-        extraArtifactPaths: reportPaths,
-        verificationReport: verification,
-      });
+      await this.writeEpisodicMemory(
+        {
+          runId,
+          goal,
+          status: 'success',
+          stopReason: 'success',
+          artifactsRoot: artifacts.root,
+          patchPaths: result.patchPaths,
+          extraArtifactPaths: reportPaths,
+          verificationReport: verification,
+        },
+        eventBus,
+      );
 
       return result;
     }
@@ -1165,16 +1195,19 @@ INSTRUCTIONS:
 
           await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
 
-          await this.writeEpisodicMemory({
-            runId,
-            goal,
-            status: 'failure',
-            stopReason: 'non_improving',
-            artifactsRoot: artifacts.root,
-            patchPaths: result.patchPaths,
-            extraArtifactPaths: reportPaths,
-            verificationReport: verification,
-          });
+          await this.writeEpisodicMemory(
+            {
+              runId,
+              goal,
+              status: 'failure',
+              stopReason: 'non_improving',
+              artifactsRoot: artifacts.root,
+              patchPaths: result.patchPaths,
+              extraArtifactPaths: reportPaths,
+              verificationReport: verification,
+            },
+            eventBus,
+          );
 
           return result;
         }
@@ -1367,16 +1400,19 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
         await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
 
-        await this.writeEpisodicMemory({
-          runId,
-          goal,
-          status: 'success',
-          stopReason: 'success',
-          artifactsRoot: artifacts.root,
-          patchPaths: finalResult.patchPaths,
-          extraArtifactPaths: reportPaths,
-          verificationReport: verification,
-        });
+        await this.writeEpisodicMemory(
+          {
+            runId,
+            goal,
+            status: 'success',
+            stopReason: 'success',
+            artifactsRoot: artifacts.root,
+            patchPaths: finalResult.patchPaths,
+            extraArtifactPaths: reportPaths,
+            verificationReport: verification,
+          },
+          eventBus,
+        );
 
         return finalResult;
       }
@@ -1420,16 +1456,19 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
 
-    await this.writeEpisodicMemory({
-      runId,
-      goal,
-      status: 'failure',
-      stopReason: 'budget_exceeded',
-      artifactsRoot: artifacts.root,
-      patchPaths: finalResult.patchPaths,
-      extraArtifactPaths: reportPaths,
-      verificationReport: verification,
-    });
+    await this.writeEpisodicMemory(
+      {
+        runId,
+        goal,
+        status: 'failure',
+        stopReason: 'budget_exceeded',
+        artifactsRoot: artifacts.root,
+        patchPaths: finalResult.patchPaths,
+        extraArtifactPaths: reportPaths,
+        verificationReport: verification,
+      },
+      eventBus,
+    );
 
     return finalResult;
   }

@@ -8,7 +8,8 @@ describe('MemoryWriter', () => {
   let memoryWriter: MemoryWriter;
 
   beforeEach(() => {
-    memoryWriter = new MemoryWriter();
+    const mockEventBus = { emit: vi.fn() };
+    memoryWriter = new MemoryWriter(mockEventBus, 'test-run');
     memoryWriter.getMemoryStore().clear();
   });
 
@@ -125,7 +126,12 @@ describe('MemoryWriter', () => {
 
   it('should redact secrets from the command', async () => {
     const toolRunMeta: ToolRunMeta = {
-      request: { command: 'pnpm test --secret=supersecret', cwd: '/tmp', reason: 'test' },
+      request: {
+        command:
+          'pnpm test --token=sk-k6zXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+        cwd: '/tmp',
+        reason: 'test',
+      },
       classification: 'test',
       toolRunId: 'run-1',
     };
@@ -138,8 +144,12 @@ describe('MemoryWriter', () => {
     };
     const repoState: RepoState = { gitSha: 'sha-1' };
 
-    const memory = await memoryWriter.extractProcedural(toolRunMeta, toolRunResult, repoState);
-    expect(memory?.content).toBe('pnpm test --REDACTED=superREDACTED');
+    const memory = await memoryWriter.extractProcedural(
+      toolRunMeta,
+      toolRunResult,
+      repoState,
+    );
+    expect(memory?.content).toBe('pnpm test --token=[REDACTED]');
   });
 
   describe('extractEpisodic', () => {

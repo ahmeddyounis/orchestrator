@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import { OrchestratorEvent } from '../types/events';
-import { redact } from './redactor';
+import { redact } from '../redaction';
 
 export interface Logger {
   log(event: OrchestratorEvent): Promise<void>;

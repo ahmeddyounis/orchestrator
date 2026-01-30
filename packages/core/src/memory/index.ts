@@ -7,7 +7,13 @@ import {
   RunSummary,
   ToolRunMeta,
 } from './types';
-import { ToolRunResult } from '@orchestrator/shared';
+import {
+  ToolRunResult,
+  redactString,
+  redactUnknown,
+  OrchestratorEvent,
+} from '@orchestrator/shared';
+import { EventBus } from '../registry';
 import { randomUUID } from 'crypto';
 import { VerificationReport } from '../verify/types';
 import { createMemoryStore } from '@orchestrator/memory';
@@ -36,17 +42,31 @@ const applicableClassifications: ApplicableClassification[] = [
   'format',
 ];
 
-class SecretRedactor {
-  redact(content: string): string {
-    // a basic redactor, in a real scenario, this would be more robust
-    return content.replace(/secret/gi, 'REDACTED');
-  }
-}
+
 
 export class MemoryWriter {
-  private redactor = new SecretRedactor();
+  private eventBus?: EventBus;
+  private runId: string;
 
-  constructor() {}
+  constructor(eventBus?: EventBus, runId = 'unknown') {
+    this.eventBus = eventBus;
+    this.runId = runId;
+  }
+
+  private async logRedactions(count: number, context: string) {
+    if (count > 0 && this.eventBus) {
+      await this.eventBus.emit({
+        type: 'MemoryRedaction',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: this.runId,
+        payload: {
+          count,
+          context,
+        },
+      } as OrchestratorEvent);
+    }
+  }
 
   async extractEpisodic(
     runSummary: RunSummary,
@@ -80,12 +100,31 @@ export class MemoryWriter {
         : undefined,
     };
 
-    let content = JSON.stringify(contentPayload, null, 2);
+    const { redacted: redactedContentPayload, redactionCount: contentRedactions } =
+      redactUnknown(contentPayload);
+    await this.logRedactions(
+      contentRedactions,
+      `episodic memory content for run ${runId}`,
+    );
+
+    let content = JSON.stringify(redactedContentPayload, null, 2);
     if (content.length > MAX_CONTENT_LENGTH) {
       content =
         content.substring(0, MAX_CONTENT_LENGTH) +
         '\n... (truncated due to size limit)';
     }
+
+    const evidence = {
+      artifactPaths: repoState.artifactPaths ?? [],
+      failureSignature: verificationReport?.failureSignature,
+    };
+
+    const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
+      redactUnknown(evidence);
+    await this.logRedactions(
+      evidenceRedactions,
+      `episodic memory evidence for run ${runId}`,
+    );
 
     const newMemory: EpisodicMemory = {
       type: 'episodic',
@@ -93,10 +132,7 @@ export class MemoryWriter {
       title,
       content,
       gitSha: repoState.gitSha,
-      evidence: {
-        artifactPaths: repoState.artifactPaths ?? [],
-        failureSignature: verificationReport?.failureSignature,
-      },
+      evidence: redactedEvidence as EpisodicMemory['evidence'],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -111,7 +147,7 @@ export class MemoryWriter {
         type: 'episodic',
         title: newMemory.title,
         content: newMemory.content,
-        evidenceJson: JSON.stringify(newMemory.evidence),
+        evidenceJson: JSON.stringify(redactedEvidence),
         gitSha: newMemory.gitSha,
         stale: false,
         createdAt: newMemory.createdAt.getTime(),
@@ -139,22 +175,34 @@ export class MemoryWriter {
       return null;
     }
 
-    const normalizedCommand = this.redactor.redact(
-      request.command.trim().replace(/\s+/g, ' '),
+    const { redacted: normalizedCommand, redactionCount: commandRedactions } =
+      redactString(request.command.trim().replace(/\s+/g, ' '));
+    await this.logRedactions(
+      commandRedactions,
+      'procedural memory command',
     );
 
     const existingMemory = [...memoryStore.values()].find(
       (mem) => mem.type === 'procedural' && mem.content === normalizedCommand,
     ) as ProceduralMemory | undefined;
 
+    const evidence = {
+      command: request.command,
+      exitCode,
+      durationMs,
+      toolRunId,
+    };
+
+    const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
+      redactUnknown(evidence);
+    await this.logRedactions(
+      evidenceRedactions,
+      'procedural memory evidence',
+    );
+
     if (existingMemory) {
       existingMemory.updatedAt = new Date();
-      existingMemory.evidence = {
-        command: request.command,
-        exitCode,
-        durationMs,
-        toolRunId,
-      };
+      existingMemory.evidence = redactedEvidence as ProceduralMemory['evidence'];
       existingMemory.gitSha = repoState.gitSha;
       memoryStore.set(existingMemory.id, existingMemory);
       return existingMemory;
@@ -166,12 +214,7 @@ export class MemoryWriter {
       title: this.generateTitle(classification as ApplicableClassification),
       content: normalizedCommand,
       gitSha: repoState.gitSha,
-      evidence: {
-        command: request.command,
-        exitCode,
-        durationMs,
-        toolRunId,
-      },
+      evidence: redactedEvidence as ProceduralMemory['evidence'],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

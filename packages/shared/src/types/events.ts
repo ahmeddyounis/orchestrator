@@ -341,6 +341,14 @@ export interface RunStopped extends BaseEvent {
   };
 }
 
+export interface MemoryRedaction extends BaseEvent {
+  type: 'MemoryRedaction';
+  payload: {
+    count: number;
+    context: string;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -358,6 +366,7 @@ export type OrchestratorEvent =
   | RunFinished
   | RunStopped
   | MemoryWrite
+  | MemoryRedaction
   | ConfirmationRequested
   | ConfirmationResolved
   | ProviderSelected
