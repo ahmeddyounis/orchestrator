@@ -29,14 +29,6 @@ export interface ProceduralMemory {
   updatedAt: Date;
 }
 
-export interface RunSummary {
-  runId: string;
-  goal: string;
-  status: 'success' | 'failure';
-  stopReason: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  decisions?: any[];
-}
 
 export interface PatchStats {
   filesChanged: string[];

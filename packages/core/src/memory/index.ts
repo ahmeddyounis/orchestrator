@@ -4,46 +4,46 @@ import {
   PatchStats,
   ProceduralMemory,
   RepoState,
-  RunSummary,
   ToolRunMeta,
-} from './types';
+} from './types'
 import {
   ToolRunResult,
   redactString,
   redactUnknown,
   OrchestratorEvent,
-} from '@orchestrator/shared';
-import { EventBus } from '../registry';
-import { randomUUID } from 'crypto';
-import { VerificationReport } from '../verify/types';
-import { createMemoryStore } from '@orchestrator/memory';
+  RunSummary,
+} from '@orchestrator/shared'
+import { EventBus } from '../registry'
+import { randomUUID } from 'crypto'
+import { VerificationReport } from '../verify/types'
+import { createMemoryStore } from '@orchestrator/memory'
 
-const memoryStore = new Map<string, Memory>();
+const memoryStore = new Map<string, Memory>()
 
-const MAX_CONTENT_LENGTH = 8 * 1024; // 8KB
+const MAX_CONTENT_LENGTH = 8 * 1024 // 8KB
 
-let sqliteStore: ReturnType<typeof createMemoryStore> | null = null;
-let sqliteInitPath: string | null = null;
+let sqliteStore: ReturnType<typeof createMemoryStore> | null = null
+let sqliteInitPath: string | null = null
 
 function ensureSqliteStore(dbPath: string) {
-  if (sqliteStore && sqliteInitPath === dbPath) return sqliteStore;
-  sqliteStore?.close();
-  sqliteStore = createMemoryStore();
-  sqliteStore.init(dbPath);
-  sqliteInitPath = dbPath;
-  return sqliteStore;
+  if (sqliteStore && sqliteInitPath === dbPath) return sqliteStore
+  sqliteStore?.close()
+  sqliteStore = createMemoryStore()
+  sqliteStore.init(dbPath)
+  sqliteInitPath = dbPath
+  return sqliteStore
 }
 
-type ApplicableClassification = 'test' | 'build' | 'lint' | 'format';
-const applicableClassifications: ApplicableClassification[] = ['test', 'build', 'lint', 'format'];
+type ApplicableClassification = 'test' | 'build' | 'lint' | 'format'
+const applicableClassifications: ApplicableClassification[] = ['test', 'build', 'lint', 'format']
 
 export class MemoryWriter {
-  private eventBus?: EventBus;
-  private runId: string;
+  private eventBus?: EventBus
+  private runId: string
 
   constructor(eventBus?: EventBus, runId = 'unknown') {
-    this.eventBus = eventBus;
-    this.runId = runId;
+    this.eventBus = eventBus
+    this.runId = runId
   }
 
   private async logRedactions(count: number, context: string) {
@@ -57,26 +57,30 @@ export class MemoryWriter {
           count,
           context,
         },
-      } as OrchestratorEvent);
+      } as OrchestratorEvent)
     }
   }
 
   async extractEpisodic(
-    runSummary: RunSummary,
+    runSummary: {
+      runId: string
+      goal: string
+      status: 'success' | 'failure'
+      stopReason: string
+    },
     repoState: RepoState,
     verificationReport?: VerificationReport,
     patchStats?: PatchStats,
   ): Promise<EpisodicMemory> {
-    const { runId, status, goal, stopReason, decisions } = runSummary;
+    const { runId, status, goal, stopReason } = runSummary
     const title = `Run ${runId}: ${status} - ${goal.substring(0, 40)}${
       goal.length > 40 ? '...' : ''
-    }`;
+    }`
 
     const contentPayload = {
       goal,
       status,
       stopReason,
-      decisions,
       verification: verificationReport
         ? {
             passed: verificationReport.passed,
@@ -91,25 +95,25 @@ export class MemoryWriter {
             deletions: patchStats.deletions,
           }
         : undefined,
-    };
+    }
 
     const { redacted: redactedContentPayload, redactionCount: contentRedactions } =
-      redactUnknown(contentPayload);
-    await this.logRedactions(contentRedactions, `episodic memory content for run ${runId}`);
+      redactUnknown(contentPayload)
+    await this.logRedactions(contentRedactions, `episodic memory content for run ${runId}`)
 
-    let content = JSON.stringify(redactedContentPayload, null, 2);
+    let content = JSON.stringify(redactedContentPayload, null, 2)
     if (content.length > MAX_CONTENT_LENGTH) {
-      content = content.substring(0, MAX_CONTENT_LENGTH) + '\n... (truncated due to size limit)';
+      content = content.substring(0, MAX_CONTENT_LENGTH) + '\n... (truncated due to size limit)'
     }
 
     const evidence = {
       artifactPaths: repoState.artifactPaths ?? [],
       failureSignature: verificationReport?.failureSignature,
-    };
+    }
 
     const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
-      redactUnknown(evidence);
-    await this.logRedactions(evidenceRedactions, `episodic memory evidence for run ${runId}`);
+      redactUnknown(evidence)
+    await this.logRedactions(evidenceRedactions, `episodic memory evidence for run ${runId}`)
 
     const newMemory: EpisodicMemory = {
       type: 'episodic',
@@ -120,7 +124,8 @@ export class MemoryWriter {
       evidence: redactedEvidence as EpisodicMemory['evidence'],
       createdAt: new Date(),
       updatedAt: new Date(),
-    };
+    }
+
 
     memoryStore.set(newMemory.id, newMemory);
 

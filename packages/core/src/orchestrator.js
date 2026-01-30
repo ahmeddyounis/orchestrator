@@ -254,7 +254,7 @@ class Orchestrator {
         // De-dupe + relativize.
         return [...new Set(absPaths.map((p) => this.toArtifactRelPath(p)))];
     }
-    async writeEpisodicMemory(args, eventBus) {
+    async writeEpisodicMemory(summary, args, eventBus) {
         if (this.suppressEpisodicMemoryWrite || !this.shouldWriteEpisodicMemory())
             return;
         let gitSha = '';
@@ -268,23 +268,98 @@ class Orchestrator {
             gitSha,
             repoId: this.repoRoot,
             memoryDbPath: this.resolveMemoryDbPath(),
-            artifactPaths: this.collectArtifactPaths(args.runId, args.artifactsRoot, args.patchPaths ?? [], args.extraArtifactPaths ?? []),
-        };
-        const runSummary = {
-            runId: args.runId,
-            goal: args.goal,
-            status: args.status,
-            stopReason: args.stopReason,
+            artifactPaths: this.collectArtifactPaths(summary.runId, args.artifactsRoot, args.patchPaths ?? [], args.extraArtifactPaths ?? []),
         };
         try {
-            const writer = new memory_2.MemoryWriter(eventBus, args.runId);
-            await writer.extractEpisodic(runSummary, repoState, args.verificationReport);
+            const writer = new memory_2.MemoryWriter(eventBus, summary.runId);
+            await writer.extractEpisodic({
+                runId: summary.runId,
+                goal: summary.goal ?? '',
+                status: summary.status,
+                stopReason: summary.stopReason ?? 'unknown',
+            }, repoState, args.verificationReport);
         }
         catch {
             // Non-fatal: don't fail the run if memory persistence fails.
         }
     }
+    async _buildRunSummary(runId, goal, startTime, status, options, runResult, artifacts) {
+        const finishedAt = new Date();
+        const patchStats = runResult.filesChanged
+            ? {
+                filesChanged: runResult.filesChanged.length,
+                linesAdded: 0, // Note: Not easily available, default to 0
+                linesDeleted: 0, // Note: Not easily available, default to 0
+                finalDiffPath: runResult.patchPaths && runResult.patchPaths.length > 0
+                    ? runResult.patchPaths[runResult.patchPaths.length - 1]
+                    : undefined,
+            }
+            : undefined;
+        const costSummary = this.costTracker?.getSummary();
+        return {
+            schemaVersion: 1,
+            runId,
+            command: ['run', goal],
+            goal,
+            repoRoot: this.repoRoot,
+            repoId: this.repoRoot, // Consider a more stable repo ID
+            startedAt: new Date(startTime).toISOString(),
+            finishedAt: finishedAt.toISOString(),
+            durationMs: finishedAt.getTime() - startTime,
+            status,
+            stopReason: runResult.stopReason,
+            thinkLevel: parseInt(options.thinkLevel.slice(1), 10),
+            selectedProviders: {
+                planner: this.config.defaults?.planner || 'default',
+                executor: this.config.defaults?.executor || 'default',
+                reviewer: this.config.defaults?.reviewer,
+            },
+            budgets: {
+                maxIterations: this.config.budget?.iter ?? budget_1.DEFAULT_BUDGET.iter,
+                maxToolRuns: 999, // Not yet implemented
+                maxWallTimeMs: this.config.budget?.time ?? budget_1.DEFAULT_BUDGET.time,
+                maxCostUsd: this.config.budget?.cost,
+            },
+            patchStats,
+            verification: runResult.verification
+                ? {
+                    enabled: runResult.verification.enabled,
+                    passed: runResult.verification.passed,
+                    failedChecks: runResult.verification.failedChecks?.length,
+                    reportPaths: runResult.verification.reportPaths,
+                }
+                : undefined,
+            tools: {
+                enabled: this.toolPolicy !== undefined,
+                runs: [], // Not yet implemented
+            },
+            memory: {
+                enabled: this.config.memory?.enabled ?? false,
+                // Deferring detailed stats for now
+            },
+            indexing: {
+                enabled: this.config.indexing?.enabled ?? false,
+                autoUpdated: false, // Deferring detailed stats for now
+            },
+            costs: {
+                perProvider: costSummary?.perProvider || {},
+                totals: {
+                    promptTokens: costSummary?.total.promptTokens || 0,
+                    completionTokens: costSummary?.total.completionTokens || 0,
+                    cost: costSummary?.total.estimatedCostUsd || 0,
+                },
+            },
+            artifacts: {
+                manifestPath: artifacts.manifest,
+                tracePath: artifacts.trace,
+                patchPaths: runResult.patchPaths,
+                contextPaths: [], // Not yet implemented
+                toolLogPaths: [], // Not yet implemented
+            },
+        };
+    }
     async runL0(goal, runId) {
+        const startTime = Date.now();
         // 1. Setup Artifacts
         const artifacts = await (0, shared_1.createRunDir)(this.repoRoot, runId);
         loader_1.ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
@@ -408,7 +483,7 @@ END_DIFF
                 runId,
                 payload: { status: 'failure', summary: msg },
             });
-            const result = {
+            const runResult = {
                 status: 'failure',
                 runId,
                 summary: msg,
@@ -419,7 +494,8 @@ END_DIFF
                     summary: 'Not run',
                 },
             };
-            await promises_1.default.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+            const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L0' }, runResult, artifacts);
+            await shared_1.SummaryWriter.write(summary, artifacts.root);
             // Write manifest before returning
             await (0, shared_1.writeManifest)(artifacts.manifest, {
                 runId,
@@ -433,11 +509,7 @@ END_DIFF
                 patchPaths: [],
                 toolLogPaths: [],
             });
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status: 'failure',
-                stopReason: 'invalid_output',
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
             }, { emit: emitEvent });
             return { status: 'failure', runId, summary: msg };
@@ -545,7 +617,8 @@ END_DIFF
                 },
             };
         }
-        await promises_1.default.writeFile(artifacts.summary, JSON.stringify(runResult, null, 2));
+        const summary = await this._buildRunSummary(runId, goal, startTime, runResult.status, { thinkLevel: 'L0' }, runResult, artifacts);
+        await shared_1.SummaryWriter.write(summary, artifacts.root);
         // Write manifest
         await (0, shared_1.writeManifest)(artifacts.manifest, {
             runId,
@@ -559,17 +632,14 @@ END_DIFF
             patchPaths: [patchPath],
             toolLogPaths: [],
         });
-        await this.writeEpisodicMemory({
-            runId,
-            goal,
-            status: runResult.status,
-            stopReason: runResult.status === 'success' ? 'success' : 'error',
+        await this.writeEpisodicMemory(summary, {
             artifactsRoot: artifacts.root,
             patchPaths: runResult.patchPaths,
         }, { emit: emitEvent });
         return runResult;
     }
     async runL1(goal, runId) {
+        const startTime = Date.now();
         const artifacts = await (0, shared_1.createRunDir)(this.repoRoot, runId);
         loader_1.ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
         const logger = new shared_1.JsonlLogger(artifacts.trace);
@@ -617,7 +687,7 @@ END_DIFF
                 runId,
                 payload: { status: 'failure', summary: msg },
             });
-            const result = {
+            const runResult = {
                 status: 'failure',
                 runId,
                 summary: msg,
@@ -628,19 +698,15 @@ END_DIFF
                     summary: 'Not run',
                 },
             };
-            await promises_1.default.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status: 'failure',
-                stopReason: 'error',
+            const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L1' }, runResult, artifacts);
+            await shared_1.SummaryWriter.write(summary, artifacts.root);
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
             }, eventBus);
-            return result;
+            return runResult;
         }
         const executionService = new service_2.ExecutionService(eventBus, this.git, new repo_1.PatchApplier(), runId, this.repoRoot, this.config);
         // Budget & Loop State
-        const startTime = Date.now();
         const budget = { ...budget_1.DEFAULT_BUDGET, ...this.config.budget };
         let stepsCompleted = 0;
         const patchPaths = [];
@@ -649,14 +715,14 @@ END_DIFF
         let consecutiveInvalidDiffs = 0;
         let consecutiveApplyFailures = 0;
         let lastApplyErrorHash = '';
-        const finish = async (status, stopReason, summary) => {
+        const finish = async (status, stopReason, summaryMsg) => {
             if (stopReason) {
                 await eventBus.emit({
                     type: 'RunStopped',
                     schemaVersion: 1,
                     timestamp: new Date().toISOString(),
                     runId,
-                    payload: { reason: stopReason, details: summary },
+                    payload: { reason: stopReason, details: summaryMsg },
                 });
             }
             await eventBus.emit({
@@ -664,7 +730,7 @@ END_DIFF
                 schemaVersion: 1,
                 timestamp: new Date().toISOString(),
                 runId,
-                payload: { status, summary },
+                payload: { status, summary: summaryMsg },
             });
             await (0, shared_1.writeManifest)(artifacts.manifest, {
                 runId,
@@ -679,10 +745,10 @@ END_DIFF
                 contextPaths,
                 toolLogPaths: [],
             });
-            const result = {
+            const runResult = {
                 status,
                 runId,
-                summary,
+                summary: summaryMsg,
                 filesChanged: Array.from(touchedFiles),
                 patchPaths,
                 stopReason,
@@ -693,7 +759,8 @@ END_DIFF
                     summary: 'Not run',
                 },
             };
-            await promises_1.default.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+            const summary = await this._buildRunSummary(runId, goal, startTime, status, { thinkLevel: 'L1' }, runResult, artifacts);
+            await shared_1.SummaryWriter.write(summary, artifacts.root);
             await (0, shared_1.writeManifest)(artifacts.manifest, {
                 runId,
                 startedAt: new Date().toISOString(),
@@ -707,16 +774,12 @@ END_DIFF
                 contextPaths,
                 toolLogPaths: [],
             });
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status,
-                stopReason: stopReason ?? 'success',
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
                 patchPaths,
                 extraArtifactPaths: contextPaths,
             }, eventBus);
-            return result;
+            return runResult;
         };
         for (const step of steps) {
             // 1. Budget Checks
@@ -966,6 +1029,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         }
     }
     async runL2(goal, runId) {
+        const startTime = Date.now();
         // 1. Initial Plan & Execute (L1)
         this.suppressEpisodicMemoryWrite = true;
         let l1Result;
@@ -981,11 +1045,8 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
             const eventBus = {
                 emit: async (e) => await logger.log(e),
             };
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status: l1Result.status,
-                stopReason: l1Result.stopReason ?? 'budget_exceeded',
+            const summary = await this._buildRunSummary(runId, goal, startTime, l1Result.status, { thinkLevel: 'L2' }, l1Result, artifacts);
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
                 patchPaths: l1Result.patchPaths,
             }, eventBus);
@@ -998,11 +1059,8 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
             const eventBus = {
                 emit: async (e) => await logger.log(e),
             };
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status: l1Result.status,
-                stopReason: l1Result.stopReason ?? 'success',
+            const summary = await this._buildRunSummary(runId, goal, startTime, l1Result.status, { thinkLevel: 'L2' }, l1Result, artifacts);
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
                 patchPaths: l1Result.patchPaths,
             }, eventBus);
@@ -1045,7 +1103,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
                 runId,
                 payload: { status: 'success', summary: 'L2 Verified Success' },
             });
-            const result = {
+            const runResult = {
                 ...l1Result,
                 status: 'success',
                 summary: 'L2 Verified Success',
@@ -1057,18 +1115,15 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
                     reportPaths,
                 },
             };
-            await promises_1.default.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
-            await this.writeEpisodicMemory({
-                runId,
-                goal,
-                status: 'success',
-                stopReason: 'success',
+            const summary = await this._buildRunSummary(runId, goal, startTime, 'success', { thinkLevel: 'L2' }, runResult, artifacts);
+            await shared_1.SummaryWriter.write(summary, artifacts.root);
+            await this.writeEpisodicMemory(summary, {
                 artifactsRoot: artifacts.root,
-                patchPaths: result.patchPaths,
+                patchPaths: runResult.patchPaths,
                 extraArtifactPaths: reportPaths,
                 verificationReport: verification,
             }, eventBus);
-            return result;
+            return runResult;
         }
         // 4. Repair Loop
         const maxIterations = 5;
@@ -1103,7 +1158,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
                             details: 'Verification failure signature unchanged for 2 iterations',
                         },
                     });
-                    const result = {
+                    const runResult = {
                         ...l1Result,
                         status: 'failure',
                         stopReason: 'non_improving',
@@ -1120,18 +1175,15 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
                         },
                         lastFailureSignature: verification.failureSignature,
                     };
-                    await promises_1.default.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
-                    await this.writeEpisodicMemory({
-                        runId,
-                        goal,
-                        status: 'failure',
-                        stopReason: 'non_improving',
+                    const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L2' }, runResult, artifacts);
+                    await shared_1.SummaryWriter.write(summary, artifacts.root);
+                    await this.writeEpisodicMemory(summary, {
                         artifactsRoot: artifacts.root,
-                        patchPaths: result.patchPaths,
+                        patchPaths: runResult.patchPaths,
                         extraArtifactPaths: reportPaths,
                         verificationReport: verification,
                     }, eventBus);
-                    return result;
+                    return runResult;
                 }
             }
             else {
@@ -1298,7 +1350,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
                     },
                 });
                 // Save Summary
-                const finalResult = {
+                const runResult = {
                     status: 'success',
                     runId,
                     summary: `L2 Verified Success after ${iterations} iterations`,
@@ -1312,18 +1364,15 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
                         reportPaths,
                     },
                 };
-                await promises_1.default.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
-                await this.writeEpisodicMemory({
-                    runId,
-                    goal,
-                    status: 'success',
-                    stopReason: 'success',
+                const summary = await this._buildRunSummary(runId, goal, startTime, 'success', { thinkLevel: 'L2' }, runResult, artifacts);
+                await shared_1.SummaryWriter.write(summary, artifacts.root);
+                await this.writeEpisodicMemory(summary, {
                     artifactsRoot: artifacts.root,
-                    patchPaths: finalResult.patchPaths,
+                    patchPaths: runResult.patchPaths,
                     extraArtifactPaths: reportPaths,
                     verificationReport: verification,
                 }, eventBus);
-                return finalResult;
+                return runResult;
             }
             await eventBus.emit({
                 type: 'IterationFinished',
@@ -1342,7 +1391,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             runId,
             payload: { status: 'failure', summary: failureSummary },
         });
-        const finalResult = {
+        const runResult = {
             status: 'failure',
             runId,
             summary: failureSummary,
@@ -1359,18 +1408,15 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             },
             lastFailureSignature: verification.failureSignature,
         };
-        await promises_1.default.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
-        await this.writeEpisodicMemory({
-            runId,
-            goal,
-            status: 'failure',
-            stopReason: 'budget_exceeded',
+        const summary = await this._buildRunSummary(runId, goal, startTime, 'failure', { thinkLevel: 'L2' }, runResult, artifacts);
+        await shared_1.SummaryWriter.write(summary, artifacts.root);
+        await this.writeEpisodicMemory(summary, {
             artifactsRoot: artifacts.root,
-            patchPaths: finalResult.patchPaths,
+            patchPaths: runResult.patchPaths,
             extraArtifactPaths: reportPaths,
             verificationReport: verification,
         }, eventBus);
-        return finalResult;
+        return runResult;
     }
 }
 exports.Orchestrator = Orchestrator;

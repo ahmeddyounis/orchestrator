@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { TraceWriter } from './trace-writer';
-import { TraceEvent } from './types';
+import { SpanEndEvent, SpanStartEvent, TraceEvent } from './types';
 
 describe('TraceWriter', () => {
   let tempDir: string;
@@ -63,18 +63,20 @@ describe('TraceWriter', () => {
 
     // Validate Start Event
     expect(startEvent.eventType).toBe('span.start');
-    expect(startEvent.payload.spanId).toBe(spanId);
-    expect(startEvent.payload.name).toBe('my-span');
-    expect(startEvent.payload.attrs).toEqual({ attr1: 'value1' });
+    const startPayload = startEvent.payload as SpanStartEvent;
+    expect(startPayload.spanId).toBe(spanId);
+    expect(startPayload.name).toBe('my-span');
+    expect(startPayload.attrs).toEqual({ attr1: 'value1' });
     expect(startEvent.ts).toBe(new Date(2024, 1, 1, 10, 0, 0).getTime());
 
     // Validate End Event
     expect(endEvent.eventType).toBe('span.end');
-    expect(endEvent.payload.spanId).toBe(spanId);
-    expect(endEvent.payload.name).toBe('my-span');
-    expect(endEvent.payload.status).toBe('ok');
-    expect(endEvent.payload.durationMs).toBe(100);
-    expect(endEvent.payload.attrs).toEqual({ attr2: 'value2' });
+    const endPayload = endEvent.payload as SpanEndEvent;
+    expect(endPayload.spanId).toBe(spanId);
+    expect(endPayload.name).toBe('my-span');
+    expect(endPayload.status).toBe('ok');
+    expect(endPayload.durationMs).toBe(100);
+    expect(endPayload.attrs).toEqual({ attr2: 'value2' });
     expect(endEvent.ts).toBe(new Date(2024, 1, 1, 10, 0, 0, 100).getTime());
   });
 
@@ -88,8 +90,9 @@ describe('TraceWriter', () => {
     expect(events).toHaveLength(4);
     const childStartEvent = events[1];
     expect(childStartEvent.eventType).toBe('span.start');
-    expect(childStartEvent.payload.name).toBe('child');
-    expect(childStartEvent.payload.parentSpanId).toBe(parentId);
+    const childStartPayload = childStartEvent.payload as SpanStartEvent;
+    expect(childStartPayload.name).toBe('child');
+    expect(childStartPayload.parentSpanId).toBe(parentId);
   });
 
   it('should warn when ending a non-existent span', async () => {

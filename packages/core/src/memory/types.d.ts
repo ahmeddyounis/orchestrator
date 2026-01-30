@@ -25,13 +25,6 @@ export interface ProceduralMemory {
     createdAt: Date;
     updatedAt: Date;
 }
-export interface RunSummary {
-    runId: string;
-    goal: string;
-    status: 'success' | 'failure';
-    stopReason: string;
-    decisions?: any[];
-}
 export interface PatchStats {
     filesChanged: string[];
     insertions: number;

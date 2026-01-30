@@ -54,13 +54,12 @@ class MemoryWriter {
         }
     }
     async extractEpisodic(runSummary, repoState, verificationReport, patchStats) {
-        const { runId, status, goal, stopReason, decisions } = runSummary;
+        const { runId, status, goal, stopReason } = runSummary;
         const title = `Run ${runId}: ${status} - ${goal.substring(0, 40)}${goal.length > 40 ? '...' : ''}`;
         const contentPayload = {
             goal,
             status,
             stopReason,
-            decisions,
             verification: verificationReport
                 ? {
                     passed: verificationReport.passed,

@@ -51,6 +51,7 @@ export declare class Orchestrator {
     private toArtifactRelPath;
     private collectArtifactPaths;
     private writeEpisodicMemory;
+    private _buildRunSummary;
     runL0(goal: string, runId: string): Promise<RunResult>;
     runL1(goal: string, runId: string): Promise<RunResult>;
     private searchMemoryHits;

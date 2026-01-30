@@ -437,3 +437,8 @@ export type OrchestratorEvent =
   | IterationStarted
   | IterationFinished
   | RepairAttempted;
+
+export interface EventWriter {
+  write(event: OrchestratorEvent): void;
+  close(): Promise<void>;
+}

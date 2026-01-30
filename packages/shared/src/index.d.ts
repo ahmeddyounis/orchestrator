@@ -10,6 +10,7 @@ export * from './types/llm';
 export * from './types/patch';
 export * from './types/tools';
 export * from './types/config';
+export * from './summary/summary';
 export * from './observability';
 export * from './config/schema';
 //# sourceMappingURL=index.d.ts.map

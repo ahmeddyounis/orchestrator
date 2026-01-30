@@ -346,19 +346,8 @@ export interface IndexAutoUpdateFinished extends BaseEvent {
     };
 }
 export type OrchestratorEvent = RunStarted | PlanRequested | PlanCreated | ContextBuilt | QueriesBuilt | PatchProposed | PatchApplied | ToolRun | ToolRunRequested | ToolRunApproved | ToolRunDenied | ToolRunStarted | ToolRunFinished | VerifyResult | RunFinished | RunStopped | MemoryWrite | MemoryRedaction | MemorySearched | MemoryStalenessReconciled | IndexAutoUpdateStarted | IndexAutoUpdateFinished | ConfirmationRequested | ConfirmationResolved | ProviderSelected | ProviderRequestStarted | ProviderRequestFinished | SubprocessSpawned | SubprocessOutputChunked | SubprocessExited | SubprocessParsed | RepoScan | RepoSearch | CheckpointCreated | PatchApplyFailed | RollbackPerformed | ToolchainDetected | StepStarted | StepFinished | VerificationStarted | VerificationFinished | IterationStarted | IterationFinished | RepairAttempted;
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export interface EventWriter {
     write(event: OrchestratorEvent): void;
-}
-export interface EventBus {
-    emit(event: OrchestratorEvent): Promise<void>;
-}
-export interface ObservabilityContext {
-    readonly runId: string;
-    readonly runDir: string;
-    readonly traceWriter: EventWriter;
-    readonly logLevel: LogLevel;
-    readonly redactFn: (content: string) => string;
-    readonly spanStack?: string[];
+    close(): Promise<void>;
 }
 //# sourceMappingURL=events.d.ts.map
