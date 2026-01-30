@@ -79,6 +79,19 @@ vi.mock('./exec/service', () => {
   };
 });
 
+vi.mock('@orchestrator/memory', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@orchestrator/memory')>();
+  const mockStore = {
+    init: vi.fn(),
+    search: vi.fn().mockReturnValue([]),
+    close: vi.fn(),
+  };
+  return {
+    ...actual,
+    createMemoryStore: vi.fn(() => mockStore),
+  };
+});
+
 describe('Orchestrator', () => {
   let orchestrator: Orchestrator;
   const mockGit = {};
@@ -287,5 +300,77 @@ describe('Orchestrator', () => {
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('repeated_failure');
     expect(result.summary).toContain('Repeated patch apply failure');
+  });
+
+  it('should include memory hits in L1 prompt', async () => {
+    const { createMemoryStore } = await import('@orchestrator/memory');
+    const mockMemoryStore = {
+      init: vi.fn(),
+      search: vi.fn().mockReturnValue([
+        {
+          id: 'mem1',
+          type: 'procedural',
+          title: 'How to do X',
+          content: 'Run command Y',
+        },
+      ]),
+      close: vi.fn(),
+    };
+    (createMemoryStore as ReturnType<typeof vi.fn>).mockReturnValue(mockMemoryStore);
+
+    const memConfig: Config['memory'] = {
+      enabled: true,
+      retrieval: {
+        topK: 5,
+        mode: 'lexical',
+        staleDownrank: true,
+      },
+      maxChars: 2000,
+      storage: {
+        path: '/test/repo/.orchestrator/memory.sqlite',
+        backend: 'sqlite',
+        encryptAtRest: false,
+      },
+      scope: 'repo',
+      writePolicy: {
+        enabled: false,
+        storeEpisodes: false,
+        storeProcedures: false,
+        requireEvidence: true,
+        redactSecrets: true,
+      },
+    };
+
+    orchestrator = new Orchestrator({
+      config: { ...config, memory: memConfig },
+      git: mockGit as unknown as GitService,
+      registry: mockRegistry as unknown as ProviderRegistry,
+      repoRoot,
+    });
+    
+    const executorGenerate = vi.fn().mockResolvedValue({ text: 'BEGIN_DIFF\ndiff...\nEND_DIFF' });
+    mockRegistry.resolveRoleProviders.mockResolvedValue({
+      planner: { generate: vi.fn() },
+      executor: { generate: executorGenerate },
+      reviewer: {},
+    });
+
+    await orchestrator.runL1('goal that matches memory', runId);
+
+    expect(mockMemoryStore.search).toHaveBeenCalledWith(
+      repoRoot,
+      'goal that matches memory step 1',
+      5,
+    );
+
+    const systemPrompt = executorGenerate.mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain('MEMORY (verified facts):');
+    expect(systemPrompt).toContain('- procedural: How to do X');
+    expect(systemPrompt).toContain('Content: Run command Y');
+    
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      '/tmp/run/memory_hits_step_0.json',
+      expect.any(String),
+    );
   });
 });

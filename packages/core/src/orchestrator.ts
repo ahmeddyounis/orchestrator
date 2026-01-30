@@ -14,6 +14,7 @@ import {
   SimpleContextPacker,
   SnippetExtractor,
 } from '@orchestrator/repo';
+import { createMemoryStore } from '@orchestrator/memory';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -825,7 +826,23 @@ END_DIFF
         // Ignore context errors
       }
 
+      // Memory Search
+      const memoryContext = await this.searchMemory(
+        {
+          goal,
+          step,
+          runId,
+          stepId: stepsCompleted,
+          artifactsRoot: artifacts.root,
+        },
+        eventBus,
+      );
+
       let contextText = `Goal: ${goal}\nCurrent Step: ${step}\n`;
+      if (memoryContext) {
+        contextText += memoryContext;
+      }
+      
       if (contextPack) {
         const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
         const packFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.json`;
@@ -999,6 +1016,80 @@ INSTRUCTIONS:
     }
 
     return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
+  }
+
+  private async searchMemory(
+    args: {
+      goal: string;
+      step: string;
+      runId: string;
+      stepId: number;
+      artifactsRoot: string;
+    },
+    eventBus: EventBus,
+  ): Promise<string> {
+    const memConfig = this.config.memory;
+    if (!memConfig?.enabled) {
+      return '';
+    }
+
+    const dbPath = this.resolveMemoryDbPath();
+    if (!dbPath) {
+      return '';
+    }
+
+    const store = createMemoryStore();
+    try {
+      store.init(dbPath);
+
+      const query = `${args.goal} ${args.step}`;
+      const topK = memConfig.retrieval.topK ?? 5;
+      const hits = store.search(this.repoRoot, query, topK);
+
+      await eventBus.emit({
+        type: 'MemorySearched',
+        schemaVersion: 1,
+        runId: args.runId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          query,
+          topK,
+          hitsCount: hits.length,
+        },
+      });
+
+      if (hits.length === 0) {
+        return '';
+      }
+
+      const artifactPath = path.join(
+        args.artifactsRoot,
+        `memory_hits_step_${args.stepId}.json`,
+      );
+      await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2));
+
+      let memoryContext = '\nMEMORY (verified facts):\n';
+      const maxChars = memConfig.maxChars ?? 2000;
+      let totalChars = 0;
+
+      for (const hit of hits) {
+        const content = `- ${hit.type}: ${hit.title}\n  Content: ${hit.content}\n`;
+        if (totalChars + content.length > maxChars) {
+          memoryContext += '... (truncated)\n';
+          break;
+        }
+        memoryContext += content;
+        totalChars += content.length;
+      }
+
+      return memoryContext;
+    } catch (err) {
+      // Log but don't fail
+      console.error('Memory search failed:', err);
+      return '';
+    } finally {
+      store.close();
+    }
   }
 
   async runL2(goal: string, runId: string): Promise<RunResult> {

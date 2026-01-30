@@ -349,6 +349,15 @@ export interface MemoryRedaction extends BaseEvent {
   };
 }
 
+export interface MemorySearched extends BaseEvent {
+  type: 'MemorySearched';
+  payload: {
+    query: string;
+    topK: number;
+    hitsCount: number;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -367,6 +376,7 @@ export type OrchestratorEvent =
   | RunStopped
   | MemoryWrite
   | MemoryRedaction
+  | MemorySearched
   | ConfirmationRequested
   | ConfirmationResolved
   | ProviderSelected

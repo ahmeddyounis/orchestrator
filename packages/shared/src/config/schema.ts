@@ -59,6 +59,7 @@ export const MemoryConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
     scope: z.enum(['repo']).default('repo'),
+    maxChars: z.number().default(4000),
     storage: z
       .object({
         backend: z.enum(['sqlite']).default('sqlite'),
