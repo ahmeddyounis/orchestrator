@@ -1,0 +1,1 @@
+{"version":3,"file":"summarizer.d.ts","sourceRoot":"","sources":["summarizer.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,WAAW,EAAsB,cAAc,EAAE,MAAM,SAAS,CAAC;AAE1E,qBAAa,iBAAiB;IACtB,SAAS,CAAC,MAAM,EAAE,WAAW,EAAE,GAAG,OAAO,CAAC,cAAc,CAAC;YA+BjD,cAAc;IAuB5B,OAAO,CAAC,gBAAgB;IAqCxB,OAAO,CAAC,YAAY;CAsBrB"}
