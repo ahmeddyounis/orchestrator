@@ -102,7 +102,7 @@ budgets:
 
 Control how the agent interacts with the local environment, including tool execution and git state.
 
-```yaml
+````yaml
 execution:
   # Whether to allow running when the git working tree is dirty
   allowDirtyWorkingTree: false # Default: false
@@ -148,4 +148,21 @@ execution:
 
     # Maximum size of stdout/stderr output to capture in bytes.
     maxOutputBytes: 1048576 # Default: 1MB
+
+## Memory Configuration
+
+The memory system allows the agent to retain knowledge between runs. See the [Memory Docs](memory.md) for a full overview.
+
+```yaml
+memory:
+  # Master switch for the memory feature.
+  # Set to true to allow the agent to remember past interactions.
+  enabled: true # Default: false
+
+  # (Future) Assign a specific provider for memory-related summarization tasks.
+  # provider: 'openai-gpt4'
+````
+
+```
+
 ```
