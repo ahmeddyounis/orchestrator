@@ -193,6 +193,9 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
     devDependencies:
+      '@orchestrator/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0

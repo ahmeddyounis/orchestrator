@@ -98,10 +98,15 @@ describe('getIndexStatus', () => {
 
     expect(status.isIndexed).toBe(true);
     expect(status.drift).toEqual({
+      hasDrift: false,
       changedCount: 0,
       addedCount: 0,
       removedCount: 0,
-      topChangedPaths: [],
+      changes: {
+        added: [],
+        removed: [],
+        modified: [],
+      },
     });
     expect(status.fileCount).toBe(2);
     expect(status.hashedCount).toBe(2);
@@ -134,7 +139,7 @@ describe('getIndexStatus', () => {
     const status = await getIndexStatus(baseConfig);
 
     expect(status.drift?.changedCount).toBe(1);
-    expect(status.drift?.topChangedPaths).toEqual(['file1.ts']);
+    expect(status.drift?.changes.modified).toEqual(['file1.ts']);
   });
 
   it('should detect added files', async () => {
@@ -244,10 +249,15 @@ describe('getIndexStatus', () => {
     const status = await getIndexStatus(baseConfig);
 
     expect(status.drift).toEqual({
+      hasDrift: true,
       changedCount: 1,
       addedCount: 1,
       removedCount: 1,
-      topChangedPaths: ['file1.ts'],
+      changes: {
+        added: ['file-added.ts'],
+        removed: ['file-to-remove.ts'],
+        modified: ['file1.ts'],
+      },
     });
   });
 });

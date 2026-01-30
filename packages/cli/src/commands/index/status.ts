@@ -54,9 +54,9 @@ export function registerIndexStatusCommand(parent: Command) {
           colAligns: ['right', 'left'],
         });
 
-        if (status.drift.topChangedPaths.length > 0) {
+        if (status.drift.changes.modified.length > 0) {
           console.log("\nTop changed paths:");
-          status.drift.topChangedPaths.forEach((p) => console.log(`- ${p}`));
+          status.drift.changes.modified.forEach((p) => console.log(`- ${p}`));
         }
 
         const totalDrift =

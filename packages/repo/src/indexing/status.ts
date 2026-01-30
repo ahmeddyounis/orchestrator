@@ -4,11 +4,17 @@ import { loadIndex as loadIndexFile } from './store';
 import { RepoScanner } from '../scanner';
 import path from 'path';
 
+
 export interface IndexDrift {
+  hasDrift: boolean;
   changedCount: number;
   addedCount: number;
   removedCount: number;
-  topChangedPaths: string[];
+  changes: {
+    added: string[];
+    removed: string[];
+    modified: string[];
+  };
 }
 
 export interface IndexStatus {
@@ -28,26 +34,23 @@ function loadIndex(config: OrchestratorConfig): Index | null {
   return loadIndexFile(indexPath) as unknown as Index | null;
 }
 
-export async function getIndexStatus(
-  config: OrchestratorConfig,
-): Promise<IndexStatus> {
-  const index = loadIndex(config);
-  if (!index) {
-    return { isIndexed: false };
-  }
-
+export async function checkDrift(
+  index: Index,
+  ignore?: string[],
+): Promise<IndexDrift> {
   const scanner = new RepoScanner();
-  const snapshot = await scanner.scan(config.rootDir, {
-    excludes: config.indexing?.ignore,
+  const snapshot = await scanner.scan(index.repoRoot, {
+    excludes: ignore,
   });
 
   const indexedFiles = new Map(index.files.map((f: IndexFile) => [f.path, f]));
   const physicalFiles = new Map(snapshot.files.map((f) => [f.path, f]));
 
-  let changedCount = 0;
-  let addedCount = 0;
-  let removedCount = 0;
-  const topChangedPaths: string[] = [];
+  const changes = {
+    added: [] as string[],
+    removed: [] as string[],
+    modified: [] as string[],
+  };
 
   for (const [path, indexedFile] of indexedFiles.entries()) {
     const physicalFile = physicalFiles.get(path);
@@ -56,28 +59,42 @@ export async function getIndexStatus(
         indexedFile.mtimeMs !== physicalFile.mtimeMs ||
         indexedFile.sizeBytes !== physicalFile.sizeBytes
       ) {
-        changedCount++;
-        if (topChangedPaths.length < 10) {
-          topChangedPaths.push(path);
-        }
+        changes.modified.push(path);
       }
     } else {
-      removedCount++;
+      changes.removed.push(path);
     }
   }
 
   for (const path of physicalFiles.keys()) {
     if (!indexedFiles.has(path)) {
-      addedCount++;
+      changes.added.push(path);
     }
   }
 
-  const drift: IndexDrift = {
+  const changedCount = changes.modified.length;
+  const addedCount = changes.added.length;
+  const removedCount = changes.removed.length;
+  const hasDrift = changedCount > 0 || addedCount > 0 || removedCount > 0;
+
+  return {
+    hasDrift,
     changedCount,
     addedCount,
     removedCount,
-    topChangedPaths,
+    changes,
   };
+}
+
+export async function getIndexStatus(
+  config: OrchestratorConfig,
+): Promise<IndexStatus> {
+  const index = loadIndex(config);
+  if (!index) {
+    return { isIndexed: false };
+  }
+
+  const drift = await checkDrift(index, config.indexing?.ignore);
 
   return {
     isIndexed: true,
@@ -89,5 +106,3 @@ export async function getIndexStatus(
     drift,
   };
 }
-
-

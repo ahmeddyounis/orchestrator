@@ -308,3 +308,24 @@ Echo: hello world
 > found
 > 
 
+Echo CLI Started
+> hello world
+Echo: hello world
+> Echo CLI Started
+> hello world
+Echo: hello world
+> found
+> 
+
+Echo CLI Started
+> hello world
+Echo: hello world
+> found
+> 
+
+Echo CLI Started
+> hello world
+Echo: hello world
+> found
+> 
+

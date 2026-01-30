@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { IndexUpdater, IndexNotFoundError } from './updater';
 import { IndexFile, saveIndexAtomic, loadIndex } from './store';
 import { RepoScanner, RepoFileMeta } from '../scanner';
 import { hashFile } from './hasher';
 import path from 'node:path';
-import fs from 'node:fs';
 
 // Mock dependencies
 vi.mock('./store', async () => {
@@ -209,4 +208,6 @@ describe('IndexUpdater', () => {
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
     expect(savedIndex.files).toEqual(baseIndex.files);
   });
+
+  
 });

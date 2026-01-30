@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { IndexBuilder } from './builder';
+import { checkDrift } from './status';
 import { vol, fs } from 'memfs';
+import * as nodePath from 'path';
+import * as nodeFs from 'fs';
 
 describe('IndexBuilder', () => {
   const repoRoot = '/test-repo';
@@ -68,5 +71,17 @@ describe('IndexBuilder', () => {
       expect(indexTs.sha256).toBeUndefined();
     }
     expect(index.stats.hashedCount).toBe(0); // All files are larger than 10 bytes
+  });
+
+  it('should build and check drift on a real file system fixture', async () => {
+    const fixturePath = nodePath.resolve(__dirname, '../__fixtures__/ts-monorepo-index');
+    const builder = new IndexBuilder(); // Uses real fs by default
+    const index = await builder.build(fixturePath);
+
+    expect(index.repoRoot).toBe(fixturePath);
+    expect(index.files).toHaveLength(3);
+    
+    const drift = await checkDrift(index);
+    expect(drift.hasDrift).toBe(false);
   });
 });
