@@ -19,6 +19,8 @@ const baseConfig: OrchestratorConfig = {
     hashAlgorithm: 'sha256',
     maxFileSizeBytes: 2000000,
     ignore: [],
+    autoUpdateOnRun: true,
+    maxAutoUpdateFiles: 5000,
   },
 };
 

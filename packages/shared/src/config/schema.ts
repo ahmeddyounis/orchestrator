@@ -7,6 +7,8 @@ export const IndexingConfigSchema = z.object({
   hashAlgorithm: z.enum(['sha256']).default('sha256'),
   maxFileSizeBytes: z.number().default(2_000_000),
   ignore: z.array(z.string()).optional(),
+  autoUpdateOnRun: z.boolean().default(true),
+  maxAutoUpdateFiles: z.number().default(5000),
 });
 
 export const ProviderConfigSchema = z

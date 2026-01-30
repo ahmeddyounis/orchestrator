@@ -62,8 +62,7 @@ export function registerIndexBuildCommand(parent: Command) {
             runId,
             timestamp: new Date().toISOString(),
             payload: {
-              markedStale: markedStaleCount,
-              clearedStale: clearedStaleCount,
+              details: `Marked ${markedStaleCount} entries as stale, cleared ${clearedStaleCount}.`,
             },
           });
         } catch {

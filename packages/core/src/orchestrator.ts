@@ -14,6 +14,8 @@ import {
   PatchApplier,
   SimpleContextPacker,
   SnippetExtractor,
+  getIndexStatus,
+  IndexUpdater,
 } from '@orchestrator/repo';
 import { MemoryEntry, createMemoryStore } from '@orchestrator/memory';
 import { RetrievalIntent } from '@orchestrator/shared';
@@ -98,12 +100,98 @@ export class Orchestrator {
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
     const runId = options.runId || Date.now().toString();
+
+    // L1+ features below
+    if (options.thinkLevel !== 'L0') {
+      const artifacts = await createRunDir(this.repoRoot, runId);
+      const logger = new JsonlLogger(artifacts.trace);
+      const eventBus: EventBus = {
+        emit: async (e) => await logger.log(e),
+      };
+      await this.autoUpdateIndex(eventBus, runId);
+    }
+
     if (options.thinkLevel === 'L0') {
       return this.runL0(goal, runId);
     } else if (options.thinkLevel === 'L2') {
       return this.runL2(goal, runId);
     } else {
       return this.runL1(goal, runId);
+    }
+  }
+
+  private async autoUpdateIndex(eventBus: EventBus, runId: string): Promise<void> {
+    const cfg = this.config.indexing;
+    if (!this.config.memory?.enabled || !cfg?.enabled || !cfg.autoUpdateOnRun) {
+      return;
+    }
+
+    try {
+      const orchestratorConfig = {
+        ...this.config,
+        rootDir: this.repoRoot,
+        orchestratorDir: path.join(this.repoRoot, '.orchestrator'),
+      };
+      const status = await getIndexStatus(orchestratorConfig);
+
+      if (!status.isIndexed) {
+        // TODO: Could auto-build here based on config
+        console.warn('Auto-update skipped: index does not exist.');
+        return;
+      }
+
+      const drift = status.drift;
+      if (!drift || !drift.hasDrift) {
+        return; // No drift
+      }
+
+      const totalDrift = drift.addedCount + drift.removedCount + drift.changedCount;
+      if (totalDrift > (cfg.maxAutoUpdateFiles ?? 5000)) {
+        console.warn(
+          `Index drift (${totalDrift} files) exceeds limit (${cfg.maxAutoUpdateFiles}). Skipping auto-update.`,
+        );
+        return;
+      }
+
+      await eventBus.emit({
+        type: 'IndexAutoUpdateStarted',
+        schemaVersion: 1,
+        runId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          fileCount: totalDrift,
+          reason: 'Pre-run check detected drift.',
+        },
+      });
+
+      const indexPath = path.join(this.repoRoot, cfg.path);
+      const updater = new IndexUpdater(indexPath);
+      const result = await updater.update(this.repoRoot);
+
+      await eventBus.emit({
+        type: 'IndexAutoUpdateFinished',
+        schemaVersion: 1,
+        runId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          filesAdded: result.added.length,
+          filesRemoved: result.removed.length,
+          filesChanged: result.changed,
+        },
+      });
+
+      await eventBus.emit({
+        type: 'MemoryStalenessReconciled',
+        schemaVersion: 1,
+        runId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          details: 'Index updated, subsequent memory retrievals will use fresh data.',
+        },
+      });
+    } catch (error) {
+      console.warn('Auto-update of index failed:', error);
+      // Non-fatal
     }
   }
 
