@@ -2,7 +2,11 @@ import { ToolClassification, ToolRunRequest } from '@orchestrator/shared';
 
 export interface RepoState {
   gitSha: string;
+  repoId?: string;
+  memoryDbPath?: string;
+  artifactPaths?: string[];
 }
+
 
 export interface ToolRunMeta {
   request: ToolRunRequest;
@@ -25,3 +29,34 @@ export interface ProceduralMemory {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface RunSummary {
+  runId: string;
+  goal: string;
+  status: 'success' | 'failure';
+  stopReason: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  decisions?: any[];
+}
+
+export interface PatchStats {
+  filesChanged: string[];
+  insertions: number;
+  deletions: number;
+}
+
+export interface EpisodicMemory {
+  type: 'episodic';
+  id: string;
+  title: string;
+  content: string;
+  gitSha: string;
+  evidence: {
+    artifactPaths: string[];
+    failureSignature?: string;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type Memory = ProceduralMemory | EpisodicMemory;

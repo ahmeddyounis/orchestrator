@@ -4,6 +4,7 @@ import { ProviderRegistry } from './registry';
 import { Config, ConfigSchema } from '@orchestrator/shared';
 import { createRunDir, writeManifest, JsonlLogger } from '@orchestrator/shared';
 import { RepoScanner, SearchService, PatchApplier, GitService } from '@orchestrator/repo';
+import { MemoryWriter } from './memory';
 import { PatchStore } from './exec/patch_store';
 import { ExecutionService } from './exec/service';
 import fs from 'fs/promises';
@@ -169,6 +170,36 @@ describe('Orchestrator', () => {
 
     // Verify manifest
     expect(writeManifest).toHaveBeenCalled();
+  });
+
+  it('should write episodic memory when enabled', async () => {
+    const spy = vi.spyOn(MemoryWriter.prototype, 'extractEpisodic').mockResolvedValue({} as any);
+
+    orchestrator = new Orchestrator({
+      config: {
+        ...config,
+        memory: {
+          ...ConfigSchema.parse({}).memory,
+          enabled: true,
+          writePolicy: {
+            ...ConfigSchema.parse({}).memory.writePolicy,
+            enabled: true,
+            storeEpisodes: true,
+          },
+          storage: {
+            ...ConfigSchema.parse({}).memory.storage,
+            path: '/tmp/memory.sqlite',
+          },
+        },
+      },
+      git: mockGit as unknown as GitService,
+      registry: mockRegistry as unknown as ProviderRegistry,
+      repoRoot,
+    });
+
+    await orchestrator.runL0('simple goal', runId);
+
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('should run L1 successfully', async () => {

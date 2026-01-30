@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MemoryWriter } from './index';
-import { RepoState, ToolRunMeta } from './types';
+import { RepoState, RunSummary, ToolRunMeta } from './types';
 import { ToolRunResult } from '@orchestrator/shared';
+import { VerificationReport } from '../verify/types';
 
 describe('MemoryWriter', () => {
   let memoryWriter: MemoryWriter;
@@ -139,5 +140,65 @@ describe('MemoryWriter', () => {
 
     const memory = await memoryWriter.extractProcedural(toolRunMeta, toolRunResult, repoState);
     expect(memory?.content).toBe('pnpm test --REDACTED=superREDACTED');
+  });
+
+  describe('extractEpisodic', () => {
+    it('should extract episodic memory for a successful run', async () => {
+      const runSummary: RunSummary = {
+        runId: 'run-1',
+        goal: 'Implement a new feature',
+        status: 'success',
+        stopReason: 'Finished',
+      };
+      const repoState: RepoState = { gitSha: 'sha-1' };
+
+      const memory = await memoryWriter.extractEpisodic(runSummary, repoState);
+
+      expect(memory).not.toBeNull();
+      expect(memory.type).toBe('episodic');
+      expect(memory.title).toBe('Run run-1: success - Implement a new feature');
+      expect(memory.content).toContain('"goal": "Implement a new feature"');
+      expect(memory.content).toContain('"status": "success"');
+      expect(memoryWriter.getMemoryStore().size).toBe(1);
+    });
+
+    it('should extract episodic memory for a failed run with verification report', async () => {
+      const runSummary: RunSummary = {
+        runId: 'run-2',
+        goal: 'Fix a critical bug',
+        status: 'failure',
+        stopReason: 'Verification failed',
+      };
+      const repoState: RepoState = { gitSha: 'sha-2' };
+      const verificationReport: VerificationReport = {
+        passed: false,
+        summary: 'Tests failed',
+        failureSignature: 'SIG-TEST-FAIL',
+        checks: [],
+      };
+
+      const memory = await memoryWriter.extractEpisodic(runSummary, repoState, verificationReport);
+
+      expect(memory.title).toBe('Run run-2: failure - Fix a critical bug');
+      expect(memory.content).toContain('"status": "failure"');
+      expect(memory.content).toContain('"failureSignature": "SIG-TEST-FAIL"');
+      expect(memory.evidence.failureSignature).toBe('SIG-TEST-FAIL');
+    });
+
+    it('should truncate content that exceeds the size limit', async () => {
+      const longGoal = 'a'.repeat(9000);
+      const runSummary: RunSummary = {
+        runId: 'run-3',
+        goal: longGoal,
+        status: 'success',
+        stopReason: 'Finished',
+      };
+      const repoState: RepoState = { gitSha: 'sha-3' };
+
+      const memory = await memoryWriter.extractEpisodic(runSummary, repoState);
+
+      expect(memory.content.length).toBeLessThanOrEqual(8192 + 50);
+      expect(memory.content.endsWith('... (truncated due to size limit)'));
+    });
   });
 });

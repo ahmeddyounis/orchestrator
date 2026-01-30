@@ -121,6 +121,9 @@ importers:
       '@orchestrator/exec':
         specifier: workspace:*
         version: link:../exec
+      '@orchestrator/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@orchestrator/repo':
         specifier: workspace:*
         version: link:../repo

@@ -21,8 +21,12 @@ import { ExecutionService } from './exec/service';
 import { UserInterface } from '@orchestrator/exec';
 import { VerificationRunner } from './verify/runner';
 import { VerificationProfile } from './verify/types';
+import { MemoryWriter } from './memory';
+import type { RepoState, RunSummary } from './memory/types';
+import type { VerificationReport } from './verify/types';
 import path from 'path';
 import fs from 'fs/promises';
+import * as fsSync from 'fs';
 import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
@@ -76,6 +80,7 @@ export class Orchestrator {
   private costTracker?: CostTracker;
   private toolPolicy?: ToolPolicy;
   private ui?: UserInterface;
+  private suppressEpisodicMemoryWrite = false;
 
   constructor(options: OrchestratorOptions) {
     this.config = options.config;
@@ -95,6 +100,131 @@ export class Orchestrator {
       return this.runL2(goal, runId);
     } else {
       return this.runL1(goal, runId);
+    }
+  }
+
+  private shouldWriteEpisodicMemory(): boolean {
+    const mem = this.config.memory;
+    return !!(
+      mem?.enabled &&
+      mem?.writePolicy?.enabled &&
+      mem?.writePolicy?.storeEpisodes
+    );
+  }
+
+  private resolveMemoryDbPath(): string | undefined {
+    const p = this.config.memory?.storage?.path;
+    if (!p) return undefined;
+    return path.isAbsolute(p) ? p : path.join(this.repoRoot, p);
+  }
+
+  private toArtifactRelPath(p: string): string {
+    if (!path.isAbsolute(p)) return p;
+    const prefix = this.repoRoot.endsWith(path.sep) ? this.repoRoot : this.repoRoot + path.sep;
+    if (!p.startsWith(prefix)) return p;
+    return path.relative(this.repoRoot, p);
+  }
+
+  private collectArtifactPaths(
+    runId: string,
+    artifactsRoot: string,
+    patchPaths: string[] = [],
+    extraPaths: string[] = [],
+  ): string[] {
+    const absPaths: string[] = [];
+    const add = (p?: string) => {
+      if (!p) return;
+      absPaths.push(p);
+    };
+
+    add(path.join(artifactsRoot, 'trace.jsonl'));
+    add(path.join(artifactsRoot, 'summary.json'));
+    add(path.join(artifactsRoot, 'manifest.json'));
+    add(path.join(artifactsRoot, 'effective-config.json'));
+
+    for (const p of patchPaths) add(p);
+    for (const p of extraPaths) add(p);
+
+    // Include any key run outputs and reports, plus patch/log artifacts.
+    const root = artifactsRoot;
+    const patchesDir = path.join(root, 'patches');
+    const toolLogsDir = path.join(root, 'tool_logs');
+
+    const addDirFiles = (dir: string, filter?: (name: string) => boolean) => {
+      if (!fsSync.existsSync(dir)) return;
+      for (const name of fsSync.readdirSync(dir)) {
+        if (filter && !filter(name)) continue;
+        const full = path.join(dir, name);
+        try {
+          if (fsSync.statSync(full).isFile()) add(full);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+
+    addDirFiles(patchesDir, (n) => n.endsWith('.patch'));
+    addDirFiles(toolLogsDir);
+
+    addDirFiles(root, (n) =>
+      n === 'executor_output.txt' ||
+      /^step_.*_output\.txt$/.test(n) ||
+      /^repair_iter_\d+_output\.txt$/.test(n) ||
+      /^verification_report_.*\.json$/.test(n) ||
+      /^verification_summary_.*\.txt$/.test(n) ||
+      /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
+      /^context_pack_.*\.(json|txt)$/.test(n),
+    );
+
+    // De-dupe + relativize.
+    return [...new Set(absPaths.map((p) => this.toArtifactRelPath(p)))];
+  }
+
+  private async writeEpisodicMemory(
+    args: {
+      runId: string;
+      goal: string;
+      status: 'success' | 'failure';
+      stopReason: string;
+      artifactsRoot: string;
+      patchPaths?: string[];
+      extraArtifactPaths?: string[];
+      verificationReport?: VerificationReport;
+    },
+  ): Promise<void> {
+    if (this.suppressEpisodicMemoryWrite || !this.shouldWriteEpisodicMemory()) return;
+
+    let gitSha = '';
+    try {
+      gitSha = await this.git.getHeadSha();
+    } catch {
+      gitSha = 'unknown';
+    }
+
+    const repoState: RepoState = {
+      gitSha,
+      repoId: this.repoRoot,
+      memoryDbPath: this.resolveMemoryDbPath(),
+      artifactPaths: this.collectArtifactPaths(
+        args.runId,
+        args.artifactsRoot,
+        args.patchPaths ?? [],
+        args.extraArtifactPaths ?? [],
+      ),
+    };
+
+    const runSummary: RunSummary = {
+      runId: args.runId,
+      goal: args.goal,
+      status: args.status,
+      stopReason: args.stopReason,
+    };
+
+    try {
+      const writer = new MemoryWriter();
+      await writer.extractEpisodic(runSummary, repoState, args.verificationReport);
+    } catch {
+      // Non-fatal: don't fail the run if memory persistence fails.
     }
   }
 
@@ -270,6 +400,15 @@ END_DIFF
         patchPaths: [],
         toolLogPaths: [],
       });
+
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status: 'failure',
+        stopReason: 'invalid_output',
+        artifactsRoot: artifacts.root,
+      });
+
       return { status: 'failure', runId, summary: msg };
     }
 
@@ -401,6 +540,15 @@ END_DIFF
       toolLogPaths: [],
     });
 
+    await this.writeEpisodicMemory({
+      runId,
+      goal,
+      status: runResult.status,
+      stopReason: runResult.status === 'success' ? 'success' : 'error',
+      artifactsRoot: artifacts.root,
+      patchPaths: runResult.patchPaths,
+    });
+
     return runResult;
   }
 
@@ -484,6 +632,14 @@ END_DIFF
         },
       };
       await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status: 'failure',
+        stopReason: 'error',
+        artifactsRoot: artifacts.root,
+      });
 
       return result;
     }
@@ -576,6 +732,16 @@ END_DIFF
         patchPaths,
         contextPaths,
         toolLogPaths: [],
+      });
+
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status,
+        stopReason: stopReason ?? 'success',
+        artifactsRoot: artifacts.root,
+        patchPaths,
+        extraArtifactPaths: contextPaths,
       });
 
       return result;
@@ -824,14 +990,38 @@ INSTRUCTIONS:
 
   async runL2(goal: string, runId: string): Promise<RunResult> {
     // 1. Initial Plan & Execute (L1)
-    const l1Result = await this.runL1(goal, runId);
+    this.suppressEpisodicMemoryWrite = true;
+    let l1Result: RunResult;
+    try {
+      l1Result = await this.runL1(goal, runId);
+    } finally {
+      this.suppressEpisodicMemoryWrite = false;
+    }
 
     if (l1Result.stopReason === 'budget_exceeded') {
+      const artifacts = await createRunDir(this.repoRoot, runId);
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status: l1Result.status,
+        stopReason: l1Result.stopReason ?? 'budget_exceeded',
+        artifactsRoot: artifacts.root,
+        patchPaths: l1Result.patchPaths,
+      });
       return l1Result;
     }
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
+      const artifacts = await createRunDir(this.repoRoot, runId);
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status: l1Result.status,
+        stopReason: l1Result.stopReason ?? 'success',
+        artifactsRoot: artifacts.root,
+        patchPaths: l1Result.patchPaths,
+      });
       return {
         ...l1Result,
         summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
@@ -901,6 +1091,18 @@ INSTRUCTIONS:
       };
 
       await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+
+      await this.writeEpisodicMemory({
+        runId,
+        goal,
+        status: 'success',
+        stopReason: 'success',
+        artifactsRoot: artifacts.root,
+        patchPaths: result.patchPaths,
+        extraArtifactPaths: reportPaths,
+        verificationReport: verification,
+      });
+
       return result;
     }
 
@@ -962,6 +1164,18 @@ INSTRUCTIONS:
           };
 
           await fs.writeFile(artifacts.summary, JSON.stringify(result, null, 2));
+
+          await this.writeEpisodicMemory({
+            runId,
+            goal,
+            status: 'failure',
+            stopReason: 'non_improving',
+            artifactsRoot: artifacts.root,
+            patchPaths: result.patchPaths,
+            extraArtifactPaths: reportPaths,
+            verificationReport: verification,
+          });
+
           return result;
         }
       } else {
@@ -1153,6 +1367,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
         await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
 
+        await this.writeEpisodicMemory({
+          runId,
+          goal,
+          status: 'success',
+          stopReason: 'success',
+          artifactsRoot: artifacts.root,
+          patchPaths: finalResult.patchPaths,
+          extraArtifactPaths: reportPaths,
+          verificationReport: verification,
+        });
+
         return finalResult;
       }
 
@@ -1194,6 +1419,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     };
 
     await fs.writeFile(artifacts.summary, JSON.stringify(finalResult, null, 2));
+
+    await this.writeEpisodicMemory({
+      runId,
+      goal,
+      status: 'failure',
+      stopReason: 'budget_exceeded',
+      artifactsRoot: artifacts.root,
+      patchPaths: finalResult.patchPaths,
+      extraArtifactPaths: reportPaths,
+      verificationReport: verification,
+    });
 
     return finalResult;
   }
