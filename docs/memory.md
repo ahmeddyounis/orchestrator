@@ -6,12 +6,28 @@ The Orchestrator's memory feature allows it to retain and recall information acr
 
 Memory is stored locally in a SQLite database file within your project's `.orchestrator` directory. It is designed to be **local-first, private, and entirely under your control.**
 
+### Memory Ranking
+
+When the Orchestrator retrieves memories to build context for a task, it doesn't treat all memories equally. A ranking system prioritizes memories based on several factors to ensure the most relevant information is used.
+
+-   **Relevance Boosts:** Memories that are semantically related to the user's prompt or the files being worked on receive a significant score boost.
+-   **Procedural Boosts:** Procedural memories, such as learned command sequences, are given a higher base score because they often represent established workflows.
+-   **Stale Down-ranking:** Memories decay over time. Older, less frequently accessed memories will have their scores reduced, making them less likely to be included in the context. This "stale down-ranking" helps prevent the agent from relying on outdated information.
+
+You can inspect how memories were scored and selected for a given run by examining the `provenance.json` artifact. See the [Context Fusion](./context-fusion.md) documentation for more details.
+
 ### Memory Types
 
 The system utilizes two primary types of memory:
 
 1.  **Episodic Memory:** Stores events and observations from past interactions. This includes commands you've run, files you've edited, and the results of those actions. It helps the agent understand the history of your project.
-2.  **Procedural Memory:** Stores learned procedures and preferences. For example, if you frequently use a specific set of commands to test your application, the agent can learn this procedure and automate it for you.
+2.  **Procedural Memory:** Stores learned procedures and preferences. For example, if you frequently use a specific set of commands to test your application, the agent can learn this procedure.
+
+### Remembered Commands
+
+A key feature of procedural memory is the ability to remember and suggest shell commands. When the Orchestrator observes that you successfully run a command multiple times, it may store that command in its procedural memory.
+
+In future interactions, if a similar task arises, the agent can recall this command and suggest it or even execute it as part of a plan. This behavior is "advisory"—the agent suggests what has worked in the past, but you always have the final say. This is a powerful way the Orchestrator adapts to your personal workflow.
 
 ### Evidence-Gated Writes
 
@@ -58,6 +74,6 @@ To completely reset the agent's knowledge for a project, you can:
 
 ## Best Practices & Troubleshooting
 
-- **Stale Information:** If the agent seems to be using outdated information, wiping the memory is often the quickest solution.
+- **Stale Information:** If the agent seems to be using outdated information, wiping the memory is often the quickest solution. You can also inspect the `provenance.json` artifact from a run to see if stale memories are being ranked highly.
 - **Disabling Memory:** If you prefer the agent to operate without long-term context, you can set `"enabled": false` in the memory configuration.
 - **Inspecting Memory:** Use `orchestrator memory show` to understand what the agent has learned. This can be useful for debugging unexpected behavior.
