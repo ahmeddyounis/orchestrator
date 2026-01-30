@@ -1,1 +1,1 @@
-export const name = '@orchestrator/eval';
+export * from './runner';

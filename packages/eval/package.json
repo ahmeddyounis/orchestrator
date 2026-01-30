@@ -13,6 +13,12 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "fs-extra": "^11.3.3",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@orchestrator/core": "workspace:*",
+    "@orchestrator/shared": "workspace:*"
   }
 }

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "test-suite",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Add a new file",
+      "repo": {
+        "fixturePath": "packages/eval/src/__fixtures__/test-repo"
+      },
+      "goal": "Create a new file named 'new-file.txt' with content 'hello world'",
+      "command": "run",
+      "thinkLevel": "L1",
+      "verification": {
+        "enabled": false,
+        "mode": "auto"
+      },
+      "tools": {
+        "enabled": true,
+        "requireConfirmation": false
+      },
+      "successCriteria": {
+        "type": "file_contains",
+        "details": {
+          "path": "new-file.txt",
+          "content": "hello world"
+        }
+      }
+    }
+  ]
+}

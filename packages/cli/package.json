@@ -26,6 +26,7 @@
   "dependencies": {
     "@orchestrator/adapters": "workspace:*",
     "@orchestrator/core": "workspace:*",
+    "@orchestrator/eval": "workspace:*",
     "@orchestrator/exec": "workspace:*",
     "@orchestrator/memory": "workspace:*",
     "@orchestrator/repo": "workspace:*",
