@@ -38,6 +38,14 @@ export interface ContextBuilt extends BaseEvent {
   };
 }
 
+export interface QueriesBuilt extends BaseEvent {
+  type: 'QueriesBuilt';
+  payload: {
+    repoQueriesCount: number;
+    memoryQueriesCount: number;
+  };
+}
+
 export interface PatchProposed extends BaseEvent {
   type: 'PatchProposed';
   payload: {
@@ -371,6 +379,7 @@ export type OrchestratorEvent =
   | PlanRequested
   | PlanCreated
   | ContextBuilt
+  | QueriesBuilt
   | PatchProposed
   | PatchApplied
   | ToolRun
