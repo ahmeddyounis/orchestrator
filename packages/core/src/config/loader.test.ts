@@ -160,6 +160,82 @@ describe('ConfigLoader', () => {
       expect(config.execution?.tools?.requireConfirmation).toBe(true);
       expect(config.execution?.tools?.timeoutMs).toBe(600_000);
     });
+
+    describe('applyThinkLevelDefaults', () => {
+      it('should apply L0 defaults', () => {
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L0',
+            memory: { enabled: true },
+          },
+        });
+
+        expect(config.memory.retrieval.topK).toBe(3);
+        expect(config.memory.maxChars).toBe(1000);
+        expect(config.memory.writePolicy.storeEpisodes).toBe(false);
+      });
+
+      it('should apply L1 defaults', () => {
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L1',
+            memory: { enabled: true },
+          },
+        });
+
+        expect(config.memory.retrieval.topK).toBe(5);
+        expect(config.memory.maxChars).toBe(1500);
+        expect(config.memory.writePolicy.storeEpisodes).toBe(true);
+      });
+
+      it('should apply L2 defaults', () => {
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L2',
+            memory: { enabled: true },
+          },
+        });
+
+        expect(config.memory.retrieval.topK).toBe(8);
+        expect(config.memory.maxChars).toBe(2500);
+        expect(config.memory.writePolicy.storeEpisodes).toBe(true);
+      });
+
+      it('should not override user-defined values', () => {
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L0',
+            memory: {
+              enabled: true,
+              retrieval: { topK: 10 },
+              maxChars: 5000,
+              writePolicy: { storeEpisodes: true },
+            },
+          },
+        });
+
+        expect(config.memory.retrieval.topK).toBe(10);
+        expect(config.memory.maxChars).toBe(5000);
+        expect(config.memory.writePolicy.storeEpisodes).toBe(true);
+      });
+
+      it('should do nothing if memory is disabled', () => {
+        const baseConfig = ConfigLoader.load({
+          flags: {
+            memory: { enabled: false },
+          },
+        });
+
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L0',
+            memory: { enabled: false },
+          },
+        });
+
+        expect(config.memory).toEqual(baseConfig.memory);
+      });
+    });
   });
 
   describe('writeEffectiveConfig', () => {

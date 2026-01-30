@@ -103,6 +103,37 @@ export class ConfigLoader {
     fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
   }
 
+  private static applyThinkLevelDefaults(config: Partial<Config>): Partial<Config> {
+    if (!config.memory?.enabled) {
+      return config;
+    }
+
+    const thinkLevel = config.thinkLevel || 'L1';
+    const memory = config.memory || {};
+    memory.retrieval = memory.retrieval || {};
+    memory.writePolicy = memory.writePolicy || {};
+
+    switch (thinkLevel) {
+      case 'L0':
+        memory.retrieval.topK ??= 3;
+        memory.maxChars ??= 1000;
+        memory.writePolicy.storeEpisodes ??= false;
+        break;
+      case 'L1':
+        memory.retrieval.topK ??= 5;
+        memory.maxChars ??= 1500;
+        memory.writePolicy.storeEpisodes ??= true;
+        break;
+      case 'L2':
+        memory.retrieval.topK ??= 8;
+        memory.maxChars ??= 2500;
+        memory.writePolicy.storeEpisodes ??= true;
+        break;
+    }
+
+    return { ...config, memory };
+  }
+
   static load(options: ConfigOptions = {}): Config {
     const cwd = options.cwd || process.cwd();
     const env = options.env || process.env;
@@ -145,6 +176,9 @@ export class ConfigLoader {
       budget: DEFAULT_BUDGET,
     };
     mergedConfig = this.mergeConfigs(defaults as Record<string, unknown>, mergedConfig);
+
+    // Apply think level defaults
+    mergedConfig = this.applyThinkLevelDefaults(mergedConfig);
 
     // Validate
     const result = ConfigSchema.safeParse(mergedConfig);
