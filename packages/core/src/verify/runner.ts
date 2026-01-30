@@ -63,7 +63,11 @@ export class VerificationRunner {
 
       // Determine touched packages if targeting is requested
       let touchedPackages: Set<string> | null = null;
-      if (profile.auto.testScope === 'targeted' && scope.touchedFiles && scope.touchedFiles.length > 0) {
+      if (
+        profile.auto.testScope === 'targeted' &&
+        scope.touchedFiles &&
+        scope.touchedFiles.length > 0
+      ) {
         touchedPackages = await targeting.resolveTouchedPackages(this.repoRoot, scope.touchedFiles);
       }
 
@@ -183,10 +187,10 @@ export class VerificationRunner {
       // SafeCommandRunner uses process.cwd() for .orchestrator location
       const projectRoot = process.cwd();
       const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId);
-      
+
       // Ensure runs dir exists
       if (!fs.existsSync(runsDir)) {
-          await fs.promises.mkdir(runsDir, { recursive: true });
+        await fs.promises.mkdir(runsDir, { recursive: true });
       }
 
       // Determine iteration index
@@ -199,20 +203,22 @@ export class VerificationRunner {
       const txtPath = path.join(runsDir, `failure_summary_iter_${iter}.txt`);
 
       await fs.promises.writeFile(jsonPath, JSON.stringify(summary, null, 2));
-      
-      const txtContent = `Failure Summary (Iter ${iter})\n` +
-        `----------------------------\n` +
-        `Failed Checks: ${summary.failedChecks.map(c => c.name).join(', ')}\n` +
-        `Suspected Files:\n${summary.suspectedFiles.map(f => ' - ' + f).join('\n')}\n` +
-        `Suggested Actions:\n${summary.suggestedNextActions.map(a => ' - ' + a).join('\n')}\n` +
-        `\nDetails:\n` +
-        summary.failedChecks.map(c => 
-            `[${c.name}] Exit Code: ${c.exitCode}\n` +
-            `Errors:\n${c.keyErrors.join('\n')}\n`
-        ).join('\n');
-        
-      await fs.promises.writeFile(txtPath, txtContent);
 
+      const txtContent =
+        `Failure Summary (Iter ${iter})\n` +
+        `----------------------------\n` +
+        `Failed Checks: ${summary.failedChecks.map((c) => c.name).join(', ')}\n` +
+        `Suspected Files:\n${summary.suspectedFiles.map((f) => ' - ' + f).join('\n')}\n` +
+        `Suggested Actions:\n${summary.suggestedNextActions.map((a) => ' - ' + a).join('\n')}\n` +
+        `\nDetails:\n` +
+        summary.failedChecks
+          .map(
+            (c) =>
+              `[${c.name}] Exit Code: ${c.exitCode}\n` + `Errors:\n${c.keyErrors.join('\n')}\n`,
+          )
+          .join('\n');
+
+      await fs.promises.writeFile(txtPath, txtContent);
     } catch {
       // Ignore errors saving summary, don't fail verification
     }

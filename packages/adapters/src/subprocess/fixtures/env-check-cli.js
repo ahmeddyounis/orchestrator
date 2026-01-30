@@ -6,4 +6,3 @@ process.stdin.once('data', () => {
   process.stdout.write('\n> '); // Final prompt before exiting
   process.exit(0);
 });
-

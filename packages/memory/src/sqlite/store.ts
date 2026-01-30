@@ -9,11 +9,7 @@ export interface MemoryStore {
   upsert(entry: MemoryEntry): void;
   search(repoId: string, query: string, topK?: number): MemoryEntry[];
   get(id: string): MemoryEntry | null;
-  list(
-    repoId: string,
-    type?: MemoryEntryType,
-    limit?: number,
-  ): MemoryEntry[];
+  list(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
   wipe(repoId: string): void;
   status(repoId: string): MemoryStatus;
   close(): void;
@@ -109,11 +105,7 @@ export function createMemoryStore(): MemoryStore {
     return row ? rowToEntry(row) : null;
   };
 
-  const list = (
-    repoId: string,
-    type?: MemoryEntryType,
-    limit?: number,
-  ): MemoryEntry[] => {
+  const list = (repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[] => {
     if (!db) throw new Error('Database not initialized');
     let query = 'SELECT * FROM memory_entries WHERE repoId = ?';
     const params: (string | number)[] = [repoId];
@@ -139,7 +131,7 @@ export function createMemoryStore(): MemoryStore {
     if (!db) throw new Error('Database not initialized');
 
     const countsStmt = db.prepare(
-      "SELECT type, COUNT(*) as count FROM memory_entries WHERE repoId = ? GROUP BY type",
+      'SELECT type, COUNT(*) as count FROM memory_entries WHERE repoId = ? GROUP BY type',
     );
     const countsRows = countsStmt.all(repoId) as {
       type: MemoryEntryType;
@@ -171,11 +163,7 @@ export function createMemoryStore(): MemoryStore {
     };
   };
 
-  const search = (
-    repoId: string,
-    query: string,
-    topK = 10,
-  ): MemoryEntry[] => {
+  const search = (repoId: string, query: string, topK = 10): MemoryEntry[] => {
     if (!db) throw new Error('Database not initialized');
 
     const stmt = db.prepare(

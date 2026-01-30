@@ -8,19 +8,12 @@ const apiKeyPatterns = [
 ];
 
 // Patterns for environment variables
-const envVarPatterns = [
-  /(?:TOKEN|SECRET|API_KEY)\s*=\s*['"]?([a-zA-Z0-9_-]+)['"]?/g,
-];
+const envVarPatterns = [/(?:TOKEN|SECRET|API_KEY)\s*=\s*['"]?([a-zA-Z0-9_-]+)['"]?/g];
 
 // Pattern for private keys
-const privateKeyPattern =
-  /-----BEGIN PRIVATE KEY-----(?:.|\n|\r)*?-----END PRIVATE KEY-----/g;
+const privateKeyPattern = /-----BEGIN PRIVATE KEY-----(?:.|\n|\r)*?-----END PRIVATE KEY-----/g;
 
-const allPatterns = [
-  ...apiKeyPatterns,
-  ...envVarPatterns,
-  privateKeyPattern,
-];
+const allPatterns = [...apiKeyPatterns, ...envVarPatterns, privateKeyPattern];
 
 export function redactString(input: string): {
   redacted: string;

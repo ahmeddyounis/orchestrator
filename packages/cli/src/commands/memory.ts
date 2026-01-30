@@ -1,4 +1,3 @@
-
 import { Command } from 'commander';
 import { createMemoryStore, MemoryEntry } from '@orchestrator/memory';
 import { ConfigLoader } from '@orchestrator/core';
@@ -23,11 +22,17 @@ async function status(options: { json?: boolean }) {
   const config = ConfigLoader.load({});
 
   if (options.json) {
-    console.log(JSON.stringify({
-      enabled: true,
-      dbPath: config.memory?.storage.path,
-      ...status,
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          enabled: true,
+          dbPath: config.memory?.storage.path,
+          ...status,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -40,13 +45,17 @@ async function status(options: { json?: boolean }) {
   console.log(`    Semantic: ${status.entryCounts.semantic}`);
   console.log(`    Total: ${status.entryCounts.total}`);
   console.log(
-    `  Last Updated: ${ 
+    `  Last Updated: ${
       status.lastUpdatedAt ? new Date(status.lastUpdatedAt).toISOString() : 'Never'
     }`,
   );
 }
 
-async function list(options: { type?: 'procedural' | 'episodic' | 'semantic', limit?: number, json?: boolean }) {
+async function list(options: {
+  type?: 'procedural' | 'episodic' | 'semantic';
+  limit?: number;
+  json?: boolean;
+}) {
   const store = getMemoryStore();
   const repoId = await findRepoRoot();
   const entries = store.list(repoId, options.type, options.limit);
@@ -73,6 +82,7 @@ async function show(id: string, options: { json?: boolean }) {
   if (!entry) {
     console.error(`Memory entry with id "${id}" not found.`);
     process.exit(1);
+    return;
   }
 
   if (options.json) {
@@ -118,11 +128,8 @@ async function wipe(options: { yes?: boolean }) {
   console.log('Memory wiped for the current repository.');
 }
 
-
 export function registerMemoryCommand(program: Command) {
-  const memoryCommand = program
-    .command('memory')
-    .description('Manage orchestrator memory.');
+  const memoryCommand = program.command('memory').description('Manage orchestrator memory.');
 
   memoryCommand
     .command('status')

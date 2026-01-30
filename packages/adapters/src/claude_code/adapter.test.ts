@@ -18,7 +18,7 @@ vi.mock('../subprocess/process-manager', () => {
 
 describe('ClaudeCodeAdapter', () => {
   let adapter: ClaudeCodeAdapter;
-  let pm: ReturnType<typeof mock<ProcessManager>>; 
+  let pm: ReturnType<typeof mock<ProcessManager>>;
 
   beforeEach(() => {
     adapter = new ClaudeCodeAdapter({
@@ -84,4 +84,3 @@ index 1234567..89abcdef 100644
     expect(response.text).not.toContain('<BEGIN_DIFF>');
   });
 });
-

@@ -54,7 +54,7 @@ describe('TargetingManager', () => {
       const packages = await targeting.resolveTouchedPackages(rootPath, touchedFiles);
       expect(packages.size).toBe(0);
     });
-    
+
     it('handles files that map to the same package', async () => {
       vi.mocked(fs.readFile).mockImplementation(async (p) => {
         const pStr = p.toString();
@@ -66,7 +66,7 @@ describe('TargetingManager', () => {
 
       const touchedFiles = ['packages/a/src/foo.ts', 'packages/a/src/bar.ts'];
       const packages = await targeting.resolveTouchedPackages(rootPath, touchedFiles);
-      
+
       expect(packages.size).toBe(1);
       expect(packages.has('pkg-a')).toBe(true);
     });
@@ -83,7 +83,7 @@ describe('TargetingManager', () => {
     it('generates pnpm -r filter command', () => {
       const packages = new Set(['pkg-a', 'pkg-b']);
       const cmd = targeting.generateTargetedCommand(baseProfile, packages, 'test');
-      
+
       expect(cmd).toContain('pnpm -r');
       expect(cmd).toContain('--filter pkg-a');
       expect(cmd).toContain('--filter pkg-b');
@@ -94,28 +94,28 @@ describe('TargetingManager', () => {
       const profile = { ...baseProfile, usesTurbo: true };
       const packages = new Set(['pkg-a']);
       const cmd = targeting.generateTargetedCommand(profile, packages, 'lint');
-      
+
       expect(cmd).toBe('pnpm turbo run lint --filter=pkg-a');
     });
 
     it('returns null if script is missing', () => {
-       const profile = { ...baseProfile, scripts: { ...baseProfile.scripts, test: false } };
-       const packages = new Set(['pkg-a']);
-       const cmd = targeting.generateTargetedCommand(profile, packages, 'test');
-       expect(cmd).toBeNull();
+      const profile = { ...baseProfile, scripts: { ...baseProfile.scripts, test: false } };
+      const packages = new Set(['pkg-a']);
+      const cmd = targeting.generateTargetedCommand(profile, packages, 'test');
+      expect(cmd).toBeNull();
     });
 
     it('returns null if no packages', () => {
-        const packages = new Set<string>();
-        const cmd = targeting.generateTargetedCommand(baseProfile, packages, 'test');
-        expect(cmd).toBeNull();
+      const packages = new Set<string>();
+      const cmd = targeting.generateTargetedCommand(baseProfile, packages, 'test');
+      expect(cmd).toBeNull();
     });
-    
+
     it('returns null for non-pnpm (unsupported)', () => {
-        const profile = { ...baseProfile, packageManager: 'npm' as const };
-        const packages = new Set(['pkg-a']);
-        const cmd = targeting.generateTargetedCommand(profile, packages, 'test');
-        expect(cmd).toBeNull();
+      const profile = { ...baseProfile, packageManager: 'npm' as const };
+      const packages = new Set(['pkg-a']);
+      const cmd = targeting.generateTargetedCommand(profile, packages, 'test');
+      expect(cmd).toBeNull();
     });
   });
 });

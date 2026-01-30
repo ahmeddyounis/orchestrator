@@ -13,9 +13,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
     const args = config.args || [];
 
     if (!command.length) {
-      throw new ConfigError(
-        `Missing command for ClaudeCode provider. Checked config.command`,
-      );
+      throw new ConfigError(`Missing command for ClaudeCode provider. Checked config.command`);
     }
 
     super({

@@ -43,10 +43,14 @@ src/utils/helper.ts(5,10): error TS2345: Argument of type 'null' is not assignab
 
     expect(summary.failedChecks).toHaveLength(1);
     expect(summary.failedChecks[0].name).toBe('typecheck');
-    expect(summary.failedChecks[0].keyErrors).toContain("src/index.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.");
+    expect(summary.failedChecks[0].keyErrors).toContain(
+      "src/index.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.",
+    );
     expect(summary.suspectedFiles).toContain('src/index.ts');
     expect(summary.suspectedFiles).toContain('src/utils/helper.ts');
-    expect(summary.suggestedNextActions).toContain('Fix TypeScript type errors in the suspected files.');
+    expect(summary.suggestedNextActions).toContain(
+      'Fix TypeScript type errors in the suspected files.',
+    );
   });
 
   it('should summarize eslint errors', async () => {
@@ -106,6 +110,8 @@ Error: expected 2 to be 3
 
     expect(summary.suspectedFiles).toContain('src/math.test.ts');
     expect(summary.suspectedFiles).toContain('src/math.ts');
-    expect(summary.suggestedNextActions).toContain('Fix failing tests. Check stack traces in logs.');
+    expect(summary.suggestedNextActions).toContain(
+      'Fix failing tests. Check stack traces in logs.',
+    );
   });
 });

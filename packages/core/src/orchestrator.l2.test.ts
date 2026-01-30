@@ -191,7 +191,7 @@ describe('Orchestrator L2', () => {
 
     expect(result.status).toBe('success');
     expect(result.summary).toContain('L2 Verified Success');
-    
+
     expect(result.verification).toBeDefined();
     expect(result.verification?.enabled).toBe(true);
     expect(result.verification?.passed).toBe(true);
@@ -247,12 +247,12 @@ describe('Orchestrator L2', () => {
 
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('non_improving');
-    
+
     expect(result.verification).toBeDefined();
     expect(result.verification?.enabled).toBe(true);
     expect(result.verification?.passed).toBe(false);
     expect(result.verification?.failedChecks).toContain('test');
-    
+
     // Iterations:
     // 0: Initial fail (sig1)
     // 1: Repair 1 fail (sig1) -> consecutive=1

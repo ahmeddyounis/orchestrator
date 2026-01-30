@@ -56,7 +56,7 @@ const migrations = [
 export function runMigrations(db: DatabaseSync): void {
   db.exec('BEGIN');
   try {
-    migrations.forEach(migration => {
+    migrations.forEach((migration) => {
       db.exec(migration);
     });
     db.exec('COMMIT');

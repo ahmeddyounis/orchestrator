@@ -35,14 +35,14 @@ export class FailureSummarizer {
 
   private async summarizeCheck(check: CheckResult): Promise<FailedCheckSummary> {
     let stderrContent = '';
-    
+
     // Prioritize stderr, fallback to stdout if stderr is empty (common in some tools)
     if (check.stderrPath && fs.existsSync(check.stderrPath)) {
-        stderrContent = await fs.promises.readFile(check.stderrPath, 'utf8');
+      stderrContent = await fs.promises.readFile(check.stderrPath, 'utf8');
     }
-    
+
     if (!stderrContent && check.stdoutPath && fs.existsSync(check.stdoutPath)) {
-        stderrContent = await fs.promises.readFile(check.stdoutPath, 'utf8');
+      stderrContent = await fs.promises.readFile(check.stdoutPath, 'utf8');
     }
 
     const keyErrors = this.extractKeyErrors(stderrContent);
@@ -58,36 +58,36 @@ export class FailureSummarizer {
 
   private extractKeyErrors(output: string): string[] {
     if (!output) return [];
-    
+
     const lines = output.split('\n');
     const errors: string[] = [];
-    
+
     // Heuristic: Keep lines that look like errors
     // Limit to top 10 relevant lines to avoid noise
     let count = 0;
     for (const line of lines) {
-        if (count >= 10) break;
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+      if (count >= 10) break;
+      const trimmed = line.trim();
+      if (!trimmed) continue;
 
-        // Common error patterns
-        if (
-            trimmed.includes('Error:') || 
-            trimmed.includes('error TS') || 
-            /^\s*at\s+/.test(line) || // Stack trace
-            /Error\s*:/.test(line) ||
-            line.includes('FAIL') ||
-            line.includes('FAILED')
-        ) {
-            errors.push(trimmed);
-            count++;
-        }
+      // Common error patterns
+      if (
+        trimmed.includes('Error:') ||
+        trimmed.includes('error TS') ||
+        /^\s*at\s+/.test(line) || // Stack trace
+        /Error\s*:/.test(line) ||
+        line.includes('FAIL') ||
+        line.includes('FAILED')
+      ) {
+        errors.push(trimmed);
+        count++;
+      }
     }
 
     // If no specific patterns found, take the last few non-empty lines as they often contain the summary
     if (errors.length === 0) {
-        const nonEmpty = lines.filter(l => l.trim().length > 0);
-        return nonEmpty.slice(-5);
+      const nonEmpty = lines.filter((l) => l.trim().length > 0);
+      return nonEmpty.slice(-5);
     }
 
     return errors;
@@ -100,19 +100,19 @@ export class FailureSummarizer {
     // TS/Lint: path/to/file.ts(10,20)
     // Stack trace: (path/to/file.ts:10:20)
     const filePatterns = [
-        new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md)):\\d+', 'g'), // path/to/file.ts:10
-        new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md))\\(\\d+', 'g'), // path/to/file.ts(10
+      new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md)):\\d+', 'g'), // path/to/file.ts:10
+      new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md))\\(\\d+', 'g'), // path/to/file.ts(10
     ];
 
     for (const pattern of filePatterns) {
-        let match;
-        while ((match = pattern.exec(text)) !== null) {
-            // Validate if it looks like a project file (simple heuristic)
-            const fpath = match[1];
-            if (!fpath.includes('node_modules')) {
-                collection.add(fpath);
-            }
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        // Validate if it looks like a project file (simple heuristic)
+        const fpath = match[1];
+        if (!fpath.includes('node_modules')) {
+          collection.add(fpath);
         }
+      }
     }
   }
 }

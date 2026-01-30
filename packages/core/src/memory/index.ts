@@ -35,14 +35,7 @@ function ensureSqliteStore(dbPath: string) {
 }
 
 type ApplicableClassification = 'test' | 'build' | 'lint' | 'format';
-const applicableClassifications: ApplicableClassification[] = [
-  'test',
-  'build',
-  'lint',
-  'format',
-];
-
-
+const applicableClassifications: ApplicableClassification[] = ['test', 'build', 'lint', 'format'];
 
 export class MemoryWriter {
   private eventBus?: EventBus;
@@ -102,16 +95,11 @@ export class MemoryWriter {
 
     const { redacted: redactedContentPayload, redactionCount: contentRedactions } =
       redactUnknown(contentPayload);
-    await this.logRedactions(
-      contentRedactions,
-      `episodic memory content for run ${runId}`,
-    );
+    await this.logRedactions(contentRedactions, `episodic memory content for run ${runId}`);
 
     let content = JSON.stringify(redactedContentPayload, null, 2);
     if (content.length > MAX_CONTENT_LENGTH) {
-      content =
-        content.substring(0, MAX_CONTENT_LENGTH) +
-        '\n... (truncated due to size limit)';
+      content = content.substring(0, MAX_CONTENT_LENGTH) + '\n... (truncated due to size limit)';
     }
 
     const evidence = {
@@ -121,10 +109,7 @@ export class MemoryWriter {
 
     const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
       redactUnknown(evidence);
-    await this.logRedactions(
-      evidenceRedactions,
-      `episodic memory evidence for run ${runId}`,
-    );
+    await this.logRedactions(evidenceRedactions, `episodic memory evidence for run ${runId}`);
 
     const newMemory: EpisodicMemory = {
       type: 'episodic',
@@ -168,19 +153,15 @@ export class MemoryWriter {
 
     if (
       exitCode !== 0 ||
-      !applicableClassifications.includes(
-        classification as ApplicableClassification,
-      )
+      !applicableClassifications.includes(classification as ApplicableClassification)
     ) {
       return null;
     }
 
-    const { redacted: normalizedCommand, redactionCount: commandRedactions } =
-      redactString(request.command.trim().replace(/\s+/g, ' '));
-    await this.logRedactions(
-      commandRedactions,
-      'procedural memory command',
+    const { redacted: normalizedCommand, redactionCount: commandRedactions } = redactString(
+      request.command.trim().replace(/\s+/g, ' '),
     );
+    await this.logRedactions(commandRedactions, 'procedural memory command');
 
     const existingMemory = [...memoryStore.values()].find(
       (mem) => mem.type === 'procedural' && mem.content === normalizedCommand,
@@ -195,16 +176,29 @@ export class MemoryWriter {
 
     const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
       redactUnknown(evidence);
-    await this.logRedactions(
-      evidenceRedactions,
-      'procedural memory evidence',
-    );
+    await this.logRedactions(evidenceRedactions, 'procedural memory evidence');
 
     if (existingMemory) {
       existingMemory.updatedAt = new Date();
       existingMemory.evidence = redactedEvidence as ProceduralMemory['evidence'];
       existingMemory.gitSha = repoState.gitSha;
       memoryStore.set(existingMemory.id, existingMemory);
+
+      if (repoState.memoryDbPath && repoState.repoId) {
+        const store = ensureSqliteStore(repoState.memoryDbPath);
+        store.upsert({
+          id: existingMemory.id,
+          repoId: repoState.repoId,
+          type: 'procedural',
+          title: existingMemory.title,
+          content: existingMemory.content,
+          evidenceJson: JSON.stringify(existingMemory.evidence),
+          gitSha: existingMemory.gitSha,
+          stale: false,
+          createdAt: existingMemory.createdAt.getTime(),
+          updatedAt: existingMemory.updatedAt.getTime(),
+        });
+      }
       return existingMemory;
     }
 
@@ -220,6 +214,23 @@ export class MemoryWriter {
     };
 
     memoryStore.set(newMemory.id, newMemory);
+
+    if (repoState.memoryDbPath && repoState.repoId) {
+      const store = ensureSqliteStore(repoState.memoryDbPath);
+      store.upsert({
+        id: newMemory.id,
+        repoId: repoState.repoId,
+        type: 'procedural',
+        title: newMemory.title,
+        content: newMemory.content,
+        evidenceJson: JSON.stringify(newMemory.evidence),
+        gitSha: newMemory.gitSha,
+        stale: false,
+        createdAt: newMemory.createdAt.getTime(),
+        updatedAt: newMemory.updatedAt.getTime(),
+      });
+    }
+
     return newMemory;
   }
 

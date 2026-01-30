@@ -11,8 +11,7 @@ describe('redaction', () => {
     });
 
     it('should redact an OpenAI-style API key', () => {
-      const input =
-        'My API key is sk-k6zXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.';
+      const input = 'My API key is sk-k6zXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.';
       const { redacted, redactionCount } = redactString(input);
       expect(redacted).toBe('My API key is [REDACTED].');
       expect(redactionCount).toBe(1);
@@ -78,9 +77,7 @@ describe('redaction', () => {
       const input =
         'My token is ghp_12345678901234567890 and my key is sk-12345678901234567890. Also, TOKEN=inline-secret.';
       const { redacted, redactionCount } = redactString(input);
-      expect(redacted).toBe(
-        'My token is [REDACTED] and my key is [REDACTED]. Also, [REDACTED].',
-      );
+      expect(redacted).toBe('My token is [REDACTED] and my key is [REDACTED]. Also, [REDACTED].');
       expect(redactionCount).toBe(3);
     });
   });
@@ -107,11 +104,7 @@ describe('redaction', () => {
     });
 
     it('should redact strings inside an array and count them', () => {
-      const input = [
-        'no secret here',
-        'SECRET="shhhh"',
-        ['nested sk-ant-12345678901234567890.'],
-      ];
+      const input = ['no secret here', 'SECRET="shhhh"', ['nested sk-ant-12345678901234567890.']];
       const expected = ['no secret here', '[REDACTED]', ['nested [REDACTED].']];
       const { redacted, redactionCount } = redactUnknown(input);
       expect(redacted).toEqual(expected);
@@ -127,10 +120,7 @@ describe('redaction', () => {
         meta: { id: 1 },
       };
       const expected = {
-        list: [
-          { name: 'test', apiKey: '[REDACTED]' },
-          '[REDACTED]',
-        ],
+        list: [{ name: 'test', apiKey: '[REDACTED]' }, '[REDACTED]'],
         meta: { id: 1 },
       };
       const { redacted, redactionCount } = redactUnknown(input);
@@ -149,4 +139,3 @@ describe('redaction', () => {
     });
   });
 });
-

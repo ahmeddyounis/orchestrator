@@ -94,11 +94,15 @@ describe('MemoryWriter', () => {
     };
     const repoState1: RepoState = { gitSha: 'sha-1' };
 
-    const firstMemory = await memoryWriter.extractProcedural(toolRunMeta1, toolRunResult1, repoState1);
+    const firstMemory = await memoryWriter.extractProcedural(
+      toolRunMeta1,
+      toolRunResult1,
+      repoState1,
+    );
     const firstCreationTime = firstMemory?.createdAt;
 
     // Ensure there's a delay for the updated at time check
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const toolRunMeta2: ToolRunMeta = {
       request: { command: ' pnpm test ', cwd: '/tmp', reason: 'test' },
@@ -114,7 +118,11 @@ describe('MemoryWriter', () => {
     };
     const repoState2: RepoState = { gitSha: 'sha-2' };
 
-    const updatedMemory = await memoryWriter.extractProcedural(toolRunMeta2, toolRunResult2, repoState2);
+    const updatedMemory = await memoryWriter.extractProcedural(
+      toolRunMeta2,
+      toolRunResult2,
+      repoState2,
+    );
 
     expect(memoryWriter.getMemoryStore().size).toBe(1);
     expect(updatedMemory?.id).toBe(firstMemory?.id);
@@ -127,8 +135,7 @@ describe('MemoryWriter', () => {
   it('should redact secrets from the command', async () => {
     const toolRunMeta: ToolRunMeta = {
       request: {
-        command:
-          'pnpm test --token=sk-k6zXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+        command: 'pnpm test --token=sk-k6zXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
         cwd: '/tmp',
         reason: 'test',
       },
@@ -144,11 +151,7 @@ describe('MemoryWriter', () => {
     };
     const repoState: RepoState = { gitSha: 'sha-1' };
 
-    const memory = await memoryWriter.extractProcedural(
-      toolRunMeta,
-      toolRunResult,
-      repoState,
-    );
+    const memory = await memoryWriter.extractProcedural(toolRunMeta, toolRunResult, repoState);
     expect(memory?.content).toBe('pnpm test --token=[REDACTED]');
   });
 

@@ -347,7 +347,7 @@ describe('Orchestrator', () => {
       registry: mockRegistry as unknown as ProviderRegistry,
       repoRoot,
     });
-    
+
     const executorGenerate = vi.fn().mockResolvedValue({ text: 'BEGIN_DIFF\ndiff...\nEND_DIFF' });
     mockRegistry.resolveRoleProviders.mockResolvedValue({
       planner: { generate: vi.fn() },
@@ -367,7 +367,7 @@ describe('Orchestrator', () => {
     expect(systemPrompt).toContain('MEMORY (verified facts):');
     expect(systemPrompt).toContain('- procedural: How to do X');
     expect(systemPrompt).toContain('Content: Run command Y');
-    
+
     expect(fs.writeFile).toHaveBeenCalledWith(
       '/tmp/run/memory_hits_step_0.json',
       expect.any(String),

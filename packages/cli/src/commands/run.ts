@@ -9,7 +9,12 @@ import {
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ClaudeCodeAdapter } from '@orchestrator/adapters';
-import { ProviderCapabilities, ProviderConfig, ToolPolicy, type Config } from '@orchestrator/shared';
+import {
+  ProviderCapabilities,
+  ProviderConfig,
+  ToolPolicy,
+  type Config,
+} from '@orchestrator/shared';
 import { OutputRenderer } from '../output/renderer';
 import { ConsoleUI } from '../ui/console';
 

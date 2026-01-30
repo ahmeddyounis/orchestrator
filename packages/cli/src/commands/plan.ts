@@ -1,7 +1,19 @@
 import { Command } from 'commander';
-import { ConfigLoader, ProviderRegistry, CostTracker, PlanService, type DeepPartial } from '@orchestrator/core';
+import {
+  ConfigLoader,
+  ProviderRegistry,
+  CostTracker,
+  PlanService,
+  type DeepPartial,
+} from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
-import { createRunDir, writeManifest, JsonlLogger, OrchestratorEvent, type Config } from '@orchestrator/shared';
+import {
+  createRunDir,
+  writeManifest,
+  JsonlLogger,
+  OrchestratorEvent,
+  type Config,
+} from '@orchestrator/shared';
 import { OpenAIAdapter, AnthropicAdapter, ClaudeCodeAdapter } from '@orchestrator/adapters';
 import { OutputRenderer } from '../output/renderer';
 import * as fs from 'fs/promises';

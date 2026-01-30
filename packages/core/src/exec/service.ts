@@ -36,7 +36,11 @@ export class ExecutionService {
       const patchTextWithNewline = patchText.endsWith('\n') ? patchText : patchText + '\n';
 
       // 3. Try applying with limits
-      let result = await this.applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, patchOptions);
+      let result = await this.applier.applyUnifiedDiff(
+        this.repoRoot,
+        patchTextWithNewline,
+        patchOptions,
+      );
 
       // 4. Handle Limit Exceeded -> Confirmation
       if (!result.applied && result.error?.type === 'limit') {

@@ -7,7 +7,6 @@ export interface RepoState {
   artifactPaths?: string[];
 }
 
-
 export interface ToolRunMeta {
   request: ToolRunRequest;
   classification: ToolClassification;

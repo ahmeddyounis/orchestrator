@@ -106,11 +106,7 @@ export class Orchestrator {
 
   private shouldWriteEpisodicMemory(): boolean {
     const mem = this.config.memory;
-    return !!(
-      mem?.enabled &&
-      mem?.writePolicy?.enabled &&
-      mem?.writePolicy?.storeEpisodes
-    );
+    return !!(mem?.enabled && mem?.writePolicy?.enabled && mem?.writePolicy?.storeEpisodes);
   }
 
   private resolveMemoryDbPath(): string | undefined {
@@ -167,14 +163,16 @@ export class Orchestrator {
     addDirFiles(patchesDir, (n) => n.endsWith('.patch'));
     addDirFiles(toolLogsDir);
 
-    addDirFiles(root, (n) =>
-      n === 'executor_output.txt' ||
-      /^step_.*_output\.txt$/.test(n) ||
-      /^repair_iter_\d+_output\.txt$/.test(n) ||
-      /^verification_report_.*\.json$/.test(n) ||
-      /^verification_summary_.*\.txt$/.test(n) ||
-      /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
-      /^context_pack_.*\.(json|txt)$/.test(n),
+    addDirFiles(
+      root,
+      (n) =>
+        n === 'executor_output.txt' ||
+        /^step_.*_output\.txt$/.test(n) ||
+        /^repair_iter_\d+_output\.txt$/.test(n) ||
+        /^verification_report_.*\.json$/.test(n) ||
+        /^verification_summary_.*\.txt$/.test(n) ||
+        /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
+        /^context_pack_.*\.(json|txt)$/.test(n),
     );
 
     // De-dupe + relativize.
@@ -429,7 +427,8 @@ END_DIFF
         break;
       }
     }
-    const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
+    const diffContent =
+      firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
@@ -842,7 +841,7 @@ END_DIFF
       if (memoryContext) {
         contextText += memoryContext;
       }
-      
+
       if (contextPack) {
         const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
         const packFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.json`;
@@ -949,8 +948,8 @@ INSTRUCTIONS:
             break;
           }
         }
-        const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
-
+        const diffContent =
+          firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
         if (diffContent.length === 0) {
           return finish('failure', 'invalid_output', 'Executor produced empty patch');
@@ -1062,10 +1061,7 @@ INSTRUCTIONS:
         return '';
       }
 
-      const artifactPath = path.join(
-        args.artifactsRoot,
-        `memory_hits_step_${args.stepId}.json`,
-      );
+      const artifactPath = path.join(args.artifactsRoot, `memory_hits_step_${args.stepId}.json`);
       await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2));
 
       let memoryContext = '\nMEMORY (verified facts):\n';
@@ -1194,7 +1190,7 @@ INSTRUCTIONS:
         runId,
         payload: { status: 'success', summary: 'L2 Verified Success' },
       });
-      
+
       const result: RunResult = {
         ...l1Result,
         status: 'success',
@@ -1265,7 +1261,7 @@ INSTRUCTIONS:
               details: 'Verification failure signature unchanged for 2 iterations',
             },
           });
-          
+
           const result: RunResult = {
             ...l1Result,
             status: 'failure',
@@ -1386,7 +1382,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           break;
         }
       }
-      const diffContent = firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
+      const diffContent =
+        firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
       // Apply Patch
       const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
@@ -1403,7 +1400,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
       const applier = new PatchApplier();
       const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
-      
+
       const applyResult = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
         maxFilesChanged: 5,
       });

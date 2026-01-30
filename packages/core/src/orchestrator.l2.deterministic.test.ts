@@ -71,10 +71,10 @@ class FakeExecutor implements ProviderAdapter {
 
   async generate(request: any) {
     // For planning requests (jsonMode), return a simple plan
-    if (request.jsonMode ||request.messages?.[0]?.content?.includes('architecture planner')) {
+    if (request.jsonMode || request.messages?.[0]?.content?.includes('architecture planner')) {
       return { text: '{"steps": ["Step 1: Apply fix"]}' };
     }
-    
+
     // For execution requests, return the diff
     const response = this.responses[this.callCount % this.responses.length];
     this.callCount++;
@@ -112,10 +112,10 @@ describe('Orchestrator L2 Deterministic', () => {
     configVersion: 1,
     thinkLevel: 'L2',
     memory: ConfigSchema.parse({}).memory,
-    defaults: { 
+    defaults: {
       planner: 'fake-executor',
       executor: 'fake-executor',
-      reviewer: 'fake-executor'
+      reviewer: 'fake-executor',
     },
     providers: {
       'fake-executor': { type: 'fake-executor', model: 'fake' },
@@ -190,7 +190,17 @@ describe('Orchestrator L2 Deterministic', () => {
     let verifyCallCount = 0;
     const failedReport: VerificationReport = {
       passed: false,
-      checks: [{ name: 'typecheck', command: 'npm run typecheck', exitCode: 1, durationMs: 100, stdoutPath: '', stderrPath: '', passed: false }],
+      checks: [
+        {
+          name: 'typecheck',
+          command: 'npm run typecheck',
+          exitCode: 1,
+          durationMs: 100,
+          stdoutPath: '',
+          stderrPath: '',
+          passed: false,
+        },
+      ],
       summary: 'Typecheck failed',
       failureSignature: 'sig1',
     };
@@ -220,10 +230,7 @@ describe('Orchestrator L2 Deterministic', () => {
     expect(result.status).toBe('success');
     expect(result.summary).toContain('L2 Verified Success after 1 iterations');
     expect(result.verification?.passed).toBe(true);
-    const fixedFileContent = await fs.readFile(
-      path.join(testRepoPath, 'src/index.ts'),
-      'utf-8',
-    );
+    const fixedFileContent = await fs.readFile(path.join(testRepoPath, 'src/index.ts'), 'utf-8');
     expect(fixedFileContent).toContain('const x: number = 0;');
 
     vi.restoreAllMocks();
@@ -270,7 +277,17 @@ describe('Orchestrator L2 Deterministic', () => {
     let verifyCallCount = 0;
     const failedReport: VerificationReport = {
       passed: false,
-      checks: [{ name: 'test', command: 'npm run test', exitCode: 1, durationMs: 100, stdoutPath: '', stderrPath: '', passed: false }],
+      checks: [
+        {
+          name: 'test',
+          command: 'npm run test',
+          exitCode: 1,
+          durationMs: 100,
+          stdoutPath: '',
+          stderrPath: '',
+          passed: false,
+        },
+      ],
       summary: 'Tests failed',
       failureSignature: 'sig2',
     };
@@ -346,7 +363,17 @@ describe('Orchestrator L2 Deterministic', () => {
 
     const failedReport: VerificationReport = {
       passed: false,
-      checks: [{ name: 'typecheck', command: 'npm run typecheck', exitCode: 1, durationMs: 100, stdoutPath: '', stderrPath: '', passed: false }],
+      checks: [
+        {
+          name: 'typecheck',
+          command: 'npm run typecheck',
+          exitCode: 1,
+          durationMs: 100,
+          stdoutPath: '',
+          stderrPath: '',
+          passed: false,
+        },
+      ],
       summary: 'Typecheck failed',
       failureSignature: 'sig_same',
     };
@@ -368,10 +395,7 @@ describe('Orchestrator L2 Deterministic', () => {
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('non_improving');
     expect(result.verification?.passed).toBe(false);
-    const finalFileContent = await fs.readFile(
-      path.join(testRepoPath, 'src/index.ts'),
-      'utf-8',
-    );
+    const finalFileContent = await fs.readFile(path.join(testRepoPath, 'src/index.ts'), 'utf-8');
     expect(finalFileContent).toContain("const x: number = 'not a number';");
 
     vi.restoreAllMocks();
