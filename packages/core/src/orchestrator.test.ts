@@ -364,9 +364,9 @@ describe('Orchestrator', () => {
     );
 
     const systemPrompt = executorGenerate.mock.calls[0][0].messages[0].content;
-    expect(systemPrompt).toContain('MEMORY (verified facts):');
-    expect(systemPrompt).toContain('- procedural: How to do X');
-    expect(systemPrompt).toContain('Content: Run command Y');
+    expect(systemPrompt).toContain('MEMORY:\n--------------------');
+    expect(systemPrompt).toContain('// MEMORY ID: mem1 (procedural)');
+    expect(systemPrompt).toContain('// How to do X\nRun command Y');
 
     expect(fs.writeFile).toHaveBeenCalledWith(
       '/tmp/run/memory_hits_step_0.json',

@@ -4,7 +4,6 @@ import { loadIndex as loadIndexFile } from './store';
 import { RepoScanner } from '../scanner';
 import path from 'path';
 
-
 export interface IndexDrift {
   hasDrift: boolean;
   changedCount: number;
@@ -34,10 +33,7 @@ function loadIndex(config: OrchestratorConfig): Index | null {
   return loadIndexFile(indexPath) as unknown as Index | null;
 }
 
-export async function checkDrift(
-  index: Index,
-  ignore?: string[],
-): Promise<IndexDrift> {
+export async function checkDrift(index: Index, ignore?: string[]): Promise<IndexDrift> {
   const scanner = new RepoScanner();
   const snapshot = await scanner.scan(index.repoRoot, {
     excludes: ignore,
@@ -86,9 +82,7 @@ export async function checkDrift(
   };
 }
 
-export async function getIndexStatus(
-  config: OrchestratorConfig,
-): Promise<IndexStatus> {
+export async function getIndexStatus(config: OrchestratorConfig): Promise<IndexStatus> {
   const index = loadIndex(config);
   if (!index) {
     return { isIndexed: false };

@@ -20,10 +20,7 @@ export async function reconcileMemoryStaleness(
 
   for (const entry of entriesWithFiles) {
     const fileRefs = JSON.parse(entry.fileRefsJson!) as string[];
-    const fileHashes = JSON.parse(entry.fileHashesJson!) as Record<
-      string,
-      string
-    >;
+    const fileHashes = JSON.parse(entry.fileHashesJson!) as Record<string, string>;
 
     let isStale = false;
     for (const filePath of fileRefs) {

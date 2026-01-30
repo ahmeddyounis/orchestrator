@@ -1,9 +1,6 @@
 import { Command } from 'commander';
 import { IndexBuilder, findRepoRoot } from '@orchestrator/repo';
-import {
-  ConfigLoader,
-  reconcileMemoryStaleness,
-} from '@orchestrator/core';
+import { ConfigLoader, reconcileMemoryStaleness } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
 import { OrchestratorEvent } from '@orchestrator/shared';
 import { GlobalOptions } from '../../types';
@@ -37,8 +34,7 @@ export function registerIndexBuildCommand(parent: Command) {
       });
 
       const builder = new IndexBuilder({
-        maxFileSizeBytes:
-          config.indexing?.maxFileSizeBytes ?? 2 * 1024 * 1024,
+        maxFileSizeBytes: config.indexing?.maxFileSizeBytes ?? 2 * 1024 * 1024,
       });
 
       const startTime = Date.now();
@@ -55,11 +51,7 @@ export function registerIndexBuildCommand(parent: Command) {
           statSync(dbPath);
           const memoryStore = createMemoryStore();
           memoryStore.init(dbPath);
-          const stalenessResult = await reconcileMemoryStaleness(
-            repoId,
-            index,
-            memoryStore,
-          );
+          const stalenessResult = await reconcileMemoryStaleness(repoId, index, memoryStore);
           markedStaleCount = stalenessResult.markedStaleCount;
           clearedStaleCount = stalenessResult.clearedStaleCount;
           memoryStore.close();
@@ -90,9 +82,7 @@ export function registerIndexBuildCommand(parent: Command) {
         };
         console.log(JSON.stringify(output, null, 2));
       } else {
-        console.log(
-          `Successfully built index at: ${repoRoot}/.orchestrator/index`,
-        );
+        console.log(`Successfully built index at: ${repoRoot}/.orchestrator/index`);
         console.log(`- Took ${durationMs}ms`);
         console.log(`- Indexed ${index.stats.fileCount} files`);
         console.log(`- Hashed ${index.stats.hashedCount} files`);
@@ -104,5 +94,3 @@ export function registerIndexBuildCommand(parent: Command) {
       }
     });
 }
-
-

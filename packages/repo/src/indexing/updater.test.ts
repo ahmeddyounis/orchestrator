@@ -208,6 +208,4 @@ describe('IndexUpdater', () => {
     const savedIndex = mockedSaveIndexAtomic.mock.calls[0][1];
     expect(savedIndex.files).toEqual(baseIndex.files);
   });
-
-  
 });

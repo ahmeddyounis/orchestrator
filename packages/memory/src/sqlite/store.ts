@@ -140,9 +140,7 @@ export function createMemoryStore(): MemoryStore {
   const updateStaleFlag = (id: string, stale: boolean): void => {
     if (!db) throw new Error('Database not initialized');
     const now = Date.now();
-    const stmt = db.prepare(
-      'UPDATE memory_entries SET stale = ?, updatedAt = ? WHERE id = ?',
-    );
+    const stmt = db.prepare('UPDATE memory_entries SET stale = ?, updatedAt = ? WHERE id = ?');
     stmt.run(stale ? 1 : 0, now, id);
   };
 

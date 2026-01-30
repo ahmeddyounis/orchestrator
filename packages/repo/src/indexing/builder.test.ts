@@ -80,7 +80,7 @@ describe('IndexBuilder', () => {
 
     expect(index.repoRoot).toBe(fixturePath);
     expect(index.files).toHaveLength(3);
-    
+
     const drift = await checkDrift(index);
     expect(drift.hasDrift).toBe(false);
   });

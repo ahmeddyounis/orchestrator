@@ -64,15 +64,9 @@ describe('reconcileMemoryStaleness', () => {
 
   it('should not mark anything if no entries have file refs', async () => {
     const index = createIndex([{ path: 'a.ts', sha256: 'hash-a' }]);
-    (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([
-      { id: '1', stale: false },
-    ]);
+    (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([{ id: '1', stale: false }]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 0, clearedStaleCount: 0 });
     expect(memoryStore.updateStaleFlag).not.toHaveBeenCalled();
@@ -83,11 +77,7 @@ describe('reconcileMemoryStaleness', () => {
     const index = createIndex([]);
     (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([entry]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 1, clearedStaleCount: 0 });
     expect(memoryStore.updateStaleFlag).toHaveBeenCalledWith('1', true);
@@ -98,11 +88,7 @@ describe('reconcileMemoryStaleness', () => {
     const index = createIndex([{ path: 'a.ts', sha256: 'hash-a-new' }]);
     (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([entry]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 1, clearedStaleCount: 0 });
     expect(memoryStore.updateStaleFlag).toHaveBeenCalledWith('1', true);
@@ -113,11 +99,7 @@ describe('reconcileMemoryStaleness', () => {
     const index = createIndex([{ path: 'a.ts', sha256: 'hash-a' }]);
     (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([entry]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 0, clearedStaleCount: 1 });
     expect(memoryStore.updateStaleFlag).toHaveBeenCalledWith('1', false);
@@ -128,11 +110,7 @@ describe('reconcileMemoryStaleness', () => {
     const index = createIndex([{ path: 'a.ts', sha256: 'hash-a' }]);
     (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([entry]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 0, clearedStaleCount: 0 });
     expect(memoryStore.updateStaleFlag).not.toHaveBeenCalled();
@@ -143,30 +121,16 @@ describe('reconcileMemoryStaleness', () => {
     const index = createIndex([{ path: 'a.ts', sha256: 'hash-a-new' }]);
     (memoryStore.listEntriesForRepo as vi.Mock).mockReturnValue([entry]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 0, clearedStaleCount: 0 });
     expect(memoryStore.updateStaleFlag).not.toHaveBeenCalled();
   });
 
   it('should handle multiple entries correctly', async () => {
-    const entry1Stale = createEntry(
-      '1',
-      ['a.ts'],
-      { 'a.ts': 'hash-a-old' },
-      false,
-    );
+    const entry1Stale = createEntry('1', ['a.ts'], { 'a.ts': 'hash-a-old' }, false);
     const entry2Clear = createEntry('2', ['b.ts'], { 'b.ts': 'hash-b' }, true);
-    const entry3NoChange = createEntry(
-      '3',
-      ['c.ts'],
-      { 'c.ts': 'hash-c' },
-      false,
-    );
+    const entry3NoChange = createEntry('3', ['c.ts'], { 'c.ts': 'hash-c' }, false);
 
     const index = createIndex([
       { path: 'a.ts', sha256: 'hash-a-new' },
@@ -179,18 +143,11 @@ describe('reconcileMemoryStaleness', () => {
       entry3NoChange,
     ]);
 
-    const result = await reconcileMemoryStaleness(
-      'test-repo',
-      index,
-      memoryStore,
-    );
+    const result = await reconcileMemoryStaleness('test-repo', index, memoryStore);
 
     expect(result).toEqual({ markedStaleCount: 1, clearedStaleCount: 1 });
     expect(memoryStore.updateStaleFlag).toHaveBeenCalledWith('1', true);
     expect(memoryStore.updateStaleFlag).toHaveBeenCalledWith('2', false);
-    expect(memoryStore.updateStaleFlag).not.toHaveBeenCalledWith(
-      '3',
-      expect.any(Boolean),
-    );
+    expect(memoryStore.updateStaleFlag).not.toHaveBeenCalledWith('3', expect.any(Boolean));
   });
 });

@@ -43,7 +43,7 @@ export function registerIndexStatusCommand(parent: Command) {
       });
 
       if (status.drift) {
-        console.log("\nDrift from repository:");
+        console.log('\nDrift from repository:');
         const driftData = [
           { key: 'Added', value: status.drift.addedCount },
           { key: 'Changed', value: status.drift.changedCount },
@@ -55,14 +55,12 @@ export function registerIndexStatusCommand(parent: Command) {
         });
 
         if (status.drift.changes.modified.length > 0) {
-          console.log("\nTop changed paths:");
+          console.log('\nTop changed paths:');
           status.drift.changes.modified.forEach((p) => console.log(`- ${p}`));
         }
 
         const totalDrift =
-          status.drift.addedCount +
-          status.drift.changedCount +
-          status.drift.removedCount;
+          status.drift.addedCount + status.drift.changedCount + status.drift.removedCount;
         if (totalDrift > 0) {
           console.log("\nRun 'orchestrator index update' to sync the index.");
         } else {
@@ -71,4 +69,3 @@ export function registerIndexStatusCommand(parent: Command) {
       }
     });
 }
-

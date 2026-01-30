@@ -63,7 +63,7 @@ async function list(options: {
   let entries = store.list(repoId, options.type, options.limit);
 
   if (options.staleOnly) {
-    entries = entries.filter(entry => entry.stale);
+    entries = entries.filter((entry) => entry.stale);
   }
 
   if (options.json) {
@@ -109,7 +109,7 @@ async function show(id: string, options: { json?: boolean }) {
     const fileRefs = JSON.parse(entry.fileRefsJson) as string[];
     if (fileRefs.length > 0) {
       console.log('File Refs:');
-      fileRefs.forEach(ref => console.log(`  - ${ref}`));
+      fileRefs.forEach((ref) => console.log(`  - ${ref}`));
     }
   }
   console.log(`Content:\n${entry.content}`);

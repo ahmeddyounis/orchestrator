@@ -9,4 +9,3 @@ export function printTable(
   data.forEach((row) => table.push(Object.values(row).map((v) => String(v))));
   console.log(table.toString());
 }
-

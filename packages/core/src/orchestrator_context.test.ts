@@ -135,7 +135,7 @@ describe('Orchestrator Context Integration', () => {
     });
   });
 
-  it('should generate, save, and use context pack in L1 run', async () => {
+  it('should generate, save, and use fused context in L1 run', async () => {
     // Setup mock context pack
     const mockContextPack = {
       items: [
@@ -158,42 +158,45 @@ describe('Orchestrator Context Integration', () => {
 
     await orchestrator.runL1('some goal', runId);
 
-    // 1. Verify ContextPacker was used
+    // 1. Verify ContextPacker was used to get repo context
     expect(SimpleContextPacker).toHaveBeenCalled();
     expect(SnippetExtractor).toHaveBeenCalled();
 
-    // 2. Verify Artifacts were saved
-    // We expect a call to fs.writeFile with the context pack JSON
-    const expectedPackPath = path.join('/tmp/run', 'context_pack_step_0_step_1.json');
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      expectedPackPath,
-      JSON.stringify(mockContextPack, null, 2),
-    );
+    // 2. Verify Fused Artifacts were saved
+    const expectedJsonPath = path.join('/tmp/run', 'fused_context_step_0_step_1.json');
+    const expectedTxtPath = path.join('/tmp/run', 'fused_context_step_0_step_1.txt');
 
-    // Expect TXT artifact
-    const expectedTxtPath = path.join('/tmp/run', 'context_pack_step_0_step_1.txt');
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      expectedTxtPath,
-      expect.stringContaining('Context Rationale:'),
-    );
+    const writeFileCalls = (fs.writeFile as ReturnType<typeof vi.fn>).mock.calls;
 
-    // 3. Verify Prompt contains rationale and headers
+    const jsonCall = writeFileCalls.find((call) => call[0] === expectedJsonPath);
+    expect(jsonCall).toBeDefined();
+    const writtenMetadata = JSON.parse(jsonCall[1]);
+    expect(writtenMetadata.repoItems[0].path).toBe('src/file.ts');
+    expect(writtenMetadata.repoItems[0].truncated).toBe(false);
+
+    const txtCall = writeFileCalls.find((call) => call[0] === expectedTxtPath);
+    expect(txtCall).toBeDefined();
+    const writtenPrompt = txtCall[1];
+
+    // 3. Verify Prompt contains fused context
+    expect(writtenPrompt).toContain('GOAL: Goal: some goal');
+    expect(writtenPrompt).toContain('REPO CONTEXT:');
+    expect(writtenPrompt).toContain('// src/file.ts:10');
+    expect(writtenPrompt).toContain('function test() {}');
+
     const executor = (await mockRegistry.resolveRoleProviders()).executor;
     const generateCall = (executor.generate as ReturnType<typeof vi.fn>).mock.calls[0];
     const messages = generateCall[0].messages;
     const systemPrompt = messages[0].content;
+    expect(systemPrompt).toContain(writtenPrompt);
 
-    expect(systemPrompt).toContain('Context Rationale:');
-    expect(systemPrompt).toContain('- src/file.ts:10-20 (Score: 10.00): Relevant keyword match');
-    expect(systemPrompt).toContain('File: src/file.ts (Lines 10-20)');
-    expect(systemPrompt).toContain('function test() {}');
+    // 4. Verify Manifest includes context paths
+    const manifestCalls = (writeManifest as ReturnType<typeof vi.fn>).mock.calls;
+    const lastManifestCall = manifestCalls[manifestCalls.length - 1];
 
-    // 4. Verify Manifest includes context path
-    expect(writeManifest).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        contextPaths: expect.arrayContaining([expectedPackPath]),
-      }),
+    expect(lastManifestCall).toBeDefined();
+    expect(lastManifestCall[1].contextPaths).toEqual(
+      expect.arrayContaining([expectedJsonPath, expectedTxtPath]),
     );
   });
 });

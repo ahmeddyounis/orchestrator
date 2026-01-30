@@ -7,6 +7,7 @@ import {
   ToolPolicy,
 } from '@orchestrator/shared';
 import {
+  ContextSignal,
   GitService,
   RepoScanner,
   SearchService,
@@ -14,7 +15,7 @@ import {
   SimpleContextPacker,
   SnippetExtractor,
 } from '@orchestrator/repo';
-import { createMemoryStore } from '@orchestrator/memory';
+import { MemoryEntry, createMemoryStore } from '@orchestrator/memory';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -32,6 +33,7 @@ import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
 import { ConfigLoader } from './config/loader';
+import { SimpleContextFuser } from './context';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -172,7 +174,7 @@ export class Orchestrator {
         /^verification_report_.*\.json$/.test(n) ||
         /^verification_summary_.*\.txt$/.test(n) ||
         /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
-        /^context_pack_.*\.(json|txt)$/.test(n),
+        /^fused_context_.*\.(json|txt)$/.test(n),
     );
 
     // De-dupe + relativize.
@@ -826,7 +828,7 @@ END_DIFF
       }
 
       // Memory Search
-      const memoryContext = await this.searchMemory(
+      const memoryHits = await this.searchMemoryHits(
         {
           goal,
           step,
@@ -837,39 +839,39 @@ END_DIFF
         eventBus,
       );
 
-      let contextText = `Goal: ${goal}\nCurrent Step: ${step}\n`;
-      if (memoryContext) {
-        contextText += memoryContext;
-      }
+      const fuser = new SimpleContextFuser();
+      const fusionBudgets = {
+        maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
+        maxMemoryChars: this.config.memory?.maxChars ?? 2000,
+        maxSignalsChars: 1000,
+      };
 
-      if (contextPack) {
-        const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
-        const packFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.json`;
-        const packPath = path.join(artifacts.root, packFilename);
-        await fs.writeFile(packPath, JSON.stringify(contextPack, null, 2));
-        contextPaths.push(packPath);
+      // TODO: Plumb real signals
+      const signals: ContextSignal[] = [];
 
-        let formattedContext = `\nCONTEXT:\n`;
+      const fusedContext = fuser.fuse({
+        goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+        repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+        memoryHits,
+        signals,
+        budgets: fusionBudgets,
+      });
 
-        formattedContext += `Context Rationale:\n`;
-        for (const item of contextPack.items) {
-          formattedContext += `- ${item.path}:${item.startLine}-${item.endLine} (Score: ${item.score.toFixed(2)}): ${item.reason}\n`;
-        }
-        formattedContext += `\n`;
+      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
+      const fusedJsonPath = path.join(
+        artifacts.root,
+        `fused_context_step_${stepsCompleted}_${stepSlug}.json`,
+      );
+      const fusedTxtPath = path.join(
+        artifacts.root,
+        `fused_context_step_${stepsCompleted}_${stepSlug}.txt`,
+      );
 
-        for (const item of contextPack.items) {
-          formattedContext += `File: ${item.path} (Lines ${item.startLine}-${item.endLine})\n\
-${item.content}\
-\
-`;
-        }
+      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
+      await fs.writeFile(fusedTxtPath, fusedContext.prompt);
+      contextPaths.push(fusedJsonPath, fusedTxtPath);
 
-        const txtFilename = `context_pack_step_${stepsCompleted}_${stepSlug}.txt`;
-        const txtPath = path.join(artifacts.root, txtFilename);
-        await fs.writeFile(txtPath, formattedContext);
-
-        contextText += formattedContext;
-      }
+      const contextText = fusedContext.prompt;
 
       let attempt = 0;
       let success = false;
@@ -893,7 +895,9 @@ INSTRUCTIONS:
 `;
 
         if (attempt > 1) {
-          systemPrompt += `\n\nPREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again.`;
+          systemPrompt += `
+
+PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again.`;
         }
 
         const response = await providers.executor.generate(
@@ -1017,7 +1021,7 @@ INSTRUCTIONS:
     return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
 
-  private async searchMemory(
+  private async searchMemoryHits(
     args: {
       goal: string;
       step: string;
@@ -1026,15 +1030,15 @@ INSTRUCTIONS:
       artifactsRoot: string;
     },
     eventBus: EventBus,
-  ): Promise<string> {
+  ): Promise<MemoryEntry[]> {
     const memConfig = this.config.memory;
     if (!memConfig?.enabled) {
-      return '';
+      return [];
     }
 
     const dbPath = this.resolveMemoryDbPath();
     if (!dbPath) {
-      return '';
+      return [];
     }
 
     const store = createMemoryStore();
@@ -1058,31 +1062,17 @@ INSTRUCTIONS:
       });
 
       if (hits.length === 0) {
-        return '';
+        return [];
       }
 
       const artifactPath = path.join(args.artifactsRoot, `memory_hits_step_${args.stepId}.json`);
       await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2));
 
-      let memoryContext = '\nMEMORY (verified facts):\n';
-      const maxChars = memConfig.maxChars ?? 2000;
-      let totalChars = 0;
-
-      for (const hit of hits) {
-        const content = `- ${hit.type}: ${hit.title}\n  Content: ${hit.content}\n`;
-        if (totalChars + content.length > maxChars) {
-          memoryContext += '... (truncated)\n';
-          break;
-        }
-        memoryContext += content;
-        totalChars += content.length;
-      }
-
-      return memoryContext;
+      return hits;
     } catch (err) {
       // Log but don't fail
       console.error('Memory search failed:', err);
-      return '';
+      return [];
     } finally {
       store.close();
     }
