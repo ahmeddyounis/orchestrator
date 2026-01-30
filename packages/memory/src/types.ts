@@ -15,3 +15,13 @@ export interface MemoryEntry {
   createdAt: number;
   updatedAt: number;
 }
+
+export interface MemoryStatus {
+  entryCounts: {
+    procedural: number;
+    episodic: number;
+    semantic: number;
+    total: number;
+  };
+  lastUpdatedAt: number | null;
+}

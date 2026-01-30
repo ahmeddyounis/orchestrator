@@ -5,6 +5,7 @@ import { registerRunCommand } from './commands/run';
 import { registerFixCommand } from './commands/fix';
 import { registerPlanCommand } from './commands/plan';
 import { registerEvalCommand } from './commands/eval';
+import { registerMemoryCommand } from './commands/memory';
 
 const program = new Command();
 
@@ -22,5 +23,6 @@ registerRunCommand(program);
 registerFixCommand(program);
 registerPlanCommand(program);
 registerEvalCommand(program);
+registerMemoryCommand(program);
 
 program.parse(process.argv);

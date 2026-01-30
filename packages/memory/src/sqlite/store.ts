@@ -2,15 +2,20 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
-import type { MemoryEntry, MemoryEntryType } from '../types';
+import type { MemoryEntry, MemoryEntryType, MemoryStatus } from '../types';
 
 export interface MemoryStore {
   init(dbPath: string): void;
   upsert(entry: MemoryEntry): void;
   search(repoId: string, query: string, topK?: number): MemoryEntry[];
   get(id: string): MemoryEntry | null;
-  list(repoId: string): MemoryEntry[];
+  list(
+    repoId: string,
+    type?: MemoryEntryType,
+    limit?: number,
+  ): MemoryEntry[];
   wipe(repoId: string): void;
+  status(repoId: string): MemoryStatus;
   close(): void;
 }
 
@@ -104,11 +109,66 @@ export function createMemoryStore(): MemoryStore {
     return row ? rowToEntry(row) : null;
   };
 
-  const list = (repoId: string): MemoryEntry[] => {
+  const list = (
+    repoId: string,
+    type?: MemoryEntryType,
+    limit?: number,
+  ): MemoryEntry[] => {
     if (!db) throw new Error('Database not initialized');
-    const stmt = db.prepare('SELECT * FROM memory_entries WHERE repoId = ?');
-    const rows = stmt.all(repoId) as unknown as MemoryEntryDbRow[];
+    let query = 'SELECT * FROM memory_entries WHERE repoId = ?';
+    const params: (string | number)[] = [repoId];
+
+    if (type) {
+      query += ' AND type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY updatedAt DESC';
+
+    if (limit) {
+      query += ' LIMIT ?';
+      params.push(limit);
+    }
+
+    const stmt = db.prepare(query);
+    const rows = stmt.all(...params) as unknown as MemoryEntryDbRow[];
     return rows.map(rowToEntry);
+  };
+
+  const status = (repoId: string): MemoryStatus => {
+    if (!db) throw new Error('Database not initialized');
+
+    const countsStmt = db.prepare(
+      "SELECT type, COUNT(*) as count FROM memory_entries WHERE repoId = ? GROUP BY type",
+    );
+    const countsRows = countsStmt.all(repoId) as {
+      type: MemoryEntryType;
+      count: number;
+    }[];
+
+    const lastUpdatedStmt = db.prepare(
+      'SELECT MAX(updatedAt) as lastUpdatedAt FROM memory_entries WHERE repoId = ?',
+    );
+    const lastUpdatedRow = lastUpdatedStmt.get(repoId) as
+      | { lastUpdatedAt: number | null }
+      | undefined;
+
+    const entryCounts: MemoryStatus['entryCounts'] = {
+      procedural: 0,
+      episodic: 0,
+      semantic: 0,
+      total: 0,
+    };
+
+    for (const row of countsRows) {
+      entryCounts[row.type] = row.count;
+      entryCounts.total += row.count;
+    }
+
+    return {
+      entryCounts,
+      lastUpdatedAt: lastUpdatedRow?.lastUpdatedAt ?? null,
+    };
   };
 
   const search = (
@@ -147,6 +207,7 @@ export function createMemoryStore(): MemoryStore {
     get,
     list,
     search,
+    status,
     wipe,
   };
 }
