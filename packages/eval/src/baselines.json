@@ -1,0 +1,9 @@
+{
+  "claude-l2-no-mem": {
+    "provider": "anthropic",
+    "thinkLevel": "L2",
+    "args": {
+      "model": "claude-3-opus-20240229"
+    }
+  }
+}

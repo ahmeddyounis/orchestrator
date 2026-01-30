@@ -93,3 +93,9 @@ export interface EvalAggregates {
   avgDurationMs: number;
   passRate: number;
 }
+
+export interface EvalComparison {
+  passRateDelta: number;
+  avgDurationDelta: number;
+  totalCostDelta: number;
+}

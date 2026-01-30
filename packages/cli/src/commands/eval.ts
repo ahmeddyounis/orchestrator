@@ -6,6 +6,7 @@ export function registerEvalCommand(program: Command) {
   program
     .command('eval')
     .argument('<suitePath>', 'Path to the evaluation suite')
+    .option('--baseline <name>', 'Name of the baseline to run against')
     .description('Run an evaluation suite')
     .action(async (suitePath, options) => {
       const globalOpts = program.opts();
