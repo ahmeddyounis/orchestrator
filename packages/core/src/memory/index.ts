@@ -254,3 +254,5 @@ export class MemoryWriter {
     return memoryStore;
   }
 }
+
+export * from './reconciler';

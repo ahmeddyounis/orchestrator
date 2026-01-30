@@ -96,7 +96,6 @@ describe('SafeCommandRunner', () => {
   it('should bypass confirmation if command is allowlisted', async () => {
     const req: ToolRunRequest = { command: 'safe-cmd run', reason: 'test', cwd: '/tmp' };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChild = new EventEmitter() as any;
     mockChild.stdout = new EventEmitter();
     mockChild.stderr = new EventEmitter();
@@ -113,7 +112,6 @@ describe('SafeCommandRunner', () => {
   it('should require confirmation if not allowlisted and requireConfirmation is true', async () => {
     const req: ToolRunRequest = { command: 'other-cmd', reason: 'test', cwd: '/tmp' };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChild = new EventEmitter() as any;
     mockChild.stdout = new EventEmitter();
     mockChild.stderr = new EventEmitter();
@@ -140,7 +138,6 @@ describe('SafeCommandRunner', () => {
     const req: ToolRunRequest = { command: 'sleep 2', reason: 'test', cwd: '/tmp' };
     const policy = { ...defaultPolicy, timeoutMs: 10 };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChild = new EventEmitter() as any;
     mockChild.stdout = new EventEmitter();
     mockChild.stderr = new EventEmitter();
@@ -159,7 +156,6 @@ describe('SafeCommandRunner', () => {
     const req: ToolRunRequest = { command: 'echo long', reason: 'test', cwd: '/tmp' };
     const policy = { ...defaultPolicy, maxOutputBytes: 5 };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChild = new EventEmitter() as any;
     mockChild.stdout = new EventEmitter();
     mockChild.stderr = new EventEmitter();

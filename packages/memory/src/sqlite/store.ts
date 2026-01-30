@@ -10,6 +10,8 @@ export interface MemoryStore {
   search(repoId: string, query: string, topK?: number): MemoryEntry[];
   get(id: string): MemoryEntry | null;
   list(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
+  listEntriesForRepo(repoId: string): MemoryEntry[];
+  updateStaleFlag(id: string, stale: boolean): void;
   wipe(repoId: string): void;
   status(repoId: string): MemoryStatus;
   close(): void;
@@ -127,6 +129,23 @@ export function createMemoryStore(): MemoryStore {
     return rows.map(rowToEntry);
   };
 
+  const listEntriesForRepo = (repoId: string): MemoryEntry[] => {
+    if (!db) throw new Error('Database not initialized');
+    const query = 'SELECT * FROM memory_entries WHERE repoId = ?';
+    const stmt = db.prepare(query);
+    const rows = stmt.all(repoId) as unknown as MemoryEntryDbRow[];
+    return rows.map(rowToEntry);
+  };
+
+  const updateStaleFlag = (id: string, stale: boolean): void => {
+    if (!db) throw new Error('Database not initialized');
+    const now = Date.now();
+    const stmt = db.prepare(
+      'UPDATE memory_entries SET stale = ?, updatedAt = ? WHERE id = ?',
+    );
+    stmt.run(stale ? 1 : 0, now, id);
+  };
+
   const status = (repoId: string): MemoryStatus => {
     if (!db) throw new Error('Database not initialized');
 
@@ -194,6 +213,8 @@ export function createMemoryStore(): MemoryStore {
     upsert,
     get,
     list,
+    listEntriesForRepo,
+    updateStaleFlag,
     search,
     status,
     wipe,

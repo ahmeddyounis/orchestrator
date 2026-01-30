@@ -358,6 +358,14 @@ export interface MemorySearched extends BaseEvent {
   };
 }
 
+export interface MemoryStalenessReconciled extends BaseEvent {
+  type: 'MemoryStalenessReconciled';
+  payload: {
+    markedStale: number;
+    clearedStale: number;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -377,6 +385,7 @@ export type OrchestratorEvent =
   | MemoryWrite
   | MemoryRedaction
   | MemorySearched
+  | MemoryStalenessReconciled
   | ConfirmationRequested
   | ConfirmationResolved
   | ProviderSelected
