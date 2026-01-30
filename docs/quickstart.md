@@ -68,6 +68,21 @@ node packages/cli/dist/index.js --help
 
 For detailed command usage, see the [CLI Reference](./cli.md).
 
+## Viewing Run Artifacts
+
+After each run, the orchestrator stores detailed logs, reports, and patches in a dedicated directory. This is essential for debugging and understanding the agent's behavior.
+
+- **Location**: `.orchestrator/runs/<run_id>/`
+
+To quickly summarize a run's results, use the `report` command:
+
+```bash
+# View a report for the last run
+node packages/cli/dist/index.js report
+```
+
+For a deep dive into the artifacts and their schemas, see the [Observability Guide](./observability.md).
+
 ## Configuration
 
 To configure the Orchestrator (providers, models, etc.), create a `.orchestrator.yaml` file in your project root or `~/.orchestrator/config.yaml`.
