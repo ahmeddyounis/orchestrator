@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export const IndexingConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  path: z.string().default('.orchestrator/index/index.json'),
+  mode: z.enum(['off', 'on-demand', 'full']).default('on-demand'),
+  hashAlgorithm: z.enum(['sha256']).default('sha256'),
+  maxFileSizeBytes: z.number().default(2_000_000),
+});
+
 export const ProviderConfigSchema = z
   .object({
     type: z.string(),
@@ -192,6 +200,7 @@ export const ConfigSchema = z.object({
         maxCommandsPerIteration: 3,
       },
     }),
+  indexing: IndexingConfigSchema.optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

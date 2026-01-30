@@ -11,6 +11,8 @@ export * from './git';
 export * from './toolchain/types';
 export * from './toolchain/detector';
 export * from './toolchain/targeting';
+export * from './indexing';
+export * from './indexing/types';
 
 /**
  * Finds the repository root starting from the current directory.
