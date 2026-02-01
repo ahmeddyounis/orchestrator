@@ -2,6 +2,8 @@ import type { RetrievalIntent } from '@orchestrator/shared';
 
 export type MemoryEntryType = 'procedural' | 'episodic' | 'semantic';
 
+export type IntegrityStatus = 'ok' | 'suspect' | 'blocked';
+
 export interface MemoryEntry {
   id: string;
   repoId: string;
@@ -13,6 +15,8 @@ export interface MemoryEntry {
   fileRefsJson?: string;
   fileHashesJson?: string;
   stale?: boolean;
+  integrityStatus?: IntegrityStatus;
+  integrityReasonsJson?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -61,6 +65,8 @@ export interface BaseHit {
   content: string;
   createdAt: number;
   updatedAt: number;
+  integrityStatus?: IntegrityStatus;
+  integrityReasonsJson?: string;
 }
 
 export interface LexicalHit extends BaseHit {

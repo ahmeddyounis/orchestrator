@@ -39,9 +39,11 @@ export class MemorySearchService {
     const { query, topKFinal } = request;
     const { memoryStore, repoId } = this.deps;
 
-    const hits = memoryStore.search(repoId, query, {
-      topK: topKFinal,
-    });
+    const hits = memoryStore
+      .search(repoId, query, {
+        topK: topKFinal,
+      })
+      .filter((hit) => hit.integrityStatus !== 'blocked');
 
     return {
       methodUsed: 'lexical',
@@ -134,6 +136,8 @@ export class MemorySearchService {
       content: entry.content,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
+      integrityStatus: entry.integrityStatus,
+      integrityReasonsJson: entry.integrityReasonsJson,
     };
   }
 
@@ -143,7 +147,7 @@ export class MemorySearchService {
 
     for (const hit of vectorHits) {
       const entry = memoryStore.get(hit.id);
-      if (entry) {
+      if (entry && entry.integrityStatus !== 'blocked') {
         hydrated.push({
           ...this.entryToBaseHit(entry),
           vectorScore: hit.score,

@@ -26,10 +26,12 @@ function createMemoryStore() {
     const now = Date.now();
     const stmt = db.prepare(`
       INSERT INTO memory_entries (
-        id, repoId, type, title, content, evidenceJson, gitSha, fileRefsJson, fileHashesJson, stale, createdAt, updatedAt
+        id, repoId, type, title, content, evidenceJson, gitSha, fileRefsJson, fileHashesJson, stale,
+        integrityStatus, integrityReasonsJson, createdAt, updatedAt
       )
       VALUES (
-        @id, @repoId, @type, @title, @content, @evidenceJson, @gitSha, @fileRefsJson, @fileHashesJson, @stale, @createdAt, @updatedAt
+        @id, @repoId, @type, @title, @content, @evidenceJson, @gitSha, @fileRefsJson, @fileHashesJson, @stale,
+        @integrityStatus, @integrityReasonsJson, @createdAt, @updatedAt
       )
       ON CONFLICT(id) DO UPDATE SET
         repoId = excluded.repoId,
@@ -41,6 +43,8 @@ function createMemoryStore() {
         fileRefsJson = excluded.fileRefsJson,
         fileHashesJson = excluded.fileHashesJson,
         stale = excluded.stale,
+        integrityStatus = excluded.integrityStatus,
+        integrityReasonsJson = excluded.integrityReasonsJson,
         updatedAt = excluded.updatedAt;
     `);
     stmt.run({
@@ -52,6 +56,8 @@ function createMemoryStore() {
       gitSha: entry.gitSha ?? null,
       fileRefsJson: entry.fileRefsJson ?? null,
       fileHashesJson: entry.fileHashesJson ?? null,
+      integrityStatus: entry.integrityStatus ?? 'ok',
+      integrityReasonsJson: entry.integrityReasonsJson ?? null,
     });
   };
   const rowToEntry = (row) => {
@@ -62,6 +68,8 @@ function createMemoryStore() {
       fileRefsJson: row.fileRefsJson ?? undefined,
       fileHashesJson: row.fileHashesJson ?? undefined,
       stale: Boolean(row.stale),
+      integrityStatus: row.integrityStatus,
+      integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
   };
   const rowToLexicalHit = (row) => {
@@ -74,6 +82,8 @@ function createMemoryStore() {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       lexicalScore: row.score,
+      integrityStatus: row.integrityStatus,
+      integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
   };
   const get = (id) => {

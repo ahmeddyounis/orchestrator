@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
 import { MemoryError } from '@orchestrator/shared';
-import type { MemoryEntry, MemoryEntryType, MemoryStatus, LexicalHit } from '../types';
+import type { MemoryEntry, MemoryEntryType, MemoryStatus, LexicalHit, IntegrityStatus } from '../types';
 
 export interface LexicalSearchOptions {
   topK?: number;
@@ -34,6 +34,8 @@ interface MemoryEntryDbRow {
   fileRefsJson: string | null;
   fileHashesJson: string | null;
   stale: number;
+  integrityStatus: IntegrityStatus;
+  integrityReasonsJson: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -63,10 +65,12 @@ export function createMemoryStore(): MemoryStore {
     const stmt = db.prepare(
       `
       INSERT INTO memory_entries (
-        id, repoId, type, title, content, evidenceJson, gitSha, fileRefsJson, fileHashesJson, stale, createdAt, updatedAt
+        id, repoId, type, title, content, evidenceJson, gitSha, fileRefsJson, fileHashesJson, stale,
+        integrityStatus, integrityReasonsJson, createdAt, updatedAt
       )
       VALUES (
-        @id, @repoId, @type, @title, @content, @evidenceJson, @gitSha, @fileRefsJson, @fileHashesJson, @stale, @createdAt, @updatedAt
+        @id, @repoId, @type, @title, @content, @evidenceJson, @gitSha, @fileRefsJson, @fileHashesJson, @stale,
+        @integrityStatus, @integrityReasonsJson, @createdAt, @updatedAt
       )
       ON CONFLICT(id) DO UPDATE SET
         repoId = excluded.repoId,
@@ -78,6 +82,8 @@ export function createMemoryStore(): MemoryStore {
         fileRefsJson = excluded.fileRefsJson,
         fileHashesJson = excluded.fileHashesJson,
         stale = excluded.stale,
+        integrityStatus = excluded.integrityStatus,
+        integrityReasonsJson = excluded.integrityReasonsJson,
         updatedAt = excluded.updatedAt;
     `,
     );
@@ -91,6 +97,8 @@ export function createMemoryStore(): MemoryStore {
       gitSha: entry.gitSha ?? null,
       fileRefsJson: entry.fileRefsJson ?? null,
       fileHashesJson: entry.fileHashesJson ?? null,
+      integrityStatus: entry.integrityStatus ?? 'ok',
+      integrityReasonsJson: entry.integrityReasonsJson ?? null,
     });
   };
 
@@ -102,6 +110,8 @@ export function createMemoryStore(): MemoryStore {
       fileRefsJson: row.fileRefsJson ?? undefined,
       fileHashesJson: row.fileHashesJson ?? undefined,
       stale: Boolean(row.stale),
+      integrityStatus: row.integrityStatus,
+      integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
   };
 
@@ -115,6 +125,8 @@ export function createMemoryStore(): MemoryStore {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       lexicalScore: row.score,
+      integrityStatus: row.integrityStatus,
+      integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
   };
 

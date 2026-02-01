@@ -13,6 +13,8 @@ const migrations = [
       fileRefsJson TEXT,
       fileHashesJson TEXT,
       stale INTEGER DEFAULT 0,
+      integrityStatus TEXT DEFAULT 'ok' CHECK(integrityStatus IN ('ok', 'suspect', 'blocked')),
+      integrityReasonsJson TEXT,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MemoryWriter } from './index';
 import { RepoState, RunSummary, ToolRunMeta } from './types';
 import { ToolRunResult } from '@orchestrator/shared';
@@ -9,7 +9,7 @@ describe('MemoryWriter', () => {
 
   beforeEach(() => {
     const mockEventBus = { emit: vi.fn() };
-    memoryWriter = new MemoryWriter(mockEventBus, 'test-run');
+    memoryWriter = new MemoryWriter({ eventBus: mockEventBus });
     memoryWriter.getMemoryStore().clear();
   });
 

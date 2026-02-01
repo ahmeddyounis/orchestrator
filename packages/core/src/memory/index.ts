@@ -18,8 +18,9 @@ import {
 import { EventBus } from '../registry';
 import { randomUUID } from 'crypto';
 import { VerificationReport } from '../verify/types';
-import { createMemoryStore, VectorMemoryBackend } from '@orchestrator/memory';
+import { createMemoryStore, VectorMemoryBackend, MemoryEntry } from '@orchestrator/memory';
 import { Embedder } from '@orchestrator/adapters';
+import { assessMemoryIntegrity } from './critic';
 
 const memoryStore = new Map<string, Memory>();
 
@@ -175,7 +176,7 @@ export class MemoryWriter {
 
     if (repoState.memoryDbPath && repoState.repoId) {
       const store = ensureSqliteStore(repoState.memoryDbPath);
-      store.upsert({
+      const entryToUpsert: MemoryEntry = {
         id: newMemory.id,
         repoId: repoState.repoId,
         type: 'episodic',
@@ -186,7 +187,18 @@ export class MemoryWriter {
         stale: false,
         createdAt: newMemory.createdAt.getTime(),
         updatedAt: newMemory.updatedAt.getTime(),
-      });
+      };
+
+      const { status, reasons } = assessMemoryIntegrity(entryToUpsert);
+      entryToUpsert.integrityStatus = status;
+      entryToUpsert.integrityReasonsJson = reasons.length > 0 ? JSON.stringify(reasons) : undefined;
+
+      if (status === 'blocked' || status === 'suspect') {
+        // Optionally, emit an event or log that a memory was blocked
+        return newMemory; // Do not save but return to caller
+      }
+
+      store.upsert(entryToUpsert);
       await this.embedAndUpsert(repoState.repoId, newMemory, repoState);
     }
 
@@ -226,6 +238,7 @@ export class MemoryWriter {
       exitCode,
       durationMs,
       toolRunId,
+      classification,
     };
 
     const redactedEvidence = this.redactionEnabled ? redactObject(evidence) : evidence;
@@ -238,7 +251,7 @@ export class MemoryWriter {
 
       if (repoState.memoryDbPath && repoState.repoId) {
         const store = ensureSqliteStore(repoState.memoryDbPath);
-        store.upsert({
+        const entryToUpsert: MemoryEntry = {
           id: existingMemory.id,
           repoId: repoState.repoId,
           type: 'procedural',
@@ -249,7 +262,18 @@ export class MemoryWriter {
           stale: false,
           createdAt: existingMemory.createdAt.getTime(),
           updatedAt: existingMemory.updatedAt.getTime(),
-        });
+        };
+
+        const { status, reasons } = assessMemoryIntegrity(entryToUpsert);
+        entryToUpsert.integrityStatus = status;
+        entryToUpsert.integrityReasonsJson = reasons.length > 0 ? JSON.stringify(reasons) : undefined;
+
+        if (status === 'blocked' || status === 'suspect') {
+          // Optionally, emit an event or log that a memory was blocked
+          return existingMemory; // Do not save but return to caller
+        }
+
+        store.upsert(entryToUpsert);
         await this.embedAndUpsert(repoState.repoId, existingMemory, repoState);
       }
       return existingMemory;
@@ -270,7 +294,7 @@ export class MemoryWriter {
 
     if (repoState.memoryDbPath && repoState.repoId) {
       const store = ensureSqliteStore(repoState.memoryDbPath);
-      store.upsert({
+      const entryToUpsert: MemoryEntry = {
         id: newMemory.id,
         repoId: repoState.repoId,
         type: 'procedural',
@@ -281,7 +305,18 @@ export class MemoryWriter {
         stale: false,
         createdAt: newMemory.createdAt.getTime(),
         updatedAt: newMemory.updatedAt.getTime(),
-      });
+      };
+
+      const { status, reasons } = assessMemoryIntegrity(entryToUpsert);
+      entryToUpsert.integrityStatus = status;
+      entryToUpsert.integrityReasonsJson = reasons.length > 0 ? JSON.stringify(reasons) : undefined;
+
+      if (status === 'blocked' || status === 'suspect') {
+        // Optionally, emit an event or log that a memory was blocked
+        return newMemory; // Do not save but return to caller
+      }
+
+      store.upsert(entryToUpsert);
       await this.embedAndUpsert(repoState.repoId, newMemory, repoState);
     }
 

@@ -42,7 +42,16 @@ describe('SQLite MemoryStore', () => {
     store.upsert(entry);
 
     const retrieved = store.get('test-1');
-    expect(retrieved).toEqual(entry);
+    expect(retrieved).toMatchObject({
+      id: entry.id,
+      repoId: entry.repoId,
+      type: entry.type,
+      title: entry.title,
+      content: entry.content,
+      stale: entry.stale,
+    });
+    // New integrity fields should have defaults
+    expect(retrieved?.integrityStatus).toBe('ok');
   });
 
   it('should update an existing entry on upsert', async () => {
