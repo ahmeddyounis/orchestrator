@@ -155,4 +155,21 @@ export class SemanticIndexStore {
     }
     return embeddings;
   }
+
+  getAllChunksWithEmbeddings(): (Chunk & { vector: Float32Array })[] {
+    const db = this.getDb();
+    const stmt = db.prepare(`
+      SELECT c.*, e.vectorB64
+      FROM semantic_chunks c
+      JOIN semantic_embeddings e ON c.chunkId = e.chunkId
+      WHERE e.vectorB64 IS NOT NULL
+    `);
+
+    const rows = stmt.all() as (Chunk & { vectorB64: string })[];
+
+    return rows.map((row) => ({
+      ...row,
+      vector: base64ToFloat32Array(row.vectorB64),
+    }));
+  }
 }

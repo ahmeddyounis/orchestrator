@@ -1,11 +1,12 @@
 import {
-  ProviderAdapter,
+  ProviderConfig,
   ProviderCapabilities,
-  GenerateRequest,
-  GenerateResponse,
-  AdapterContext,
-} from '@orchestrator/adapters';
-import { ProviderConfig } from '@orchestrator/shared';
+  ModelRequest as GenerateRequest,
+  ModelResponse as GenerateResponse,
+} from '@orchestrator/shared';
+
+import { ProviderAdapter } from '../adapter';
+import { AdapterContext } from '../types';
 
 const FAKE_DIFF_FAIL = `
 BEGIN_DIFF
@@ -46,9 +47,11 @@ export class FakeAdapter implements ProviderAdapter {
 
   capabilities(): ProviderCapabilities {
     return {
-      name: 'Fake',
-      streaming: false,
-      functions: false,
+      supportsStreaming: false,
+      supportsToolCalling: false,
+      supportsJsonMode: false,
+      modality: 'text',
+      latencyClass: 'fast',
     };
   }
 

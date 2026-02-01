@@ -1,13 +1,15 @@
-import { Config, ProviderConfig, OrchestratorEvent, ConfigError } from '@orchestrator/shared';
+import {
+  Config,
+  ProviderConfig,
+  OrchestratorEvent,
+  ConfigError,
+  EventBus,
+} from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
 import { CostTracker } from './cost/tracker';
 import { CostTrackingAdapter } from './cost/proxy';
 
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
-
-export interface EventBus {
-  emit(event: OrchestratorEvent): Promise<void> | void;
-}
 
 export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();

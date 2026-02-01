@@ -20,6 +20,8 @@ import {
   SnippetExtractor,
   getIndexStatus,
   IndexUpdater,
+  SemanticIndexStore,
+  SemanticSearchService,
 } from '@orchestrator/repo';
 import {
   MemoryEntry,
@@ -1055,9 +1057,78 @@ END_DIFF
           maxMatchesPerFile: 5,
         });
 
-        const extraMatches = [];
+        const lexicalMatches = searchResults.matches;
+
+        // M15-07: Semantic Search
+        let semanticHits: { path: string; startLine: number; content: string }[] = [];
+        if (this.config.indexing?.semantic?.enabled) {
+          try {
+            const indexPath = path.join(this.repoRoot, this.config.indexing.path);
+            if (fsSync.existsSync(path.join(indexPath, 'semantic.sqlite'))) {
+              const store = new SemanticIndexStore();
+              store.init(path.join(indexPath, 'semantic.sqlite'));
+
+              const embedderId = store.getMeta()?.embedderId;
+              if (embedderId) {
+                const embedder = this.registry.getAdapter(embedderId);
+                const semanticSearchService = new SemanticSearchService({
+                  store,
+                  embedder,
+                  eventBus,
+                });
+
+                const hits = await semanticSearchService.search(
+                  step,
+                  this.config.indexing.semantic.topK ?? 5,
+                  runId,
+                );
+
+                if (hits.length > 0) {
+                  const hitsArtifactPath = path.join(
+                    artifacts.root,
+                    `semantic_hits_step_${stepsCompleted}.json`,
+                  );
+                  await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
+                  contextPaths.push(hitsArtifactPath);
+                }
+
+                semanticHits = hits.map((hit) => ({
+                  path: hit.path,
+                  startLine: hit.startLine,
+                  endLine: hit.endLine,
+                  content: hit.content,
+                  score: hit.score,
+                }));
+              }
+              store.close();
+            }
+          } catch (e: any) {
+            await eventBus.emit({
+              type: 'SemanticSearchFailed',
+              schemaVersion: 1,
+              runId,
+              timestamp: new Date().toISOString(),
+              payload: {
+                error: e.message,
+              },
+            });
+          }
+        }
+
+        const allMatches = [
+          ...lexicalMatches,
+          ...semanticHits.map((h) => ({
+            path: h.path,
+            line: h.startLine,
+            column: 0,
+            matchText: 'SEMANTIC_MATCH',
+            lineText: '',
+            score: (h as any).score || 0.5,
+          })),
+        ];
+
         for (const touched of touchedFiles) {
-          extraMatches.push({
+          allMatches.push({
             path: touched,
             line: 1,
             column: 1,
@@ -1068,10 +1139,7 @@ END_DIFF
         }
 
         const extractor = new SnippetExtractor();
-        const candidates = await extractor.extractSnippets(
-          [...searchResults.matches, ...extraMatches],
-          { cwd: this.repoRoot },
-        );
+        const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
 
         const packer = new SimpleContextPacker();
         contextPack = packer.pack(step, [], candidates, {

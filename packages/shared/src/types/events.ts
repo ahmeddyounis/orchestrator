@@ -436,7 +436,31 @@ export type OrchestratorEvent =
   | VerificationFinished
   | IterationStarted
   | IterationFinished
-  | RepairAttempted;
+  | RepairAttempted
+  | SemanticSearchFinishedEvent
+  | SemanticSearchFailedEvent;
+
+export interface SemanticSearchFailedEvent extends BaseEvent {
+  type: 'SemanticSearchFailed';
+  payload: {
+    error: string;
+  };
+}
+
+export interface SemanticSearchFinishedEvent extends BaseEvent {
+  type: 'SemanticSearchFinished';
+  payload: {
+    query: string;
+    topK: number;
+    hitCount: number;
+    candidateCount: number;
+    durationMs: number;
+  };
+}
+
+export interface EventBus {
+  emit(event: OrchestratorEvent): Promise<void> | void;
+}
 
 export interface EventWriter {
   write(event: OrchestratorEvent): void;

@@ -1,7 +1,7 @@
 import { stat } from 'fs/promises';
 import { resolve } from 'path';
 
-import { Embedder } from '../../../../adapters/src/embed';
+import { Embedder } from '@orchestrator/adapters';
 import { RepoScanner, RepoFileMeta } from '../../scanner';
 import { hashFile } from '../hasher';
 import { SemanticChunker } from './chunker';
@@ -15,7 +15,7 @@ const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 export interface SemanticIndexBuilderConfig {
   repoRoot: string;
   repoId: string;
-  embedder: Embedder<string>;
+  embedder: Embedder;
   maxFileSizeBytes?: number;
   maxChunksPerBuild?: number;
 }
