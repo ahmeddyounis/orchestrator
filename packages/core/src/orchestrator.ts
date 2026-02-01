@@ -52,6 +52,7 @@ import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
 import { ConfigLoader } from './config/loader';
+import { PluginLoader, LoadedPlugin } from './plugins/loader';
 import { SimpleContextFuser } from './context';
 import {
   CandidateGenerator,
@@ -160,7 +161,8 @@ class ProceduralMemoryImpl implements ProceduralMemory {
 export class Orchestrator {
   private config: Config;
   private git: GitService;
-  private registry: ProviderRegistry;
+  private readonly registry: ProviderRegistry;
+  private loadedPlugins: LoadedPlugin[] = [];
   private repoRoot: string;
   private costTracker?: CostTracker;
   private toolPolicy?: ToolPolicy;
@@ -168,7 +170,7 @@ export class Orchestrator {
   private suppressEpisodicMemoryWrite = false;
   private escalationCount = 0;
 
-  constructor(options: OrchestratorOptions) {
+  private constructor(options: OrchestratorOptions, private loadedPlugins: LoadedPlugin[] = []) {
     this.config = options.config;
     this.git = options.git;
     this.registry = options.registry;
@@ -177,6 +179,27 @@ export class Orchestrator {
     this.toolPolicy = options.toolPolicy;
     this.ui = options.ui;
   }
+
+  public static async create(options: OrchestratorOptions): Promise<Orchestrator> {
+    const logger = new JsonlLogger(path.join(options.repoRoot, '.orchestrator', 'logs', 'plugins.jsonl'));
+    const pluginLoader = new PluginLoader(options.config, logger, options.repoRoot);
+    const loadedPlugins = await pluginLoader.loadPlugins();
+
+    for (const loadedPlugin of loadedPlugins) {
+      if (loadedPlugin.manifest.type === 'provider') {
+        options.registry.registerProvider(loadedPlugin.manifest.name, () => {
+          // This is a bit of a hack, as the plugin is already initialized.
+          // We should ideally pass the config to the plugin loader.
+          // For now, we just return the already initialized plugin.
+          return loadedPlugin.plugin as any;
+        });
+      }
+    }
+
+    return new Orchestrator(options, loadedPlugins);
+  }
+
+
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
     const runId = options.runId || Date.now().toString();

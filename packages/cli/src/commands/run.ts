@@ -271,14 +271,15 @@ export function registerRunCommand(program: Command) {
       };
       const toolPolicy = config.execution?.tools || defaultToolPolicy;
 
-      const orchestrator = new Orchestrator({
-        config,
-        git,
-        registry,
-        repoRoot,
-        ui,
-        toolPolicy,
-      });
+    const orchestrator = await Orchestrator.create({
+      config,
+      git: new GitService(repoRoot),
+      registry,
+      repoRoot,
+      costTracker,
+      toolPolicy,
+      ui,
+    });
 
       const result = await orchestrator.run(goal, { thinkLevel, runId });
 

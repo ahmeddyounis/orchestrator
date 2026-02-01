@@ -193,7 +193,7 @@ export function registerFixCommand(program: Command) {
       registry.registerFactory('mock', stubFactory);
       registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
 
-      const orchestrator = new Orchestrator({ config, git, registry, repoRoot });
+      const orchestrator = await Orchestrator.create({ config, git, registry, repoRoot });
 
       const result = await orchestrator.run(goal, { thinkLevel, runId });
 

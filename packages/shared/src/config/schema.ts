@@ -337,6 +337,12 @@ export const SecurityConfigSchema = z
     encryption: { keyEnv: 'ORCHESTRATOR_ENC_KEY' },
   });
 
+export const PluginsConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  paths: z.array(z.string()).default(['.orchestrator/plugins']),
+  allowlistIds: z.array(z.string()).optional(),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
@@ -452,7 +458,9 @@ export const ConfigSchema = z.object({
   indexing: IndexingConfigSchema.optional(),
   telemetry: TelemetryConfigSchema.optional(),
   security: SecurityConfigSchema.optional(),
+  plugins: PluginsConfigSchema.optional(),
 });
+
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;

@@ -4,9 +4,52 @@ import { findRepoRoot, GitService } from '@orchestrator/repo';
 import { ConfigLoader } from '@orchestrator/core';
 import semver from 'semver';
 import { execSync } from 'child_process';
+import { PluginLoader, JsonlLogger } from '@orchestrator/core';
+import path from 'path';
 
 interface DoctorCheck {
   name: string;
+async function checkPlugins(configPath?: string): Promise<DoctorCheck> {
+  try {
+    const repoRoot = await findRepoRoot();
+    const config = ConfigLoader.load({ configPath, cwd: repoRoot });
+    if (!config.plugins?.enabled) {
+      return {
+        name: 'Plugins',
+        status: 'ok',
+        message: 'Dynamic plugins are disabled.',
+      };
+    }
+
+    const logger = new JsonlLogger(path.join(repoRoot, '.orchestrator', 'logs', 'doctor.jsonl'), true);
+    const pluginLoader = new PluginLoader(config, logger, repoRoot);
+    const loadedPlugins = await pluginLoader.loadPlugins();
+
+    if (loadedPlugins.length === 0) {
+      return {
+        name: 'Plugins',
+        status: 'ok',
+        message: 'Plugins are enabled, but no plugins were found.',
+        remediation: `You can add plugins to the paths specified in your config (default: .orchestrator/plugins).`,
+      };
+    }
+
+    const pluginNames = loadedPlugins.map((p) => `${p.manifest.name}@${p.manifest.version}`).join(', ');
+    return {
+      name: 'Plugins',
+      status: 'ok',
+      message: `Loaded ${loadedPlugins.length} plugins: ${pluginNames}`,
+    };
+  } catch (err: unknown) {
+    return {
+      name: 'Plugins',
+      status: 'error',
+      message: `Error loading plugins: ${(err as Error).message}`,
+    };
+  }
+}
+
+
   status: 'ok' | 'warn' | 'error';
   message: string;
   remediation?: string;
@@ -265,6 +308,7 @@ export function registerDoctorCommand(program: Command) {
           checkProviderConfig(globalOpts.config),
           checkTelemetryConfig(globalOpts.config),
           checkExternalWorkers(globalOpts.config),
+          checkPlugins(globalOpts.config),
         ]);
         checks.push(...allChecks);
 
