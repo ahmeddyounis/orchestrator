@@ -282,8 +282,8 @@ export declare const ConfigSchema: z.ZodObject<{
             enableTypecheck: z.ZodDefault<z.ZodBoolean>;
             enableTests: z.ZodDefault<z.ZodBoolean>;
             testScope: z.ZodDefault<z.ZodEnum<{
-                full: "full";
                 targeted: "targeted";
+                full: "full";
             }>>;
             maxCommandsPerIteration: z.ZodDefault<z.ZodNumber>;
         }, z.core.$strip>>;

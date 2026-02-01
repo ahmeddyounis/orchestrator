@@ -7,6 +7,8 @@ import { registerPlanCommand } from './commands/plan';
 import { registerEvalCommand } from './commands/eval';
 import { registerMemoryCommand } from './commands/memory';
 import { registerIndexCommand } from './commands/index';
+import { registerDoctorCommand } from './commands/doctor';
+import { registerInitCommand } from './commands/init';
 
 const program = new Command();
 
@@ -26,5 +28,7 @@ registerPlanCommand(program);
 registerEvalCommand(program);
 registerMemoryCommand(program);
 registerIndexCommand(program);
+registerDoctorCommand(program);
+registerInitCommand(program);
 
 program.parse(process.argv);
