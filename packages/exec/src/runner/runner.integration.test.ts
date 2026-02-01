@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { SafeCommandRunner, UserInterface, RunnerContext } from './runner';
 import { ToolRunRequest, ToolPolicy, ToolError, UsageError } from '@orchestrator/shared';
 import fs from 'fs';
-import path from 'path';
+import { join } from '@orchestrator/shared';
 import { randomUUID } from 'crypto';
 
 describe('SafeCommandRunner Integration', () => {
@@ -19,7 +19,7 @@ describe('SafeCommandRunner Integration', () => {
   };
 
   const projectRoot = process.cwd();
-  const runsDir = path.join(projectRoot, '.orchestrator', 'runs', testRunId);
+    const runsDir = join(projectRoot, '.orchestrator', 'runs', testRunId);
 
   // Default policy: fairly restrictive but allows what we need
   const basePolicy: ToolPolicy = {

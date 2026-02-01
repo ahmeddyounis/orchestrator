@@ -2,7 +2,7 @@
 
 import { ManifestManager } from './manager.js';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { join } from 'path';
+import { join } from '../fs/path.js';
 import { remove } from 'fs-extra';
 import { readJson } from 'fs-extra';
 import { MANIFEST_FILENAME } from './manifest.js';

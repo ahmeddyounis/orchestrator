@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { join } from '../fs/path.js';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
@@ -27,7 +27,7 @@ export class TraceWriter {
     if (!fs.existsSync(traceDir)) {
       fs.mkdirSync(traceDir, { recursive: true });
     }
-    const tracePath = path.join(traceDir, 'trace.jsonl');
+        const tracePath = join(traceDir, 'trace.jsonl');
     this.traceStream = fs.createWriteStream(tracePath, { flags: 'a' });
   }
 

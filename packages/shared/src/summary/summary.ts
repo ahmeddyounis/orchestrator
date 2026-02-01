@@ -1,4 +1,4 @@
-import path from 'node:path';
+import { join } from '../fs/path.js';
 import { atomicWrite } from '../fs/io.js';
 import { redactForLogs } from '../redaction';
 
@@ -114,7 +114,7 @@ export interface RunSummary {
 
 export class SummaryWriter {
   static async write(summary: RunSummary, runDir: string): Promise<string> {
-    const summaryPath = path.join(runDir, 'summary.json');
+    const summaryPath = join(runDir, 'summary.json');
     // The summary object can be large, so we stringify it with indentation
     // to make it human-readable.
     const redactedSummary = redactForLogs(summary);

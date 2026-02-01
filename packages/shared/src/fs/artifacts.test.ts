@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { join } from './path';
 import * as os from 'os';
 import { createRunDir, getRunArtifactPaths, writeManifest, Manifest } from './artifacts';
 
@@ -14,7 +14,7 @@ describe('artifacts', () => {
   });
 
   it('createRunDir creates directory structure', async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-test-'));
+        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-test-'));
     const runId = 'test-run-123';
 
     const paths = await createRunDir(tmpDir, runId);
@@ -38,8 +38,8 @@ describe('artifacts', () => {
     expect(patchesDirExists).toBe(true);
 
     // Verify paths structure
-    expect(paths.trace).toBe(path.join(tmpDir, '.orchestrator/runs', runId, 'trace.jsonl'));
-    expect(paths.manifest).toBe(path.join(tmpDir, '.orchestrator/runs', runId, 'manifest.json'));
+        expect(paths.trace).toBe(join(tmpDir, '.orchestrator/runs', runId, 'trace.jsonl'));
+        expect(paths.manifest).toBe(join(tmpDir, '.orchestrator/runs', runId, 'manifest.json'));
   });
 
   it('getRunArtifactPaths returns correct paths without creating', () => {
@@ -47,14 +47,14 @@ describe('artifacts', () => {
     const runId = 'abc';
     const paths = getRunArtifactPaths(base, runId);
 
-    expect(paths.root).toBe(path.join(base, '.orchestrator/runs', runId));
-    expect(paths.trace).toBe(path.join(base, '.orchestrator/runs', runId, 'trace.jsonl'));
-    expect(paths.toolLogsDir).toBe(path.join(base, '.orchestrator/runs', runId, 'tool_logs'));
-    expect(paths.patchesDir).toBe(path.join(base, '.orchestrator/runs', runId, 'patches'));
+        expect(paths.root).toBe(join(base, '.orchestrator/runs', runId));
+    expect(paths.trace).toBe(join(base, '.orchestrator/runs', runId, 'trace.jsonl'));
+    expect(paths.toolLogsDir).toBe(join(base, '.orchestrator/runs', runId, 'tool_logs'));
+    expect(paths.patchesDir).toBe(join(base, '.orchestrator/runs', runId, 'patches'));
   });
 
   it('writeManifest writes the manifest file', async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-test-'));
+    tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-test-'));
     const runId = 'manifest-test';
     const paths = await createRunDir(tmpDir, runId);
 

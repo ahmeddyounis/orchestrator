@@ -15,6 +15,7 @@
     "baseUrl": ".",
     "paths": {
       "@orchestrator/*": ["packages/*/src"]
-    }
+    },
+    "types": ["vitest/globals"]
   }
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
-import path from 'node:path';
+import { join } from '../fs/path.js';
 import os from 'node:os';
 import { TraceWriter } from './trace-writer';
 import { SpanEndEvent, SpanStartEvent, TraceEvent } from './types';
@@ -11,7 +11,7 @@ describe('TraceWriter', () => {
   const runId = 'test-run-123';
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-'));
+        tempDir = fs.mkdtempSync(join(os.tmpdir(), 'test-'));
     traceWriter = new TraceWriter(runId, tempDir);
   });
 
@@ -22,7 +22,7 @@ describe('TraceWriter', () => {
   });
 
   const readTraceFile = (): TraceEvent[] => {
-    const content = fs.readFileSync(path.join(tempDir, 'trace.jsonl'), 'utf-8');
+    const content = fs.readFileSync(join(tempDir, 'trace.jsonl'), 'utf-8');
     return content
       .split('\n')
       .filter(Boolean)
@@ -31,7 +31,7 @@ describe('TraceWriter', () => {
 
   it('should create a trace file', async () => {
     await traceWriter.writeEvent('info', 'test.event', {});
-    expect(fs.existsSync(path.join(tempDir, 'trace.jsonl'))).toBe(true);
+    expect(fs.existsSync(join(tempDir, 'trace.jsonl'))).toBe(true);
   });
 
   it('should write a generic event', async () => {

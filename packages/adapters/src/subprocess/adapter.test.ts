@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as path from 'path';
+import { join, resolve } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import { SubprocessProviderAdapter } from './adapter';
 import { AdapterContext } from '../types';
 import { ModelRequest, Logger } from '@orchestrator/shared';
 
-const FIXTURE_PATH = path.resolve(__dirname, 'fixtures/echo-cli.js');
+const FIXTURE_PATH = resolve(__dirname, 'fixtures/echo-cli.js');
 
 describe('SubprocessProviderAdapter', () => {
   const mockLogger = {
@@ -22,7 +22,7 @@ describe('SubprocessProviderAdapter', () => {
     timeoutMs: 5000,
   };
 
-  const runDir = path.join(process.cwd(), '.orchestrator', 'runs', 'test-run-id', 'tool_logs');
+    const runDir = join(process.cwd(), '.orchestrator', 'runs', 'test-run-id', 'tool_logs');
 
   beforeEach(async () => {
     await fs.mkdir(runDir, { recursive: true });
@@ -54,7 +54,7 @@ describe('SubprocessProviderAdapter', () => {
     expect(response.text).toContain('Echo: hello world');
 
     // Check if log file was created
-    const logPath = path.join(runDir, 'subprocess_subprocess.log');
+        const logPath = join(runDir, 'subprocess_subprocess.log');
     const logContent = await fs.readFile(logPath, 'utf-8');
     expect(logContent).toContain('hello world');
   });
@@ -99,10 +99,9 @@ describe('SubprocessProviderAdapter', () => {
 
     const response = await adapter.generate(req, ctx);
 
-    // With a max size of 50, the output should be truncated
-    expect(response.text.length).toBeLessThanOrEqual(50);
+    expect(response.text?.length).toBeLessThanOrEqual(50);
     expect(response.text).toContain('TRUNCATED');
     // Check that we have the tail end of the 'A's
-    expect(response.text.endsWith('A'.repeat(10))).toBe(false); // prompt is stripped
+    expect(response.text?.endsWith('A'.repeat(10))).toBe(false); // prompt is stripped
   });
 });

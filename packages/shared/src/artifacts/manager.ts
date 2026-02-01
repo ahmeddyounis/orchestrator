@@ -1,7 +1,7 @@
 // packages/shared/src/artifacts/manager.ts
 
 import { MANIFEST_FILENAME, MANIFEST_VERSION, Manifest } from './manifest.js';
-import { join, relative } from 'path';
+import { join, relative } from '../fs/path.js';
 import { atomicWrite, ensureDir } from '../fs/index.js';
 import { readJson } from 'fs-extra';
 

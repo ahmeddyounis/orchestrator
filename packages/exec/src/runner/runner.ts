@@ -1,6 +1,6 @@
-import { spawn } from 'child_process';
+import { spawn, exec as execSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
+import { join, isWindows } from '@orchestrator/shared';
 import { randomUUID } from 'crypto';
 import {
   ToolRunRequest,
@@ -11,6 +11,22 @@ import {
 } from '@orchestrator/shared';
 import { parseCommand } from '../classify/parser';
 import * as classifier from '../classify/classifier';
+
+function killProcessTree(pid: number, signal: NodeJS.Signals | number = 'SIGTERM') {
+  if (isWindows()) {
+    // On Windows, process.kill is not effective for killing process trees.
+    // We use taskkill to forcefully terminate the process and its children.
+    execSync(`taskkill /PID ${pid} /T /F`);
+  } else {
+    // On POSIX systems, sending a signal to the negative PID kills the entire process group.
+    // This requires the child process to have been spawned in detached mode.
+    try {
+      process.kill(-pid, signal);
+    } catch (e) {
+      // This can fail if the process is already dead, which is fine.
+    }
+  }
+}
 
 // Detects characters that require a shell to interpret.
 function isShellCommand(command: string): boolean {
@@ -160,11 +176,11 @@ export class SafeCommandRunner {
     const projectRoot = req.cwd || ctx.cwd || process.cwd(); // Assuming root is CWD
 
     // Artifacts paths
-    const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId, 'tool_logs');
+        const runsDir = join(projectRoot, '.orchestrator', 'runs', runId, 'tool_logs');
     fs.mkdirSync(runsDir, { recursive: true });
 
-    const stdoutPath = path.join(runsDir, `${toolRunId}_stdout.log`);
-    const stderrPath = path.join(runsDir, `${toolRunId}_stderr.log`);
+        const stdoutPath = join(runsDir, `${toolRunId}_stdout.log`);
+    const stderrPath = join(runsDir, `${toolRunId}_stderr.log`);
 
     // 5. Run Process
     return this.exec(req, policy, stdoutPath, stderrPath);
@@ -228,12 +244,8 @@ export class SafeCommandRunner {
 
       // Timeout handling
       timeoutTimer = setTimeout(() => {
-        try {
-          if (child.pid) {
-            process.kill(-child.pid, 'SIGTERM');
-          }
-        } catch {
-          // Ignore if already dead
+        if (child.pid) {
+          killProcessTree(child.pid, 'SIGTERM');
         }
 
         const partialStdout = fs.readFileSync(stdoutPath, 'utf8').slice(0, 1000);
@@ -261,12 +273,8 @@ export class SafeCommandRunner {
           );
           stdoutStream.write('\n[Output truncated due to limit]\n');
           // Kill process
-          try {
-            if (child.pid) {
-              process.kill(-child.pid, 'SIGTERM');
-            }
-          } catch {
-            /* ignore */
+          if (child.pid) {
+            killProcessTree(child.pid, 'SIGTERM');
           }
         } else {
           stdoutStream.write(chunk);
@@ -287,12 +295,8 @@ export class SafeCommandRunner {
           );
           stderrStream.write('\n[Output truncated due to limit]\n');
           // Kill process
-          try {
-            if (child.pid) {
-              process.kill(-child.pid, 'SIGTERM');
-            }
-          } catch {
-            /* ignore */
+          if (child.pid) {
+            killProcessTree(child.pid, 'SIGTERM');
           }
         } else {
           stderrStream.write(chunk);

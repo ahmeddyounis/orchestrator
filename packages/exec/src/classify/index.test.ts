@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseCommand, classifyCommand, matchesDenylist, matchesAllowlist } from './index';
+import { parseCommand } from './parser';
+import { classifyCommand, matchesDenylist, matchesAllowlist } from './classifier';
 
 describe('parseCommand', () => {
   it('parses simple command', () => {

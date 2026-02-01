@@ -1,6 +1,6 @@
 // packages/shared/src/fs/io.ts
 import { promises as fs } from 'fs';
-import { dirname } from 'path';
+import { dirname } from './path';
 import { tmpName } from 'tmp-promise';
 import { ensureDir as fseEnsureDir } from 'fs-extra';
 

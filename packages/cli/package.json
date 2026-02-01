@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "@types/which": "^3.0.4",
     "esbuild": "^0.23.0",
     "typescript": "^5.3.3"
   },
@@ -36,9 +37,11 @@
     "@orchestrator/repo": "workspace:*",
     "@orchestrator/shared": "workspace:*",
     "@types/inquirer": "^8.2.12",
+    "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.2",
     "inquirer": "^8.2.7",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "which": "^6.0.0"
   }
 }

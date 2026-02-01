@@ -1,4 +1,4 @@
-import * as path from 'path';
+import { join } from './path';
 import * as fs from 'fs/promises';
 
 export const ORCHESTRATOR_DIR = '.orchestrator';
@@ -33,9 +33,9 @@ export interface Manifest {
  * Returns the paths to the standard artifacts.
  */
 export async function createRunDir(baseDir: string, runId: string): Promise<RunArtifactPaths> {
-  const runRootDir = path.join(baseDir, ORCHESTRATOR_DIR, RUNS_DIR, runId);
-  const toolLogsDir = path.join(runRootDir, 'tool_logs');
-  const patchesDir = path.join(runRootDir, 'patches');
+  const runRootDir = join(baseDir, ORCHESTRATOR_DIR, RUNS_DIR, runId);
+  const toolLogsDir = join(runRootDir, 'tool_logs');
+  const patchesDir = join(runRootDir, 'patches');
 
   await fs.mkdir(runRootDir, { recursive: true });
   await fs.mkdir(toolLogsDir, { recursive: true });
@@ -43,9 +43,9 @@ export async function createRunDir(baseDir: string, runId: string): Promise<RunA
 
   return {
     root: runRootDir,
-    trace: path.join(runRootDir, 'trace.jsonl'),
-    summary: path.join(runRootDir, 'summary.json'),
-    manifest: path.join(runRootDir, 'manifest.json'),
+    trace: join(runRootDir, 'trace.jsonl'),
+    summary: join(runRootDir, 'summary.json'),
+    manifest: join(runRootDir, 'manifest.json'),
     patchesDir: patchesDir,
     toolLogsDir: toolLogsDir,
   };
@@ -55,14 +55,14 @@ export async function createRunDir(baseDir: string, runId: string): Promise<RunA
 export const createRunArtifactsDir = createRunDir;
 
 export function getRunArtifactPaths(baseDir: string, runId: string): RunArtifactPaths {
-  const runRootDir = path.join(baseDir, ORCHESTRATOR_DIR, RUNS_DIR, runId);
+  const runRootDir = join(baseDir, ORCHESTRATOR_DIR, RUNS_DIR, runId);
   return {
     root: runRootDir,
-    trace: path.join(runRootDir, 'trace.jsonl'),
-    summary: path.join(runRootDir, 'summary.json'),
-    manifest: path.join(runRootDir, 'manifest.json'),
-    patchesDir: path.join(runRootDir, 'patches'),
-    toolLogsDir: path.join(runRootDir, 'tool_logs'),
+    trace: join(runRootDir, 'trace.jsonl'),
+    summary: join(runRootDir, 'summary.json'),
+    manifest: join(runRootDir, 'manifest.json'),
+    patchesDir: join(runRootDir, 'patches'),
+    toolLogsDir: join(runRootDir, 'tool_logs'),
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { join } from '../fs/path.js';
 import * as os from 'os';
 import { JsonlLogger } from './jsonlLogger';
 import { RunStarted } from '../types/events';
@@ -15,8 +15,8 @@ describe('JsonlLogger', () => {
   });
 
   it('logs events to file in JSONL format', async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-logger-test-'));
-    const logPath = path.join(tmpDir, 'trace.jsonl');
+        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
+    const logPath = join(tmpDir, 'trace.jsonl');
     const logger = new JsonlLogger(logPath);
 
     const event1: RunStarted = {
@@ -34,8 +34,8 @@ describe('JsonlLogger', () => {
   });
 
   it('appends multiple events', async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-logger-test-'));
-    const logPath = path.join(tmpDir, 'trace.jsonl');
+        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
+    const logPath = join(tmpDir, 'trace.jsonl');
     const logger = new JsonlLogger(logPath);
 
     const event1: RunStarted = {

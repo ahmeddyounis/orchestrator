@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { RUN_SUMMARY_SCHEMA_VERSION, RunSummary, SummaryWriter } from './summary.js';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join } from '../fs/path.js';
 import { remove, readJson, ensureDir } from 'fs-extra';
 
 describe('SummaryWriter', () => {
