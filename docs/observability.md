@@ -12,10 +12,10 @@ Each `run_id` is a unique timestamp. This directory is your single source of tru
 
 ### What's Inside?
 
--   **`summary.json`**: A high-level summary of the run, including the final status, duration, and how much it cost (in tokens and dollars).
--   **`diff.patch`**: A standard `.patch` file showing all the code changes that were made. You can use this to easily review the changes.
--   **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging.
--   **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
+- **`summary.json`**: A high-level summary of the run, including the final status, duration, and how much it cost (in tokens and dollars).
+- **`diff.patch`**: A standard `.patch` file showing all the code changes that were made. You can use this to easily review the changes.
+- **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging.
+- **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
 
 ## The `report` Command
 
@@ -41,20 +41,22 @@ orchestrator report <run_id>
 
 The report provides a clean, human-readable summary of the run, including:
 
--   **Status**: Did the run complete successfully, fail, or does it need review?
--   **Duration**: How long the run took.
--   **Cost**: A breakdown of the cost based on the number of tokens used.
--   **Changed Files**: A list of all the files that were created or modified.
--   **Errors**: If anything went wrong, the errors will be displayed here.
+- **Status**: Did the run complete successfully, fail, or does it need review?
+- **Duration**: How long the run took.
+- **Cost**: A breakdown of the cost based on the number of tokens used.
+- **Changed Files**: A list of all the files that were created or modified.
+- **Errors**: If anything went wrong, the errors will be displayed here.
 
 ## Example: Debugging a Failed Test
 
 Let's say the orchestrator runs and tells you that verification failed. Here's how you can use the artifacts to debug it:
 
 1.  **Run the report**:
+
     ```bash
     orchestrator report
     ```
+
     The report shows that the `pnpm test` command failed.
 
 2.  **Find the `run_id`**: The report will show the `run_id`. Let's say it's `171234567890`.

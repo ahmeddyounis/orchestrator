@@ -9,7 +9,6 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 const shared_1 = require("@orchestrator/shared");
-const errors_1 = require("./errors");
 const parser_1 = require("../classify/parser");
 class SafeCommandRunner {
     checkPolicy(req, policy) {
@@ -49,17 +48,17 @@ class SafeCommandRunner {
     async run(req, policy, ui, ctx) {
         const policyResult = this.checkPolicy(req, policy);
         if (!policyResult.isAllowed) {
-            throw new errors_1.PolicyDeniedError(policyResult.reason || 'Command denied by policy');
+            throw new shared_1.UsageError(policyResult.reason || 'Command denied by policy');
         }
         if (policyResult.needsConfirmation) {
             // Check for non-interactive mode
             // Corresponds to --non-interactive flag
             if (policy.interactive === false) {
-                throw new errors_1.ConfirmationDeniedError(`Command execution denied in non-interactive mode: ${req.command}`);
+                throw new shared_1.UsageError(`Command execution denied in non-interactive mode: ${req.command}`);
             }
             const confirmed = await ui.confirm(`Execute command: ${req.command}`, `Reason: ${req.reason}\nCWD: ${req.cwd || ctx.cwd || process.cwd()}`);
             if (!confirmed) {
-                throw new errors_1.ConfirmationDeniedError(`User denied execution of: ${req.command}`);
+                throw new shared_1.UsageError(`User denied execution of: ${req.command}`);
             }
         }
         // 4. Execution Setup
@@ -107,7 +106,9 @@ class SafeCommandRunner {
                 }
                 const partialStdout = fs_1.default.readFileSync(stdoutPath, 'utf8').slice(0, 1000);
                 const partialStderr = fs_1.default.readFileSync(stderrPath, 'utf8').slice(0, 1000);
-                reject(new errors_1.TimeoutError(`Command timed out after ${policy.timeoutMs}ms`, partialStdout, partialStderr));
+                reject(new shared_1.ToolError(`Command timed out after ${policy.timeoutMs}ms`, {
+                    details: { partialStdout, partialStderr },
+                }));
             }, policy.timeoutMs);
             // Output handling
             child.stdout.on('data', (chunk) => {
@@ -158,7 +159,7 @@ class SafeCommandRunner {
                 clearTimeout(timeoutTimer);
                 stdoutStream.end();
                 stderrStream.end();
-                reject(new errors_1.ProcessError(`Failed to start process: ${err.message}`, null, '', ''));
+                reject(new shared_1.ToolError(`Failed to start process: ${err.message}`));
             });
             child.on('close', (code) => {
                 clearTimeout(timeoutTimer);

@@ -28,9 +28,9 @@ You don't need to manually re-index every time you change a file. The orchestrat
 
 You should only need to manually run `orchestrator index` in a few situations:
 
--   When you first set up a project.
--   If you've made massive changes to your project (e.g., upgrading a framework or refactoring the entire codebase).
--   If the orchestrator seems to be confused or working with outdated information.
+- When you first set up a project.
+- If you've made massive changes to your project (e.g., upgrading a framework or refactoring the entire codebase).
+- If the orchestrator seems to be confused or working with outdated information.
 
 ## Indexing Status
 

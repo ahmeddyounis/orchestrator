@@ -6,10 +6,10 @@ The Orchestrator can remember information from past runs to improve its performa
 
 When memory is enabled, the orchestrator saves details about each run to a local file in your project's `.orchestrator` directory. This includes:
 
--   The initial task description.
--   The files that were changed.
--   The commands that were run.
--   The final outcome of the run.
+- The initial task description.
+- The files that were changed.
+- The commands that were run.
+- The final outcome of the run.
 
 On subsequent runs, the orchestrator will use this information to better understand your project and your goals.
 

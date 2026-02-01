@@ -18,7 +18,8 @@
     "lint:fix": "turbo run lint:fix",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "release:check": "tsx scripts/release_check.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -28,6 +29,7 @@
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
+    "execa": "^9.6.1",
     "globals": "^17.2.0",
     "prettier": "^3.2.4",
     "tsx": "^4.21.0",

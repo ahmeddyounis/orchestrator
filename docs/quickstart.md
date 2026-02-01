@@ -4,8 +4,8 @@ This guide will walk you through installing and running the Orchestrator on your
 
 ## Prerequisites
 
--   Node.js v20+
--   A TypeScript project (we'll use a `pnpm` monorepo in this guide)
+- Node.js v20+
+- A TypeScript project (we'll use a `pnpm` monorepo in this guide)
 
 ## 1. Installation
 
@@ -30,14 +30,14 @@ Before you can run the orchestrator, you need to configure your API provider and
 
     ```json
     {
-        "providers": {
-            "gemini": {
-                "apiKey": "YOUR_API_KEY"
-            }
-        },
-        "defaults": {
-            "model": "gemini-1.5-pro-latest"
+      "providers": {
+        "gemini": {
+          "apiKey": "YOUR_API_KEY"
         }
+      },
+      "defaults": {
+        "model": "gemini-1.5-pro-latest"
+      }
     }
     ```
 
@@ -82,6 +82,6 @@ This is a simple example, but it shows the power of the orchestrator to automate
 
 Now that you've seen a basic workflow, explore the other documentation to learn more about what you can do:
 
--   [CLI Reference](cli.md)
--   [Configuration](config.md)
--   [Verification](verification.md)
+- [CLI Reference](cli.md)
+- [Configuration](config.md)
+- [Verification](verification.md)

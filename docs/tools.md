@@ -31,8 +31,8 @@ You can configure the execution policy in your `.orchestrator/config.json` file.
 
 ### `exec.confirm`
 
--   **Type**: `boolean`
--   **Default**: `true`
+- **Type**: `boolean`
+- **Default**: `true`
 
 This setting controls the confirmation prompt. When `true`, you will be prompted before every command.
 
@@ -40,13 +40,13 @@ If you set this to `false`, the orchestrator will execute commands without askin
 
 ### `exec.safeMode`
 
--   **Type**: `boolean`
--   **Default**: `true`
+- **Type**: `boolean`
+- **Default**: `true`
 
 Safe mode provides an additional layer of protection by preventing the execution of commands that are deemed potentially risky or destructive. This includes:
 
--   Commands that could delete files (e.g., `rm -rf`).
--   Commands that could modify system settings.
--   Commands that attempt to access files outside of the project directory.
+- Commands that could delete files (e.g., `rm -rf`).
+- Commands that could modify system settings.
+- Commands that attempt to access files outside of the project directory.
 
 Even with `confirm` set to `false`, `safeMode` will still block these commands. It is strongly recommended to keep `safeMode` enabled.

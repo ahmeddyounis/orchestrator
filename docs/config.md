@@ -47,10 +47,10 @@ Here is an example of a `config.json` file with all the common options:
 
 This section is where you configure your AI model providers.
 
--   `"gemini"`: Settings for Google Gemini models.
-    -   `"apiKey"`: Your Gemini API key.
--   `"openai"`: Settings for OpenAI models.
-    -   `"apiKey"`: Your OpenAI API key.
+- `"gemini"`: Settings for Google Gemini models.
+  - `"apiKey"`: Your Gemini API key.
+- `"openai"`: Settings for OpenAI models.
+  - `"apiKey"`: Your OpenAI API key.
 
 **Security Note:** It is recommended to use your user-level config file (`~/.orchestrator/config.json`) for API keys to avoid committing them to your project's repository.
 
@@ -58,23 +58,23 @@ This section is where you configure your AI model providers.
 
 Set the default model to use for all runs.
 
--   `"model"`: The ID of the model to use (e.g., `"gemini-1.5-pro-latest"`, `"gpt-4o"`).
+- `"model"`: The ID of the model to use (e.g., `"gemini-1.5-pro-latest"`, `"gpt-4o"`).
 
 ### `exec` (Optional)
 
 Control the execution of shell commands.
 
--   `"confirm"`: If `true` (the default), the CLI will prompt for confirmation before executing any command. Set to `false` to disable prompts.
--   `"safeMode"`: If `true` (the default), the orchestrator will not execute commands that it deems potentially destructive or outside the project workspace.
+- `"confirm"`: If `true` (the default), the CLI will prompt for confirmation before executing any command. Set to `false` to disable prompts.
+- `"safeMode"`: If `true` (the default), the orchestrator will not execute commands that it deems potentially destructive or outside the project workspace.
 
 ### `log` (Optional)
 
 Configure logging verbosity.
 
--   `"level"`: The log level. Can be `"debug"`, `"info"`, `"warn"`, or `"error"`. Defaults to `"info"`.
+- `"level"`: The log level. Can be `"debug"`, `"info"`, `"warn"`, or `"error"`. Defaults to `"info"`.
 
 ### `memory` (Optional)
 
 Configure the memory feature.
 
--   `"enabled"`: If `true`, the orchestrator will remember context from previous runs to improve its performance. See the [Memory Guide](memory.md) for more details.
+- `"enabled"`: If `true`, the orchestrator will remember context from previous runs to improve its performance. See the [Memory Guide](memory.md) for more details.

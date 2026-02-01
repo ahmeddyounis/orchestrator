@@ -2,7 +2,13 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { ToolRunRequest, ToolPolicy, ToolRunResult, ToolError, UsageError } from '@orchestrator/shared';
+import {
+  ToolRunRequest,
+  ToolPolicy,
+  ToolRunResult,
+  ToolError,
+  UsageError,
+} from '@orchestrator/shared';
 import { parseCommand } from '../classify/parser';
 
 export interface RunnerContext {
@@ -78,9 +84,7 @@ export class SafeCommandRunner {
       // Check for non-interactive mode
       // Corresponds to --non-interactive flag
       if (policy.interactive === false) {
-        throw new UsageError(
-          `Command execution denied in non-interactive mode: ${req.command}`,
-        );
+        throw new UsageError(`Command execution denied in non-interactive mode: ${req.command}`);
       }
 
       const confirmed = await ui.confirm(
@@ -153,10 +157,9 @@ export class SafeCommandRunner {
         const partialStderr = fs.readFileSync(stderrPath, 'utf8').slice(0, 1000);
 
         reject(
-          new ToolError(
-            `Command timed out after ${policy.timeoutMs}ms`,
-            { details: { partialStdout, partialStderr } },
-          ),
+          new ToolError(`Command timed out after ${policy.timeoutMs}ms`, {
+            details: { partialStdout, partialStderr },
+          }),
         );
       }, policy.timeoutMs);
 

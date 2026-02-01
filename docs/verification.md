@@ -40,8 +40,8 @@ If you have a non-standard setup, you can specify the exact commands to run for 
 
 ### Verification Scope
 
--   **Targeted (default)**: The orchestrator only runs verification in the workspace packages that were directly affected by the changes. This is the default behavior in a monorepo and is much faster.
--   **Full**: You can force the orchestrator to run verification across all packages, even if they weren't changed.
+- **Targeted (default)**: The orchestrator only runs verification in the workspace packages that were directly affected by the changes. This is the default behavior in a monorepo and is much faster.
+- **Full**: You can force the orchestrator to run verification across all packages, even if they weren't changed.
 
 To force a full verification run, you can set the scope in your configuration:
 
