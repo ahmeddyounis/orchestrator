@@ -7,6 +7,20 @@ import { tmpdir } from 'node:os';
 import { SQLiteVectorBackend } from './sqlite-backend';
 import type { VectorItem } from '../backend';
 
+function cosine(a: Float32Array, b: Float32Array): number {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
+  if (magnitude === 0) return 0;
+  return dotProduct / magnitude;
+}
+
 describe('SQLiteVectorBackend', () => {
   let backend: SQLiteVectorBackend;
   let tempDir: string;
@@ -148,6 +162,27 @@ describe('SQLiteVectorBackend', () => {
 
       expect(results).toEqual([]);
     });
+
+    it('should handle upserting 5 items and querying topK with correct ordering', async () => {
+      // From spec M16-09
+      const items: VectorItem[] = [
+        { id: 'v1', vector: new Float32Array([0.1, 0.1, 0.1]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.17
+        { id: 'v2', vector: new Float32Array([0.9, 0.9, 0.9]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.9
+        { id: 'v3', vector: new Float32Array([0.5, 0.5, 0.5]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.5
+        { id: 'v4', vector: new Float32Array([0.2, 0.2, 0.2]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.2
+        { id: 'v5', vector: new Float32Array([0.8, 0.8, 0.8]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.8
+      ];
+      await backend.upsert(ctx, 'new-repo', items);
+
+      const queryVector = new Float32Array([1, 1, 1]);
+      const results = await backend.query(ctx, 'new-repo', queryVector, 3);
+
+      expect(results.length).toBe(3);
+      expect(results.map((r) => r.id)).toEqual(['v2', 'v5', 'v3']);
+      expect(results[0].score).toBeCloseTo(cosine(queryVector, items[1].vector));
+      expect(results[1].score).toBeCloseTo(cosine(queryVector, items[4].vector));
+      expect(results[2].score).toBeCloseTo(cosine(queryVector, items[2].vector));
+    });
   });
 
   describe('deleteByIds', () => {
@@ -185,6 +220,21 @@ describe('SQLiteVectorBackend', () => {
     it('should handle empty ids array', async () => {
       await backend.deleteByIds(ctx, repoId, []);
       // Should not throw
+    });
+
+    it('should delete multiple specified items', async () => {
+      const items: VectorItem[] = [
+        { id: 'd1', vector: new Float32Array([1, 0, 0]), metadata: { type: 't', stale: false, updatedAt: 1 } },
+        { id: 'd2', vector: new Float32Array([0, 1, 0]), metadata: { type: 't', stale: false, updatedAt: 1 } },
+        { id: 'd3', vector: new Float32Array([0, 0, 1]), metadata: { type: 't', stale: false, updatedAt: 1 } },
+      ];
+      await backend.upsert(ctx, repoId, items);
+
+      await backend.deleteByIds(ctx, repoId, ['d1', 'd3']);
+
+      const results = await backend.query(ctx, repoId, new Float32Array([1, 1, 1]), 10);
+      expect(results.length).toBe(1);
+      expect(results[0].id).toBe('d2');
     });
   });
 

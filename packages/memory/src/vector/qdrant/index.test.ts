@@ -63,6 +63,43 @@ describe('QdrantVectorBackend', () => {
     ]);
   });
 
+  it('should not send content or title in the payload (privacy)', async () => {
+    // From spec M16-09
+    let requestBody: any;
+    server.use(
+      http.put(`${config.url}/collections/${config.collection}/points`, async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json({ status: 'ok' });
+      }),
+    );
+
+    const backend = new QdrantVectorBackend(config);
+    await backend.init({});
+
+    const items: VectorItem[] = [
+      {
+        id: '1',
+        vector: new Float32Array([0.1, 0.2]),
+        metadata: {
+          type: 'test',
+          stale: false,
+          updatedAt: 123,
+          // These should be stripped
+          content: 'sensitive content',
+          title: 'sensitive title',
+        },
+      },
+    ];
+
+    await backend.upsert({}, 'repo-1', items);
+
+    const payload = requestBody.points[0].payload;
+    expect(payload).toBeDefined();
+    expect(payload.content).toBeUndefined();
+    expect(payload.title).toBeUndefined();
+    expect(payload.repoId).toBe('repo-1');
+  });
+
   it('should query with repoId filter', async () => {
     let requestBody: any;
     server.use(
