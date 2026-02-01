@@ -8,7 +8,7 @@ import {
   type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
-import { ClaudeCodeAdapter } from '@orchestrator/adapters';
+import { ClaudeCodeAdapter, FakeAdapter } from '@orchestrator/adapters';
 import {
   ProviderCapabilities,
   ProviderConfig,
@@ -197,6 +197,7 @@ export function registerRunCommand(program: Command) {
       registry.registerFactory('anthropic', stubFactory);
       registry.registerFactory('mock', stubFactory);
       registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
+      registry.registerFactory('fake', (cfg) => new FakeAdapter(cfg));
 
       const ui = new ConsoleUI();
       const defaultToolPolicy: ToolPolicy = {

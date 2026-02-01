@@ -10,3 +10,4 @@ export * from './openai';
 export * from './anthropic';
 export * from './subprocess';
 export * from './claude_code';
+export * from './fake/adapter';
