@@ -9,6 +9,7 @@ import {
   RunSummary,
   SummaryWriter,
   ConfigError,
+  redactObject,
 } from '@orchestrator/shared';
 import {
   ContextSignal,
@@ -167,7 +168,12 @@ export class Orchestrator {
       const artifacts = await createRunDir(this.repoRoot, runId);
       const logger = new JsonlLogger(artifacts.trace);
       const eventBus: EventBus = {
-        emit: async (e) => await logger.log(e),
+        emit: async (e) => {
+          const redactedEvent = this.config.security?.redaction?.enabled
+            ? (redactObject(e) as OrchestratorEvent)
+            : e;
+          await logger.log(redactedEvent);
+        },
       };
       await this.autoUpdateIndex(eventBus, runId);
     }
@@ -367,7 +373,11 @@ export class Orchestrator {
     };
 
     try {
-      const writer = new MemoryWriter(eventBus, summary.runId);
+      const writer = new MemoryWriter({
+        eventBus,
+        runId: summary.runId,
+        securityConfig: this.config.security,
+      });
       await writer.extractEpisodic(
         {
           runId: summary.runId,
@@ -503,7 +513,10 @@ export class Orchestrator {
     const logger = new JsonlLogger(artifacts.trace);
 
     const emitEvent = async (e: OrchestratorEvent) => {
-      await logger.log(e);
+      const redactedEvent = this.config.security?.redaction?.enabled
+        ? (redactObject(e) as OrchestratorEvent)
+        : e;
+      await logger.log(redactedEvent);
     };
 
     await emitEvent({
@@ -846,7 +859,12 @@ END_DIFF
     const logger = new JsonlLogger(artifacts.trace);
 
     const eventBus: EventBus = {
-      emit: async (e) => await logger.log(e),
+      emit: async (e) => {
+        const redactedEvent = this.config.security?.redaction?.enabled
+          ? (redactObject(e) as OrchestratorEvent)
+          : e;
+        await logger.log(redactedEvent);
+      },
     };
 
     await eventBus.emit({
@@ -1196,7 +1214,7 @@ END_DIFF
         eventBus,
       );
 
-      const fuser = new SimpleContextFuser();
+      const fuser = new SimpleContextFuser(this.config.security);
       const fusionBudgets = {
         maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
         maxMemoryChars: this.config.memory?.maxChars ?? 2000,
@@ -1486,7 +1504,12 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       const artifacts = await createRunDir(this.repoRoot, runId);
       const logger = new JsonlLogger(artifacts.trace);
       const eventBus: EventBus = {
-        emit: async (e) => await logger.log(e),
+        emit: async (e) => {
+          const redactedEvent = this.config.security?.redaction?.enabled
+            ? (redactObject(e) as OrchestratorEvent)
+            : e;
+          await logger.log(redactedEvent);
+        },
       };
       const summary = await this._buildRunSummary(
         runId,
@@ -1513,7 +1536,12 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       const artifacts = await createRunDir(this.repoRoot, runId);
       const logger = new JsonlLogger(artifacts.trace);
       const eventBus: EventBus = {
-        emit: async (e) => await logger.log(e),
+        emit: async (e) => {
+          const redactedEvent = this.config.security?.redaction?.enabled
+            ? (redactObject(e) as OrchestratorEvent)
+            : e;
+          await logger.log(redactedEvent);
+        },
       };
       const summary = await this._buildRunSummary(
         runId,
@@ -1538,13 +1566,12 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       };
     }
 
-    // Re-use run dir structure
-    const artifacts = await createRunDir(this.repoRoot, runId);
-    const logger = new JsonlLogger(artifacts.trace);
-    const eventBus: EventBus = {
-      emit: async (e) => await logger.log(e),
-    };
-
+        const eventBus: EventBus = {
+          emit: async (e) => {
+            const redactedEvent = this.config.security?.redaction?.enabled ? (redactObject(e) as OrchestratorEvent) : e;
+            await logger.log(redactedEvent);
+          },
+        };
     const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
     const verificationRunner = new VerificationRunner(
       proceduralMemory,
@@ -1775,7 +1802,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         }
       }
 
-      const fuser = new SimpleContextFuser();
+      const fuser = new SimpleContextFuser(this.config.security);
       const fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nTask: Fix verification errors.`,
         repoPack: { items: [], totalChars: 0, estimatedTokens: 0 }, // No repo context for repairs yet

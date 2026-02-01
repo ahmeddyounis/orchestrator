@@ -315,6 +315,16 @@ export const TelemetryConfigSchema = z.object({
   redact: z.boolean().default(true),
 });
 
+export const SecurityConfigSchema = z.object({
+  redaction: z.object({
+    enabled: z.boolean().default(true),
+    allowPatterns: z.array(z.string()).optional(),
+    maxRedactionsPerFile: z.number().default(200),
+  }).default({ enabled: true, maxRedactionsPerFile: 200 }),
+}).default({
+  redaction: { enabled: true, maxRedactionsPerFile: 200 },
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
@@ -429,6 +439,7 @@ export const ConfigSchema = z.object({
     }),
   indexing: IndexingConfigSchema.optional(),
   telemetry: TelemetryConfigSchema.optional(),
+  security: SecurityConfigSchema.optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

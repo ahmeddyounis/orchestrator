@@ -1,12 +1,23 @@
 import { ContextFuser, FusedContext, FusionBudgets } from './types';
 import { ContextPack, ContextSignal } from '@orchestrator/repo';
 import { MemoryEntry } from '@orchestrator/memory';
+import { Config, SecretScanner, redact } from '@orchestrator/shared';
 
 const HEADER_SEPARATOR = `
 ${'-'.repeat(20)}
 `;
 
 export class SimpleContextFuser implements ContextFuser {
+  private scanner?: SecretScanner;
+  private redactionEnabled: boolean;
+
+  constructor(config?: Config['security']) {
+    this.redactionEnabled = config?.redaction?.enabled ?? false;
+    if (this.redactionEnabled) {
+      this.scanner = new SecretScanner();
+    }
+  }
+
   fuse(inputs: {
     repoPack: ContextPack;
     memoryHits: MemoryEntry[];
@@ -70,7 +81,15 @@ export class SimpleContextFuser implements ContextFuser {
 
     for (const item of repoPack.items) {
       const header = `// ${item.path}:${item.startLine}`;
-      const content = item.content;
+      let content = item.content;
+      
+      if (this.redactionEnabled && this.scanner) {
+        const findings = this.scanner.scan(content);
+        if (findings.length > 0) {
+          content = redact(content, findings);
+        }
+      }
+
       const block = `${header}\n${content}`;
 
       if (totalChars + block.length > budget) {
@@ -99,7 +118,15 @@ export class SimpleContextFuser implements ContextFuser {
 
     for (const hit of memoryHits) {
       const header = `// MEMORY ID: ${hit.id} (${hit.type})`;
-      const content = `// ${hit.title}\n${hit.content}`;
+      let content = `// ${hit.title}\n${hit.content}`;
+
+      if (this.redactionEnabled && this.scanner) {
+        const findings = this.scanner.scan(content);
+        if (findings.length > 0) {
+          content = redact(content, findings);
+        }
+      }
+
       const block = `${header}\n${content}`;
 
       if (totalChars + block.length > budget) {
@@ -132,6 +159,13 @@ export class SimpleContextFuser implements ContextFuser {
         content += `\n${signal.data}`;
       } else if (signal.data) {
         content += `\nData: ${JSON.stringify(signal.data, null, 2)}`;
+      }
+
+      if (this.redactionEnabled && this.scanner) {
+        const findings = this.scanner.scan(content);
+        if (findings.length > 0) {
+          content = redact(content, findings);
+        }
       }
 
       if (totalChars + content.length > budget) {

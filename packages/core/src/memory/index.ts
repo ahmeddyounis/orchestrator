@@ -8,10 +8,12 @@ import {
 } from './types';
 import {
   ToolRunResult,
-  redactString,
-  redactUnknown,
   OrchestratorEvent,
   RunSummary,
+  Config,
+  SecretScanner,
+  redact,
+  redactObject,
 } from '@orchestrator/shared';
 import { EventBus } from '../registry';
 import { randomUUID } from 'crypto';
@@ -44,6 +46,7 @@ export interface MemoryWriterDependencies {
   runId?: string;
   embedder?: Embedder;
   vectorBackend?: VectorMemoryBackend;
+  securityConfig?: Config['security'];
 }
 
 export class MemoryWriter {
@@ -51,12 +54,18 @@ export class MemoryWriter {
   private readonly runId: string;
   private readonly embedder?: Embedder;
   private readonly vectorBackend?: VectorMemoryBackend;
+  private scanner?: SecretScanner;
+  private redactionEnabled: boolean;
 
   constructor(deps: MemoryWriterDependencies = {}) {
     this.eventBus = deps.eventBus;
     this.runId = deps.runId || 'unknown';
     this.embedder = deps.embedder;
     this.vectorBackend = deps.vectorBackend;
+    this.redactionEnabled = deps.securityConfig?.redaction?.enabled ?? false;
+    if (this.redactionEnabled) {
+      this.scanner = new SecretScanner();
+    }
   }
 
   private async logRedactions(count: number, context: string) {
@@ -126,12 +135,18 @@ export class MemoryWriter {
           }
         : undefined,
     };
-
-    const { redacted: redactedContentPayload, redactionCount: contentRedactions } =
-      redactUnknown(contentPayload);
-    await this.logRedactions(contentRedactions, `episodic memory content for run ${runId}`);
-
+    
+    const redactedContentPayload = this.redactionEnabled ? redactObject(contentPayload) : contentPayload;
+    
     let content = JSON.stringify(redactedContentPayload, null, 2);
+    if (this.redactionEnabled && this.scanner) {
+        const findings = this.scanner.scan(content);
+        if (findings.length > 0) {
+            content = redact(content, findings);
+            await this.logRedactions(findings.length, `episodic memory content for run ${runId}`);
+        }
+    }
+
     if (content.length > MAX_CONTENT_LENGTH) {
       content = content.substring(0, MAX_CONTENT_LENGTH) + '\n... (truncated due to size limit)';
     }
@@ -141,10 +156,8 @@ export class MemoryWriter {
       failureSignature: verificationReport?.failureSignature,
     };
 
-    const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
-      redactUnknown(evidence);
-    await this.logRedactions(evidenceRedactions, `episodic memory evidence for run ${runId}`);
-
+    const redactedEvidence = this.redactionEnabled ? redactObject(evidence) : evidence;
+    
     const newMemory: EpisodicMemory = {
       type: 'episodic',
       id: randomUUID(),
@@ -193,10 +206,14 @@ export class MemoryWriter {
       return null;
     }
 
-    const { redacted: normalizedCommand, redactionCount: commandRedactions } = redactString(
-      request.command.trim().replace(/\s+/g, ' '),
-    );
-    await this.logRedactions(commandRedactions, 'procedural memory command');
+    let normalizedCommand = request.command.trim().replace(/\s+/g, ' ');
+    if (this.redactionEnabled && this.scanner) {
+        const findings = this.scanner.scan(normalizedCommand);
+        if (findings.length > 0) {
+            normalizedCommand = redact(normalizedCommand, findings);
+            await this.logRedactions(findings.length, 'procedural memory command');
+        }
+    }
 
     const existingMemory = [...memoryStore.values()].find(
       (mem) => mem.type === 'procedural' && mem.content === normalizedCommand,
@@ -208,10 +225,8 @@ export class MemoryWriter {
       durationMs,
       toolRunId,
     };
-
-    const { redacted: redactedEvidence, redactionCount: evidenceRedactions } =
-      redactUnknown(evidence);
-    await this.logRedactions(evidenceRedactions, 'procedural memory evidence');
+    
+    const redactedEvidence = this.redactionEnabled ? redactObject(evidence) : evidence;
 
     if (existingMemory) {
       existingMemory.updatedAt = new Date();

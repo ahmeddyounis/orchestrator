@@ -10,6 +10,7 @@ export * from './fs/artifacts';
 export { ManifestManager, MANIFEST_FILENAME, MANIFEST_VERSION } from './artifacts';
 export * from './config/schema';
 export * from './types/memory';
+export * from './security/secrets';
 
 export * from './types/llm';
 export * from './types/patch';
