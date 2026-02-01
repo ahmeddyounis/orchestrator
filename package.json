@@ -41,5 +41,14 @@
   "dependencies": {
     "@types/semver": "^7.7.1",
     "semver": "^7.7.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "tree-sitter-go",
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-rust",
+      "tree-sitter-typescript"
+    ]
   }
 }

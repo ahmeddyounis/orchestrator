@@ -14,6 +14,7 @@ export * from './toolchain/detector';
 export * from './toolchain/targeting';
 export * from './indexing';
 export * from './indexing/types';
+export * from './tree-sitter';
 
 /**
  * Finds the repository root starting from the current directory.
