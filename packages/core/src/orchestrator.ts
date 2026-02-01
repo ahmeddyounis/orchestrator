@@ -316,7 +316,8 @@ export class Orchestrator {
         /^verification_command_source.json$/.test(n) ||
         /^verification_summary_.*\.txt$/.test(n) ||
         /^failure_summary_iter_\d+\.(json|txt)$/.test(n) ||
-        /^fused_context_.*\.(json|txt)$/.test(n),
+        /^fused_context_.*\.(json|txt)$/.test(n) ||
+        /^reviewer_iter_.*\.json$/.test(n),
     );
 
     // De-dupe + relativize.
@@ -2344,16 +2345,13 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         eventBus,
         costTracker: this.costTracker!,
         executor: providers.executor,
+        reviewer: providers.reviewer,
         artifactsRoot: artifacts.root,
         budget: budget,
         logger,
       };
 
-      const candidates = await candidateGenerator.generateCandidates(stepContext, bestOfN);
-      const validCandidates = candidates.filter((c) => c.valid && c.patch);
-
-      // TODO: Implement a more sophisticated candidate selection strategy (e.g., reviewer/judge)
-      const bestCandidate = validCandidates[0];
+      const bestCandidate = await candidateGenerator.generateAndSelectCandidate(stepContext, bestOfN);
 
       let success = false;
       let lastError = '';

@@ -4,6 +4,7 @@ import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { Reviewer, ReviewerContext } from './reviewer';
 
 // Budget type derived from Config
 type Budget = NonNullable<Config['budget']>;
@@ -17,6 +18,7 @@ export interface StepContext {
   eventBus: EventBus;
   costTracker: CostTracker;
   executor: ProviderAdapter;
+  reviewer: ProviderAdapter;
   artifactsRoot: string;
   budget: Budget;
   logger: Logger;
@@ -37,7 +39,11 @@ export interface Candidate {
 }
 
 export class CandidateGenerator {
-  constructor() {}
+  private reviewer: Reviewer;
+
+  constructor() {
+    this.reviewer = new Reviewer();
+  }
 
   private parseDiff(rawOutput: string): string | null {
     const diffMatch = rawOutput.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
@@ -68,7 +74,7 @@ export class CandidateGenerator {
     return { filesChanged, linesAdded, linesDeleted };
   }
 
-  async generateCandidates(stepContext: StepContext, n: number): Promise<Candidate[]> {
+  private async generateCandidates(stepContext: StepContext, n: number): Promise<Candidate[]> {
     const candidates: Candidate[] = [];
     const {
       runId,
@@ -186,5 +192,47 @@ INSTRUCTIONS:
     }
 
     return candidates;
+  }
+
+  async generateAndSelectCandidate(stepContext: StepContext, n: number): Promise<Candidate | null> {
+    const candidates = await this.generateCandidates(stepContext, n);
+    const validCandidates = candidates.filter((c) => c.valid && c.patch);
+
+    if (validCandidates.length === 0) {
+      return null;
+    }
+
+    if (validCandidates.length === 1) {
+      return validCandidates[0];
+    }
+
+    const reviewerContext: ReviewerContext = {
+      runId: stepContext.runId,
+      eventBus: stepContext.eventBus,
+      costTracker: stepContext.costTracker,
+      reviewer: stepContext.reviewer,
+      artifactsRoot: stepContext.artifactsRoot,
+      logger: stepContext.logger,
+    };
+
+    const review = await this.reviewer.review(
+      {
+        goal: stepContext.goal,
+        step: stepContext.step,
+        fusedContext: stepContext.fusedContext,
+        candidates: validCandidates,
+      },
+      reviewerContext,
+    );
+
+    if (review.rankings.length === 0) {
+      // Fallback to the first valid candidate if the reviewer fails
+      return validCandidates[0];
+    }
+
+    const sortedRankings = review.rankings.sort((a, b) => b.score - a.score);
+    const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
+    
+    return validCandidates.find(c => c.index === bestCandidateId) || validCandidates[0];
   }
 }
