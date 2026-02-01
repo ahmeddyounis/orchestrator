@@ -13,6 +13,8 @@ export interface MemoryStore {
   get(id: string): MemoryEntry | null;
   list(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
   listEntriesForRepo(repoId: string): MemoryEntry[];
+  listEntriesWithoutVectors(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
+  markVectorUpdated(id: string): void;
   updateStaleFlag(id: string, stale: boolean): void;
   wipe(repoId: string): void;
   status(repoId: string): MemoryStatus;
@@ -41,6 +43,7 @@ export function createMemoryStore(): MemoryStore {
     mkdirSync(dirname(dbPath), { recursive: true });
     db = new DatabaseSync(dbPath);
     db.exec('PRAGMA journal_mode = WAL;');
+    db.exec('PRAGMA foreign_keys = ON;');
     runMigrations(db);
   };
 
@@ -131,6 +134,46 @@ export function createMemoryStore(): MemoryStore {
     return rows.map(rowToEntry);
   };
 
+  const listEntriesWithoutVectors = (
+    repoId: string,
+    type?: MemoryEntryType,
+    limit?: number,
+  ): MemoryEntry[] => {
+    if (!db) throw new MemoryError('Database not initialized');
+    let query = `
+      SELECT me.*
+      FROM memory_entries me
+      LEFT JOIN memory_vectors mv ON me.id = mv.memory_id
+      WHERE me.repoId = ? AND mv.memory_id IS NULL
+    `;
+    const params: (string | number)[] = [repoId];
+
+    if (type) {
+      query += ' AND me.type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY me.updatedAt DESC';
+
+    if (limit) {
+      query += ' LIMIT ?';
+      params.push(limit);
+    }
+
+    const stmt = db.prepare(query);
+    const rows = stmt.all(...params) as unknown as MemoryEntryDbRow[];
+    return rows.map(rowToEntry);
+  };
+
+  const markVectorUpdated = (id: string): void => {
+    if (!db) throw new MemoryError('Database not initialized');
+    const now = Date.now();
+    const stmt = db.prepare(
+      'INSERT OR REPLACE INTO memory_vectors (memory_id, updated_at) VALUES (?, ?)',
+    );
+    stmt.run(id, now);
+  };
+
   const listEntriesForRepo = (repoId: string): MemoryEntry[] => {
     if (!db) throw new MemoryError('Database not initialized');
     const query = 'SELECT * FROM memory_entries WHERE repoId = ?';
@@ -218,6 +261,7 @@ export function createMemoryStore(): MemoryStore {
 
   const wipe = (repoId: string): void => {
     if (!db) throw new MemoryError('Database not initialized');
+    // Foreign key with ON DELETE CASCADE will handle memory_vectors
     const stmt = db.prepare('DELETE FROM memory_entries WHERE repoId = ?');
     stmt.run(repoId);
   };
@@ -229,6 +273,8 @@ export function createMemoryStore(): MemoryStore {
     get,
     list,
     listEntriesForRepo,
+    listEntriesWithoutVectors,
+    markVectorUpdated,
     updateStaleFlag,
     search,
     status,

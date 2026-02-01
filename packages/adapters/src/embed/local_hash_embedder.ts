@@ -1,24 +1,12 @@
 // packages/adapters/src/embed/local_hash_embedder.ts
-
-import { createHash } from 'crypto';
 import { Embedder } from './embedder';
+import { createHash } from 'crypto';
 
 export class LocalHashEmbedder implements Embedder {
-  constructor(private readonly dimensions: number = 384) {}
+  constructor(private readonly dimensions: number = 256) {}
 
   async embedTexts(texts: string[]): Promise<number[][]> {
-    return texts.map((text) => {
-      const normalizedText = text.trim().toLowerCase();
-      const hash = createHash('sha256').update(normalizedText).digest();
-
-      const floatArray = new Array(this.dimensions).fill(0);
-      for (let i = 0; i < this.dimensions; i++) {
-        const hashIndex = i % hash.length;
-        floatArray[i] = hash.readUInt8(hashIndex) / 255.0;
-      }
-
-      return this.l2Normalize(floatArray);
-    });
+    return texts.map((text) => this.embedText(text));
   }
 
   dims(): number {
@@ -26,15 +14,19 @@ export class LocalHashEmbedder implements Embedder {
   }
 
   id(): string {
-    return `local-hash:${this.dimensions}`;
+    return `local-hash-dim${this.dimensions}`;
   }
 
-  private l2Normalize(arr: number[]): number[] {
-    const sumOfSquares = arr.reduce((sum, val) => sum + val * val, 0);
-    const norm = Math.sqrt(sumOfSquares);
-    if (norm === 0) {
-      return arr;
+  private embedText(text: string): number[] {
+    const hash = createHash('sha256').update(text).digest();
+    const vector: number[] = [];
+    for (let i = 0; i < this.dimensions; i++) {
+      const byteIndex = i % hash.length;
+      const bitIndex = Math.floor(i / hash.length) % 8;
+      const byte = hash[byteIndex];
+      const bit = (byte >> bitIndex) & 1;
+      vector.push(bit);
     }
-    return arr.map((val) => val / norm);
+    return vector;
   }
 }

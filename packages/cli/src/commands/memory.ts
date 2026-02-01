@@ -1,7 +1,13 @@
 import { Command } from 'commander';
-import { createMemoryStore, MemoryEntry } from '@orchestrator/memory';
+import {
+  createMemoryStore,
+  MemoryEntry,
+  createVectorMemoryBackend,
+  VectorMemoryBackend,
+} from '@orchestrator/memory';
 import { ConfigLoader } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
+import { createEmbedder, Embedder } from '@orchestrator/adapters';
 
 function getMemoryStore() {
   const config = ConfigLoader.load({});
@@ -142,6 +148,82 @@ async function wipe(options: { yes?: boolean }) {
   console.log('Memory wiped for the current repository.');
 }
 
+async function reembed(options: {
+  limit?: number;
+  type?: 'procedural' | 'episodic' | 'all';
+  forceAll?: boolean;
+}) {
+  const config = ConfigLoader.load({});
+  const repoId = await findRepoRoot();
+
+  if (!config.memory?.enabled || !config.memory.vector?.enabled) {
+    console.error('Vector memory is not enabled in the configuration.');
+    process.exit(1);
+  }
+
+  const vectorConfig = config.memory.vector;
+
+  // 1. Create Embedder
+  const embedderId = vectorConfig.embedder;
+  if (!embedderId) {
+    console.error('Embedder not configured for vector memory.');
+    process.exit(2);
+  }
+
+  let embedder: Embedder;
+  try {
+    embedder = createEmbedder({
+      provider: embedderId,
+      ...config.embeddings?.[embedderId],
+    });
+  } catch (e: any) {
+    console.error(`Failed to create embedder: ${e.message}`);
+    process.exit(2);
+  }
+
+  // 2. Create Vector Memory Backend
+  const vectorBackend: VectorMemoryBackend = createVectorMemoryBackend(
+    config.memory.vector.storage,
+  );
+
+  // 3. Get Memory Store
+  const store = getMemoryStore();
+  const type = options.type === 'all' ? undefined : options.type;
+
+  const memoryEntries = options.forceAll
+    ? store.list(repoId, type)
+    : store.listEntriesWithoutVectors(repoId, type);
+
+  // 4. Re-embed
+  console.log(`Found ${memoryEntries.length} entries to re-embed.`);
+  let processed = 0;
+  const limit = options.limit || memoryEntries.length;
+
+  const MAX_EMBED_CONTENT_LENGTH = 4 * 1024; // 4KB
+
+  for (const entry of memoryEntries) {
+    if (processed >= limit) {
+      break;
+    }
+
+    process.stdout.write(`Embedding entry ${processed + 1}/${limit}: ${entry.id}\r`);
+
+    const textToEmbed =
+      entry.title + '\n' + entry.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
+    const vectors = await embedder.embedTexts([textToEmbed]);
+
+    if (vectors.length > 0) {
+      await vectorBackend.upsert(repoId, [
+        { id: entry.id, vector: vectors[0], metadata: { type: entry.type } },
+      ]);
+      store.markVectorUpdated(entry.id);
+    }
+    processed++;
+  }
+
+  console.log(`\nSuccessfully re-embedded ${processed} memory entries.`);
+}
+
 export function registerMemoryCommand(program: Command) {
   const memoryCommand = program.command('memory').description('Manage orchestrator memory.');
 
@@ -171,4 +253,12 @@ export function registerMemoryCommand(program: Command) {
     .description('Wipe all memory for the current repository.')
     .option('--yes', 'Skip confirmation prompt.')
     .action(wipe);
+
+  memoryCommand
+    .command('reembed')
+    .description('Re-embed memory entries.')
+    .option('--limit <n>', 'Limit number of entries to re-embed.', parseInt)
+    .option('--type <type>', 'Filter by type (procedural, episodic, all). Default to all.', 'all')
+    .option('--force-all', 'Re-embed all entries, even those with existing vectors.')
+    .action(reembed);
 }

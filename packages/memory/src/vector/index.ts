@@ -1,19 +1,5 @@
 // packages/memory/src/vector/index.ts
 
-export {
-  VectorBackendContext,
-  VectorItemMetadata,
-  VectorUpsertItem,
-  VectorQueryResult,
-  VectorQueryFilters,
-  VectorBackendInfo,
-  VectorMemoryBackend,
-} from "./backend";
-
-export {
-  VectorBackendFactory,
-  VectorBackendConfig,
-  MockVectorMemoryBackend,
-  VectorBackendNotImplementedError,
-  RemoteBackendNotAllowedError,
-} from "./factory";
+export * from './backend';
+export * from './noop';
+export * from './factory';

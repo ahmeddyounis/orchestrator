@@ -51,6 +51,13 @@ const migrations = [
       VALUES (new.rowid, new.title, new.content);
     END;
   `,
+  `
+    CREATE TABLE IF NOT EXISTS memory_vectors (
+      memory_id TEXT PRIMARY KEY,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (memory_id) REFERENCES memory_entries(id) ON DELETE CASCADE
+    );
+  `,
 ];
 
 export function runMigrations(db: DatabaseSync): void {

@@ -16,11 +16,13 @@ import {
 import { EventBus } from '../registry';
 import { randomUUID } from 'crypto';
 import { VerificationReport } from '../verify/types';
-import { createMemoryStore } from '@orchestrator/memory';
+import { createMemoryStore, VectorMemoryBackend } from '@orchestrator/memory';
+import { Embedder } from '@orchestrator/adapters';
 
 const memoryStore = new Map<string, Memory>();
 
 const MAX_CONTENT_LENGTH = 8 * 1024; // 8KB
+const MAX_EMBED_CONTENT_LENGTH = 4 * 1024; // 4KB
 
 let sqliteStore: ReturnType<typeof createMemoryStore> | null = null;
 let sqliteInitPath: string | null = null;
@@ -37,13 +39,24 @@ function ensureSqliteStore(dbPath: string) {
 type ApplicableClassification = 'test' | 'build' | 'lint' | 'format';
 const applicableClassifications: ApplicableClassification[] = ['test', 'build', 'lint', 'format'];
 
-export class MemoryWriter {
-  private eventBus?: EventBus;
-  private runId: string;
+export interface MemoryWriterDependencies {
+  eventBus?: EventBus;
+  runId?: string;
+  embedder?: Embedder;
+  vectorBackend?: VectorMemoryBackend;
+}
 
-  constructor(eventBus?: EventBus, runId = 'unknown') {
-    this.eventBus = eventBus;
-    this.runId = runId;
+export class MemoryWriter {
+  private readonly eventBus?: EventBus;
+  private readonly runId: string;
+  private readonly embedder?: Embedder;
+  private readonly vectorBackend?: VectorMemoryBackend;
+
+  constructor(deps: MemoryWriterDependencies = {}) {
+    this.eventBus = deps.eventBus;
+    this.runId = deps.runId || 'unknown';
+    this.embedder = deps.embedder;
+    this.vectorBackend = deps.vectorBackend;
   }
 
   private async logRedactions(count: number, context: string) {
@@ -61,6 +74,26 @@ export class MemoryWriter {
     }
   }
 
+  private async embedAndUpsert(repoId: string, memory: Memory, repoState: RepoState) {
+    if (!this.embedder || !this.vectorBackend) {
+      return;
+    }
+
+    const textToEmbed =
+      memory.title + '\n' + memory.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
+    const vectors = await this.embedder.embedTexts([textToEmbed]);
+
+    if (vectors.length > 0) {
+      await this.vectorBackend.upsert(repoId, [
+        { id: memory.id, vector: vectors[0], metadata: { type: memory.type } },
+      ]);
+      if (repoState.memoryDbPath) {
+        const store = ensureSqliteStore(repoState.memoryDbPath);
+        store.markVectorUpdated(memory.id);
+      }
+    }
+  }
+
   async extractEpisodic(
     runSummary: {
       runId: string;
@@ -73,9 +106,7 @@ export class MemoryWriter {
     patchStats?: PatchStats,
   ): Promise<EpisodicMemory> {
     const { runId, status, goal, stopReason } = runSummary;
-    const title = `Run ${runId}: ${status} - ${goal.substring(0, 40)}${
-      goal.length > 40 ? '...' : ''
-    }`;
+    const title = `Run ${runId}: ${status} - ${goal.substring(0, 40)}${goal.length > 40 ? '...' : ''}`;
 
     const contentPayload = {
       goal,
@@ -142,6 +173,7 @@ export class MemoryWriter {
         createdAt: newMemory.createdAt.getTime(),
         updatedAt: newMemory.updatedAt.getTime(),
       });
+      await this.embedAndUpsert(repoState.repoId, newMemory, repoState);
     }
 
     return newMemory;
@@ -202,6 +234,7 @@ export class MemoryWriter {
           createdAt: existingMemory.createdAt.getTime(),
           updatedAt: existingMemory.updatedAt.getTime(),
         });
+        await this.embedAndUpsert(repoState.repoId, existingMemory, repoState);
       }
       return existingMemory;
     }
@@ -233,6 +266,7 @@ export class MemoryWriter {
         createdAt: newMemory.createdAt.getTime(),
         updatedAt: newMemory.updatedAt.getTime(),
       });
+      await this.embedAndUpsert(repoState.repoId, newMemory, repoState);
     }
 
     return newMemory;
@@ -251,6 +285,13 @@ export class MemoryWriter {
       default:
         return 'How to perform a task';
     }
+  }
+
+  async wipe(repoId: string, dbPath: string) {
+    const store = ensureSqliteStore(dbPath);
+    store.wipe(repoId);
+    memoryStore.clear();
+    await this.vectorBackend?.wipeRepo(repoId);
   }
 
   // for testing
