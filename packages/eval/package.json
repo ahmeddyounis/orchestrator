@@ -15,10 +15,13 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "fs-extra": "^11.3.3",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@types/chalk": "^2.2.0"
   },
   "dependencies": {
+    "chalk": "^4.1.2",
     "@orchestrator/core": "workspace:*",
-    "@orchestrator/shared": "workspace:*"
+    "@orchestrator/shared": "workspace:*",
+    "@orchestrator/repo": "workspace:*"
   }
 }

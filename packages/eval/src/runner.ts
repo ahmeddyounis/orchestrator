@@ -1,6 +1,5 @@
 import path from 'node:path';
 import fs from 'fs-extra';
-import { spawn } from 'node:child_process';
 import {
   type EvalSuite,
   type EvalTask,
@@ -11,12 +10,25 @@ import {
   type EvalAggregates,
   type EvalComparison,
   type CriterionResult,
+  type Config,
 } from '@orchestrator/shared';
-import { findRepoRoot } from '@orchestrator/repo';
+import { findRepoRoot, GitService } from '@orchestrator/repo';
+import {
+  Orchestrator,
+  ProviderRegistry,
+  NoopUserInterface,
+  AllowAllToolPolicy,
+} from '@orchestrator/core';
 import { file_contains, script_exit, verification_pass } from './criteria';
+import { SimpleRenderer } from './renderer';
 
 export interface EvalRunnerOptions {
   baseline?: string;
+}
+
+export interface EvalRunnerConstructorOptions {
+  config: Config;
+  outputDir: string;
 }
 
 interface BaselineConfig {
@@ -29,22 +41,33 @@ interface BaselineConfig {
 
 export class EvalRunner {
   private baselines: Record<string, BaselineConfig> = {};
+  private config: Config;
+  private outputDir: string;
+  private renderer: SimpleRenderer;
 
-  constructor() {
-    // constructor
+  constructor(options: EvalRunnerConstructorOptions) {
+    this.config = options.config;
+    this.outputDir = options.outputDir;
+    this.renderer = new SimpleRenderer();
   }
 
-  async runSuite(suitePath: string, options: EvalRunnerOptions): Promise<EvalResult> {
+  async runSuite(
+    suitePath: string,
+    options: EvalRunnerOptions,
+  ): Promise<EvalResult> {
     await this.loadBaselines();
 
     const suite = await this.loadSuite(suitePath);
     const suiteName = suite.name;
     const startedAt = Date.now();
+    this.renderer.logSuiteStarted(suiteName);
 
     const orchestratorTaskResults: EvalTaskResult[] = [];
-    for (const task of suite.tasks) {
+    for (const [index, task] of suite.tasks.entries()) {
+      this.renderer.logTaskStarted(task, index, suite.tasks.length);
       const taskResult = await this.runTask(task);
       orchestratorTaskResults.push(taskResult);
+      this.renderer.logTaskFinished(taskResult);
     }
 
     let baselineResult: EvalResult | undefined;
@@ -55,9 +78,11 @@ export class EvalRunner {
       }
 
       const baselineTaskResults: EvalTaskResult[] = [];
-      for (const task of suite.tasks) {
+      for (const [index, task] of suite.tasks.entries()) {
+        this.renderer.logTaskStarted(task, index, suite.tasks.length, true);
         const taskResult = await this.runBaselineTask(task, baselineConfig);
         baselineTaskResults.push(taskResult);
+        this.renderer.logTaskFinished(taskResult, true);
       }
       const baselineFinishedAt = Date.now();
       const baselineAggregates = this.calculateAggregates(
@@ -67,7 +92,7 @@ export class EvalRunner {
       baselineResult = {
         schemaVersion: '1',
         suiteName,
-        startedAt,
+        startedAt: startedAt,
         finishedAt: baselineFinishedAt,
         tasks: baselineTaskResults,
         aggregates: baselineAggregates,
@@ -91,10 +116,19 @@ export class EvalRunner {
 
     let comparison: EvalComparison | undefined;
     if (baselineResult) {
-      comparison = this.compareAggregates(orchestratorResult.aggregates, baselineResult.aggregates);
+      comparison = this.compareAggregates(
+        orchestratorResult.aggregates,
+        baselineResult.aggregates,
+      );
     }
 
-    await this.writeAllResults(suiteName, orchestratorResult, baselineResult, comparison);
+    const finalReportPath = await this.writeAllResults(
+      suiteName,
+      orchestratorResult,
+      baselineResult,
+      comparison,
+    );
+    this.renderer.logSuiteFinished(orchestratorResult, finalReportPath);
 
     return orchestratorResult;
   }
@@ -106,27 +140,43 @@ export class EvalRunner {
     return {
       passRateDelta: orchestrator.passRate - baseline.passRate,
       avgDurationDelta: orchestrator.avgDurationMs - baseline.avgDurationMs,
-      totalCostDelta: (orchestrator.totalCostUsd ?? 0) - (baseline.totalCostUsd ?? 0),
+      totalCostDelta:
+        (orchestrator.totalCostUsd ?? 0) - (baseline.totalCostUsd ?? 0),
     };
   }
 
   private async loadBaselines(): Promise<void> {
     const repoRoot = await findRepoRoot();
-    const baselinesPath = path.join(repoRoot, 'packages/eval/src/baselines.json');
+    const baselinesPath = path.join(
+      repoRoot,
+      'packages/eval/src/baselines.json',
+    );
     if (await fs.pathExists(baselinesPath)) {
       this.baselines = await fs.readJson(baselinesPath);
     }
   }
 
-  private calculateAggregates(tasks: EvalTaskResult[], totalDurationMs: number): EvalAggregates {
+  private calculateAggregates(
+    tasks: EvalTaskResult[],
+    totalDurationMs: number,
+  ): EvalAggregates {
     const totalTasks = tasks.length;
     const passed = tasks.filter((t) => t.status === 'pass').length;
     const failed = tasks.filter((t) => t.status === 'fail').length;
     const error = tasks.filter((t) => t.status === 'error').length;
     const skipped = tasks.filter((t) => t.status === 'skipped').length;
-    const totalCostUsd = tasks.reduce((sum, t) => sum + (t.metrics?.estimatedCostUsd ?? 0), 0);
-    const totalIterations = tasks.reduce((sum, t) => sum + (t.metrics?.iterations ?? 0), 0);
-    const totalToolRuns = tasks.reduce((sum, t) => sum + (t.metrics?.toolRuns ?? 0), 0);
+    const totalCostUsd = tasks.reduce(
+      (sum, t) => sum + (t.metrics?.estimatedCostUsd ?? 0),
+      0,
+    );
+    const totalIterations = tasks.reduce(
+      (sum, t) => sum + (t.metrics?.iterations ?? 0),
+      0,
+    );
+    const totalToolRuns = tasks.reduce(
+      (sum, t) => sum + (t.metrics?.toolRuns ?? 0),
+      0,
+    );
 
     return {
       totalTasks,
@@ -148,30 +198,31 @@ export class EvalRunner {
     const suiteContent = await fs.readJson(suitePath);
     const validationResult = validateEvalSuite(suiteContent);
     if (!validationResult.success) {
-      throw new Error(`Invalid eval suite: ${validationResult.error.message}`);
+      throw new Error(
+        `Invalid eval suite: ${validationResult.error.message}`,
+      );
     }
     return validationResult.data as EvalSuite;
   }
 
   private async runTask(task: EvalTask): Promise<EvalTaskResult> {
     const startedAt = Date.now();
-    const taskId = task.id;
     let workDir: string | undefined;
 
     try {
       workDir = await this.setupTask(task);
-      const { runId, runDir } = await this.executeTask(task, workDir);
-      const summary = await this.loadRunSummary(runDir);
-
+      const { runId, runDir, summary } = await this.executeTask(
+        task,
+        workDir,
+        this.config,
+      );
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed, results } = await this.evaluateSuccess(
-        task.successCriteria,
-        summary,
-      );
+      const { passed, verificationPassed, results } =
+        await this.evaluateSuccess(task.successCriteria, summary);
 
       return {
-        taskId,
+        taskId: task.id,
         status: passed ? 'pass' : 'fail',
         runId,
         durationMs: finishedAt - startedAt,
@@ -185,7 +236,8 @@ export class EvalRunner {
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
-            (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
+            (summary.patchStats?.linesAdded ?? 0) +
+            (summary.patchStats?.linesDeleted ?? 0),
         },
         artifacts: {
           runDir: runDir,
@@ -196,7 +248,7 @@ export class EvalRunner {
     } catch (e) {
       const finishedAt = Date.now();
       return {
-        taskId,
+        taskId: task.id,
         status: 'error',
         durationMs: finishedAt - startedAt,
         failure: {
@@ -213,12 +265,18 @@ export class EvalRunner {
 
   private async setupTask(task: EvalTask): Promise<string> {
     const repoRoot = await findRepoRoot();
-    const workDir = await fs.mkdtemp(path.join(repoRoot, '.tmp', 'eval-'));
+    const workDir = await fs.mkdtemp(
+      path.join(repoRoot, '.tmp', 'eval-'),
+    );
 
     const fixturePath = path.resolve(repoRoot, task.repo.fixturePath);
     await fs.copy(fixturePath, workDir);
 
-    // TODO: Init git repo if needed
+    const git = new GitService(workDir);
+    await git.init();
+    await git.addAll();
+    await git.commit('Initial commit');
+
     return workDir;
   }
 
@@ -227,23 +285,42 @@ export class EvalRunner {
     baselineConfig: BaselineConfig,
   ): Promise<EvalTaskResult> {
     const startedAt = Date.now();
-    const taskId = task.id;
     let workDir: string | undefined;
 
     try {
       workDir = await this.setupTask(task);
-      const { runId, runDir } = await this.executeBaselineTask(task, workDir, baselineConfig);
-      const summary = await this.loadRunSummary(runDir);
 
+      const baselineRunConfig = {
+        ...this.config,
+        thinkLevel: baselineConfig.thinkLevel || this.config.thinkLevel,
+        memory: { enabled: false }, // Baselines run without memory
+        providers: {
+          ...this.config.providers,
+          [baselineConfig.provider]: {
+            ...this.config.providers?.[baselineConfig.provider],
+            model: baselineConfig.args.model,
+          },
+        },
+        defaults: {
+          ...this.config.defaults,
+          planner: baselineConfig.provider,
+          executor: baselineConfig.provider,
+          reviewer: baselineConfig.provider,
+        },
+      };
+
+      const { runId, runDir, summary } = await this.executeTask(
+        task,
+        workDir,
+        baselineRunConfig,
+      );
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed, results } = await this.evaluateSuccess(
-        task.successCriteria,
-        summary,
-      );
+      const { passed, verificationPassed, results } =
+        await this.evaluateSuccess(task.successCriteria, summary);
 
       return {
-        taskId,
+        taskId: task.id,
         status: passed ? 'pass' : 'fail',
         runId,
         durationMs: finishedAt - startedAt,
@@ -257,7 +334,8 @@ export class EvalRunner {
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
-            (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
+            (summary.patchStats?.linesAdded ?? 0) +
+            (summary.patchStats?.linesDeleted ?? 0),
         },
         artifacts: {
           runDir: runDir,
@@ -268,7 +346,7 @@ export class EvalRunner {
     } catch (e) {
       const finishedAt = Date.now();
       return {
-        taskId,
+        taskId: task.id,
         status: 'error',
         durationMs: finishedAt - startedAt,
         failure: {
@@ -283,116 +361,42 @@ export class EvalRunner {
     }
   }
 
-  private async executeBaselineTask(
-    task: EvalTask,
-    workDir: string,
-    baselineConfig: BaselineConfig,
-  ): Promise<{ runId: string; runDir: string }> {
-    const repoRoot = await findRepoRoot();
-    const cliPath = path.resolve(repoRoot, 'packages/cli/dist/index.js');
-
-    const args: string[] = [
-      task.command,
-      task.goal,
-      '--think',
-      baselineConfig.thinkLevel || task.thinkLevel || 'auto',
-      `--provider=${baselineConfig.provider}`,
-      `--provider-options-model=${baselineConfig.args.model}`,
-      '--no-memory',
-      '--json',
-      '--non-interactive',
-    ];
-
-    return new Promise((resolve, reject) => {
-      const child = spawn('node', [cliPath, ...args], {
-        cwd: workDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code) => {
-        if (code !== 0 && code !== 1) {
-          return reject(
-            new Error(`Orchestrator CLI failed with code ${code}:
-${stderr}`),
-          );
-        }
-        try {
-          const output = JSON.parse(stdout);
-          const runDir = path.join(workDir, '.orchestrator', 'runs', output.runId);
-          resolve({ runId: output.runId, runDir });
-        } catch {
-          reject(new Error(`Failed to parse CLI output: ${stdout}`));
-        }
-      });
-    });
-  }
-
   private async executeTask(
     task: EvalTask,
     workDir: string,
-  ): Promise<{ runId: string; runDir: string }> {
-    const repoRoot = await findRepoRoot();
-    const cliPath = path.resolve(repoRoot, 'packages/cli/dist/index.js');
+    config: Config,
+  ): Promise<{ runId: string; runDir: string; summary: RunSummary }> {
+    const registry = new ProviderRegistry(config.providers || {});
+    const git = new GitService(workDir);
 
-    const args: string[] = [
-      task.command,
-      task.goal,
-      '--think',
-      task.thinkLevel || 'auto',
-      '--json',
-      '--non-interactive',
-    ];
-
-    return new Promise((resolve, reject) => {
-      const child = spawn('node', [cliPath, ...args], {
-        cwd: workDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      child.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      child.on('close', (code) => {
-        if (code !== 0 && code !== 1) {
-          // 1 can mean failure, which is a valid outcome for an eval
-          return reject(
-            new Error(`Orchestrator CLI failed with code ${code}:
-${stderr}`),
-          );
-        }
-        try {
-          // The CLI output should be a JSON object with runId
-          const output = JSON.parse(stdout);
-          const runDir = path.join(workDir, '.orchestrator', 'runs', output.runId);
-          resolve({ runId: output.runId, runDir });
-        } catch {
-          reject(new Error(`Failed to parse CLI output: ${stdout}`));
-        }
-      });
+    const orchestrator = new Orchestrator({
+      config,
+      git,
+      registry,
+      repoRoot: workDir,
+      toolPolicy: new AllowAllToolPolicy(), // Evals run with full tool access
+      ui: new NoopUserInterface(), // Evals are non-interactive
     });
+
+    const thinkLevel = task.thinkLevel === 'auto' ? 'L1' : task.thinkLevel || 'L1';
+    
+    if (task.command !== 'run') {
+        throw new Error(`Eval task command '${task.command}' not yet supported.`);
+    }
+
+    const result = await orchestrator.run(task.goal, { thinkLevel });
+
+    const runDir = path.join(workDir, '.orchestrator', 'runs', result.runId);
+    const summary = await this.loadRunSummary(runDir);
+
+    return { runId: result.runId, runDir, summary };
   }
 
   private async loadRunSummary(runDir: string): Promise<RunSummary> {
     const summaryPath = path.join(runDir, 'summary.json');
+    if (!(await fs.pathExists(summaryPath))) {
+      throw new Error(`summary.json not found in ${runDir}`);
+    }
     return fs.readJson(summaryPath);
   }
 
@@ -444,24 +448,27 @@ ${stderr}`),
     orchestratorResult: EvalResult,
     baselineResult?: EvalResult,
     comparison?: EvalComparison,
-  ): Promise<void> {
-    const repoRoot = await findRepoRoot();
+  ): Promise<string> {
     const resultsDir = path.join(
-      repoRoot,
-      '.orchestrator',
-      'eval',
+      this.outputDir,
       suiteName,
       String(orchestratorResult.startedAt),
     );
     await fs.ensureDir(resultsDir);
 
-    const orchestratorResultsPath = path.join(resultsDir, 'results_orchestrator.json');
+    const orchestratorResultsPath = path.join(
+      resultsDir,
+      'results_orchestrator.json',
+    );
     await fs.writeJson(orchestratorResultsPath, orchestratorResult, {
       spaces: 2,
     });
 
     if (baselineResult) {
-      const baselineResultsPath = path.join(resultsDir, 'results_baseline.json');
+      const baselineResultsPath = path.join(
+        resultsDir,
+        'results_baseline.json',
+      );
       await fs.writeJson(baselineResultsPath, baselineResult, { spaces: 2 });
     }
 
@@ -469,5 +476,17 @@ ${stderr}`),
       const comparisonPath = path.join(resultsDir, 'comparison.json');
       await fs.writeJson(comparisonPath, comparison, { spaces: 2 });
     }
+
+    const summaryReport = {
+      suite: suiteName,
+      status: orchestratorResult.aggregates.failed > 0 || orchestratorResult.aggregates.error > 0 ? 'FAIL' : 'PASS',
+      aggregates: orchestratorResult.aggregates,
+      comparison,
+    };
+    
+    const finalReportPath = path.join(resultsDir, 'summary.json');
+    await fs.writeJson(finalReportPath, summaryReport, { spaces: 2 });
+
+    return finalReportPath;
   }
 }

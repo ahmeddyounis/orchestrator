@@ -12,4 +12,6 @@ export * from './exec/patch_store';
 export * from './verify';
 export * from './state';
 export * from './memory';
+export * from './exec/tool_policy';
+export * from './exec/ui';
 export * from './orchestrator';
