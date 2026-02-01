@@ -1,43 +1,43 @@
 # Indexing
 
-The Orchestrator's indexing service is responsible for creating and maintaining a searchable index of your codebase. This index is used by various components, including the context provider and memory system, to quickly find relevant information.
+To understand your project, the Orchestrator creates an "index" of your code. This index is a local, searchable database of your files, classes, functions, and other symbols. It's the key to how the orchestrator can quickly find relevant code when you give it a task.
 
-## How it Works
+## Creating the Index
 
-The indexer periodically scans your project files, parsing them to extract key information such as file structure, declared symbols (classes, functions, variables), and other metadata. This data is stored in a local database, enabling fast and efficient search operations.
+To create the index for your project, run the `index` command in your project's root directory:
 
-By default, the indexer respects your `.gitignore` and `.orchestrator/.ignore` files, ensuring that irrelevant or sensitive files are not included in the index.
-
-## Automatic Updates
-
-To ensure the index remains fresh and accurate, the Orchestrator automatically performs an incremental update at the start of each run. When you invoke a command like `orchestrator run`, the indexer first identifies any files that have been created, modified, or deleted since the last run.
-
-This incremental update is designed to be fast and efficient, only re-indexing the files that have changed.
-
-### `maxAutoUpdateFiles` Safeguard
-
-In large repositories, a significant number of files might change between runs (e.g., after switching branches or pulling a large update). To prevent unexpectedly long indexing times, the Orchestrator includes a safeguard: `maxAutoUpdateFiles`.
-
-If the number of files needing an update exceeds this threshold, the automatic update is skipped, and a warning is logged. This ensures that the run can proceed without a lengthy delay.
-
-You can configure this value in your `.orchestrator/config.json`:
-
-```json
-{
-  "indexing": {
-    "maxAutoUpdateFiles": 100
-  }
-}
+```bash
+orchestrator index
 ```
 
-If you frequently encounter this warning, you can either increase the limit or manually trigger a full re-index during a convenient time using the `orchestrator index re-index` command.
+This will scan your project and create the index in the `.orchestrator/` directory. You only need to do this once for each project.
 
-## Manual Indexing
+## Automatic Updates & Staleness
 
-You can manually control the indexing process using the following commands:
+Your code is always changing. The orchestrator knows this and will automatically update the index with your latest changes at the beginning of each `run` command.
 
-| Command                       | Description                                         |
-| :---------------------------- | :-------------------------------------------------- |
-| `orchestrator index re-index` | Performs a full scan and rebuilds the entire index. |
-| `orchestrator index status`   | Shows the current status of the index.              |
-| `orchestrator index search`   | (Future) Searches the index for a given query.      |
+This incremental update is very fast and ensures that the orchestrator is always working with the most up-to-date version of your code.
+
+### What if I change branches?
+
+If you make a large change, like switching git branches, the index might become "stale". The orchestrator will detect this and automatically re-index the necessary files to catch up.
+
+You don't need to manually re-index every time you change a file. The orchestrator handles this for you.
+
+## When to Manually Re-index
+
+You should only need to manually run `orchestrator index` in a few situations:
+
+-   When you first set up a project.
+-   If you've made massive changes to your project (e.g., upgrading a framework or refactoring the entire codebase).
+-   If the orchestrator seems to be confused or working with outdated information.
+
+## Indexing Status
+
+You can check the status of your index at any time:
+
+```bash
+orchestrator index status
+```
+
+This will tell you how many files are in the index and when it was last updated.

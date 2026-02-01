@@ -1,169 +1,109 @@
 # CLI Reference
 
-This document provides a comprehensive reference for the Orchestrator CLI commands and options.
+This document provides a reference for the Orchestrator CLI commands.
 
 ## Global Options
 
-These options apply to all commands:
+These options can be used with any command:
 
-- `--help`: Display help for command.
-- `--version`: Output the version number.
-- `--json`: Output results as JSON. Useful for programmatic consumption.
-- `--config <path>`: Path to an explicit configuration file. Overrides user and repo configs.
-- `--verbose`: Enable verbose logging for debugging purposes.
-- `--yes`: Automatically answer "yes" to all prompts.
-- `--non-interactive`: Disable interactive prompts. Fails if a prompt is required and not answered via flags.
+-   `--help`: Show help for a command.
+-   `--config <path>`: Specify a path to a config file.
+-   `--verbose`: Enable verbose logging.
 
-## Commands
+## Main Commands
 
 ### `run`
 
-Run an agentic task to achieve a specified goal. **Best for general features, refactoring, or ad-hoc tasks.**
+The `run` command is the core of the orchestrator. You give it a task in natural language, and it will try to accomplish it.
 
 **Usage:**
 
 ```bash
-orchestrator run <goal> [options]
+orchestrator run "<your task description>" [options]
 ```
 
 **Arguments:**
 
-- `<goal>`: The natural language description of the task to perform.
+-   `<your task description>`: A detailed description of what you want to achieve.
 
 **Options:**
 
-- `--verify <boolean>`: Enable or disable verification. Defaults to `true`.
-- `--verify-scope <scope>`: Set verification scope (`full` or `targeted`). Defaults to `targeted`.
-- `--think <level>`: Set thinking level (`L0`, `L1`, or `auto`). Defaults to `auto` (L1).
-  - `L0`: Reflex mode (fast, single-pass).
-  - `L1`: Reasoning mode (plan then execute).
-- `--budget <key=value>`: Set budget limits. Can be specified multiple times.
-  - Keys: `tokens`, `cost` (USD), `iter` (steps), `time` (duration).
-- `--planner <providerId>`: Override the configured planner provider.
-- `--executor <providerId>`: Override the configured executor provider.
-- `--reviewer <providerId>`: Override the configured reviewer provider.
-- `--allow-large-diff`: Allow large diffs without user confirmation. Useful for non-interactive runs.
-- `--memory <on|off>`: Enable/disable memory (default: `off`).
-- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
-- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
+-   `--l2`: (Optional) Enable Level 2 reasoning for more complex tasks. This allows the orchestrator to perform deeper analysis and chain multiple steps together.
+-   `--no-verify`: (Optional) Disable automatic verification (running tests and linting) after making changes.
+-   `--memory`: (Optional) Enable memory to allow the orchestrator to remember context from previous runs.
 
-**Examples:**
+---
 
-Run a simple task (L0 is efficient here):
+### Example 1: Simple Task
+
+A straightforward request to add a feature.
 
 ```bash
-orchestrator run "Update the README to include installation instructions" --think L0
+orchestrator run "Add a dark mode toggle to the settings page."
 ```
 
-Run a complex task with planning (L1):
+---
+
+### Example 2: Complex Task with L2 Reasoning
+
+For more complex problems, you can use the `--l2` flag. This is useful for tasks that require deep analysis or refactoring across multiple files.
+
+Let's say you need to refactor a core piece of your application.
+
+**Initial Prompt:**
 
 ```bash
-orchestrator run "Refactor the login component to use hooks" --think L1
+orchestrator run --l2 "The current user authentication logic is monolithic and hard to test. Refactor it into a modular structure with separate services for session management, password hashing, and user data retrieval."
 ```
 
-Run with specific budgets:
+**How L2 Works:**
 
-```bash
-orchestrator run "Optimize database queries" --budget cost=2.00 --budget time=15m
-```
+1.  **Deeper Analysis**: The orchestrator will first analyze the codebase to understand the existing authentication logic, its dependencies, and potential risks of refactoring.
+2.  **Multi-step Plan**: It will create a more detailed, multi-step plan. For example:
+    -   *Step 1: Create new service files for `session.ts`, `password.ts`, and `user-profile.ts`.*
+    -   *Step 2: Migrate password hashing logic to `password.ts`.*
+    -   *Step 3: Update login and registration endpoints to use the new services.*
+    -   *Step 4: Run tests for each affected component.*
+3.  **Iterative Execution**: It will execute the plan step-by-step, verifying its work at each stage.
 
-**Monorepo Examples:**
+This approach allows the orchestrator to handle complex, multi-faceted tasks that would be difficult to complete in a single step.
 
-Run a task in a specific package (pnpm):
+---
 
-```bash
-# Using pnpm filtering to run in a specific package context
-pnpm --filter @my-org/ui exec orchestrator run "Add a Button component"
-```
+### `index`
 
-Run a task across the workspace (Turbo):
-
-```bash
-# Orchestrator is aware of monorepo structures
-orchestrator run "Update all packages to use React 19"
-```
-
-### `fix`
-
-Fix an issue based on a goal. **Best for bug fixes and targeted repairs.**
-
-Functionally similar to `run`, but uses a `fix/` branch prefix and defaults to L1 thinking to ensure careful analysis of the bug.
+This command creates or updates the orchestrator's index of your codebase. The index is used to provide context for the `run` command.
 
 **Usage:**
 
 ```bash
-orchestrator fix <goal> [options]
+orchestrator index
 ```
 
-**Arguments:**
+You should run this command whenever you make significant changes to your project.
 
-- `<goal>`: The description of the issue to fix.
+### `report`
 
-**Options:**
-
-- `--think <level>`: Set thinking level (`L0`, `L1`). Defaults to `L1`.
-- `--budget <key=value>`: Set budget limits.
-- `--memory <on|off>`: Enable/disable memory (default: `off`).
-- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
-- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
-
-**Examples:**
-
-Fix a specific bug:
-
-```bash
-orchestrator fix "The login button is misaligned on mobile"
-```
-
-Fix with a strict cost limit:
-
-```bash
-orchestrator fix "Resolve the race condition in the cache" --budget cost=0.50
-```
-
-### `plan`
-
-Plan a task based on a goal without executing it. This is effectively the "Plan" phase of an L1 run, stopping before execution.
+View a summary of the last run, or a specific run.
 
 **Usage:**
 
 ```bash
-orchestrator plan <goal> [options]
+orchestrator report [run_id]
 ```
 
 **Arguments:**
 
-- `<goal>`: The goal to plan for.
-
-**Options:**
-
-- `--planner <providerId>`: Override the configured planner provider.
-- `--memory <on|off>`: Enable/disable memory (default: `off`).
-- `--memory-path <path>`: Override the sqlite DB path (default: `.orchestrator/memory.sqlite`).
-- `--memory-topk <n>`: Override retrieval topK (must be an integer >= 1).
-
-**Examples:**
-
-```bash
-orchestrator plan "Migrate the database to PostgreSQL"
-```
+-   `[run_id]`: (Optional) The ID of the run to view. If not provided, it shows the last run.
 
 ### `eval`
 
-Run an evaluation suite.
+Run an evaluation suite to measure the orchestrator's performance on a set of predefined tasks.
 
 **Usage:**
 
 ```bash
-orchestrator eval --suite <path> [options]
+orchestrator eval --suite <path_to_suite_file>
 ```
 
-**Options:**
-
-- `--suite <path>`: (Required) Path to the evaluation suite file.
-
-**Examples:**
-
-```bash
-orchestrator eval --suite ./evals/code-quality.yaml
-```
+For more details, see the [Evaluation Guide](eval.md).

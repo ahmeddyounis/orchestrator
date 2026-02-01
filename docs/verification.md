@@ -1,76 +1,54 @@
 # Verification
 
-The Orchestrator includes a verification step to ensure that changes are safe and meet quality standards. This typically involves running tests, linters, and other checks against your codebase.
+After making changes to your code, the Orchestrator can automatically run tests and other checks to verify that everything still works correctly. This is a crucial step to ensure the quality and safety of the changes.
 
-## How it Works
+## Automatic Verification
 
-When you run `orchestrator run` with verification enabled (the default), it will execute the verification commands defined in your `orchestrator.config.json` file. The Orchestrator attempts to automatically detect your project setup and configure sensible defaults.
+Verification is enabled by default. After the orchestrator has applied a code change, it will automatically perform the following steps:
 
-### Automatic Detection (pnpm + turbo)
+1.  **Detect Test Commands**: The orchestrator inspects your `package.json` files to find your test and linting scripts. It looks for common script names like `"test"`, `"lint"`, and `"typecheck"`.
+2.  **Run Checks**: It executes the detected commands. For a `pnpm` monorepo, it's smart enough to only run tests for the packages that were actually changed, which saves time.
+3.  **Report Results**: If any of the verification steps fail, the orchestrator will report the failure and provide the error output. The proposed code changes will not be considered successful.
 
-For monorepos using `pnpm` and `turborepo`, the Orchestrator will automatically detect which packages have changed and run the verification commands only for those packages. This is called **targeted verification**.
+## Disabling Verification
 
-If you want to force verification to run for all packages, you can use the `--verify-scope=full` flag.
+While it's highly recommended to keep verification enabled, you can disable it for a specific run using the `--no-verify` flag:
+
+```bash
+orchestrator run "Update the README" --no-verify
+```
+
+This is useful for tasks that don't affect the code, like updating documentation.
 
 ## Configuration
 
-You can customize the verification behavior in your `orchestrator.config.json` file.
-
-### Verification Commands
-
-The `verify` section of the config file allows you to define the commands to run. You can specify commands for `format`, `lint`, and `test`.
-
-**Example:**
+For most JavaScript/TypeScript projects, the automatic detection will work out of the box. However, you can customize the verification commands in your `.orchestrator/config.json` file if needed.
 
 ```json
 {
-  "verify": {
-    "format": "prettier --check .",
-    "lint": "eslint .",
-    "test": "vitest run"
-  }
-}
-```
-
-### Targeted vs. Full Verification
-
-- **Targeted (default):** The Orchestrator only verifies changed packages. This is faster for large projects.
-- **Full:** The Orchestrator verifies all packages. This is more thorough but slower.
-
-You can control this with the `--verify-scope` flag or the `scope` property in the `verify` config.
-
-**Example:**
-
-```json
-{
-  "verify": {
-    "scope": "full",
+  "verification": {
     "commands": {
-      "format": "prettier --check .",
-      "lint": "eslint .",
-      "test": "vitest run"
+      "test": "pnpm test:unit",
+      "lint": "pnpm lint:ci",
+      "typecheck": "pnpm typecheck"
     }
   }
 }
 ```
 
-## Logs and Reports
+If you have a non-standard setup, you can specify the exact commands to run for testing, linting, and type-checking.
 
-Verification logs are stored in the `.orchestrator/logs` directory. Each run will have a corresponding log file.
+### Verification Scope
 
-If verification fails, the output from the failed command will be in the log file, which can help you debug the issue.
+-   **Targeted (default)**: The orchestrator only runs verification in the workspace packages that were directly affected by the changes. This is the default behavior in a monorepo and is much faster.
+-   **Full**: You can force the orchestrator to run verification across all packages, even if they weren't changed.
 
-## Common Failure Modes
+To force a full verification run, you can set the scope in your configuration:
 
-- **Missing Dependencies:** Ensure that all dependencies are installed before running the orchestrator.
-- **Blocked Tools:** If you have security software that might block the execution of certain command-line tools, you may need to add exceptions.
-- **Timeouts:** Long-running verification steps might time out. You can adjust timeouts in the configuration.
-- **Misconfigured Commands:** Ensure the commands in your config are correct and can run successfully in your local environment.
-
-## Interpreting Verification Artifacts
-
-The verification status is reported in the run summary.
-
-- **Verified:** All verification steps passed.
-- **Verification Failed:** One or more verification steps failed. Check the logs for details.
-- **Verification Skipped:** Verification was disabled for the run.
+```json
+{
+  "verification": {
+    "scope": "full"
+  }
+}
+```

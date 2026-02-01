@@ -1,131 +1,69 @@
-# Observability
+# Observability: Reports and Artifacts
 
-The orchestrator is designed for transparency. It produces detailed artifacts for every run, allowing you to debug issues, analyze performance, and understand costs.
+The Orchestrator is designed to be transparent. For every run, it produces detailed logs and reports so you can understand exactly what it did.
 
 ## Run Artifacts
 
-For every run, the orchestrator creates a directory to store artifacts for reproducibility and debugging.
+After each run, the orchestrator saves a collection of "artifacts" to a new directory in your project:
 
 **Path**: `.orchestrator/runs/<run_id>/`
 
-This directory is your primary source of truth for what happened during a run.
+Each `run_id` is a unique timestamp. This directory is your single source of truth for a run.
 
-### Core Artifacts
+### What's Inside?
 
-- **`trace.jsonl`**: The complete, low-level event log for the run in [JSONL](https://jsonlines.org/) format. This is the most detailed record, capturing everything from tool calls to AI model interactions. It includes timing information for building performance traces.
-- **`summary.json`**: A high-level summary of the run's outcome, duration, and token/cost metrics.
-- **`manifest.json`**: A list of all files created or modified during the run, along with their SHA-256 hashes.
-- **`diff.patch`**: A cumulative `diff` of all code changes applied during the run. This can be applied as a patch for review.
-- **`tool_logs/`**: A directory containing raw `stdout` and `stderr` logs from tool executions.
+-   **`summary.json`**: A high-level summary of the run, including the final status, duration, and how much it cost (in tokens and dollars).
+-   **`diff.patch`**: A standard `.patch` file showing all the code changes that were made. You can use this to easily review the changes.
+-   **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging.
+-   **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
 
-### `trace.jsonl` Schema
+## The `report` Command
 
-Each line is a JSON object representing a span in a distributed trace.
+The easiest way to understand a run is to use the `report` command.
 
-- `schemaVersion`: `number` (Current: 1)
-- `timestamp`: `string` (ISO 8601)
-- `runId`: `string`
-- `type`: `string` (Event Type, e.g., `RunStarted`, `ToolRun`, `LLMRequest`)
-- `spanId`: `string` (Unique ID for this event)
-- `parentSpanId`: `string | null` (The ID of the parent event)
-- `details`: `object` (Payload specific to the event type)
+### Reporting on the Last Run
 
-Events form a hierarchy. For example, a `ToolRun` event would be a child of an `AgentStep` event.
-
-### `summary.json` Schema
-
-This file provides a quick overview of the run.
-
-```json
-{
-  "runId": "string",
-  "status": "string (e.g., 'completed', 'failed', 'needs_review')",
-  "startTime": "string (ISO 8601)",
-  "endTime": "string (ISO 8601)",
-  "durationMs": "number",
-  "cost": {
-    "total": "number (in USD)",
-    "breakdown": [
-      {
-        "provider": "string",
-        "model": "string",
-        "inputTokens": "number",
-        "outputTokens": "number",
-        "cost": "number"
-      }
-    ]
-  },
-  "tools": {
-    "run": "number",
-    "errors": "number"
-  },
-  "llmRequests": "number"
-}
-```
-
-_Schema is illustrative and may be subject to minor changes._
-
-### `manifest.json` Schema
-
-This file tracks every file touched by the orchestrator.
-
-```json
-[
-  {
-    "path": "string (relative to project root)",
-    "status": "string (e.g., 'created', 'modified', 'deleted')",
-    "hash": "string (SHA-256)"
-  }
-]
-```
-
-## Reporting
-
-### CLI Report Command
-
-The orchestrator includes a built-in command to generate reports from run artifacts.
+To see a summary of the most recent run, simply type:
 
 ```bash
-# Generate a report for the last run
-node packages/cli/dist/index.js report
-
-# Generate a report for a specific run
-node packages/cli/dist/index.js report --runId <run_id>
+orchestrator report
 ```
 
-The report provides a summary of the run, including:
+### Reporting on a Specific Run
 
-- Status and duration.
-- A list of modified files.
-- Cost and token usage.
-- Errors and warnings.
+If you want to view a report for an older run, you can pass the `run_id`:
 
-### Cost Reporting
+```bash
+orchestrator report <run_id>
+```
 
-Cost is calculated based on token usage for each LLM provider. The pricing data is managed internally within the `@orchestrator/cost` package. When you run a report, it uses the `summary.json` artifact to display the total cost and a breakdown by provider and model.
+### What the Report Shows
 
-This helps you monitor expenses and optimize your agent's configuration for cost-effectiveness.
+The report provides a clean, human-readable summary of the run, including:
 
-## Example: Debugging a Failed Run in a Monorepo
+-   **Status**: Did the run complete successfully, fail, or does it need review?
+-   **Duration**: How long the run took.
+-   **Cost**: A breakdown of the cost based on the number of tokens used.
+-   **Changed Files**: A list of all the files that were created or modified.
+-   **Errors**: If anything went wrong, the errors will be displayed here.
 
-Imagine the orchestrator fails during a `pnpm test` command in a large monorepo. Here’s how you’d investigate:
+## Example: Debugging a Failed Test
 
-1.  **Find the Run ID**: Note the `runId` from the CLI output or find the latest directory in `.orchestrator/runs/`. Let's say it's `171234567890`.
+Let's say the orchestrator runs and tells you that verification failed. Here's how you can use the artifacts to debug it:
 
-2.  **Check the Summary**: Open `.orchestrator/runs/171234567890/summary.json`. You see `"status": "failed"`.
-
-3.  **Use the Report Command**: For a quick overview of the error, run:
-
+1.  **Run the report**:
     ```bash
-
-    node packages/cli/dist/index.js report --runId 171234567890
-
+    orchestrator report
     ```
+    The report shows that the `pnpm test` command failed.
 
-    The report shows a `ToolRun` error for the `pnpm test` command.
+2.  **Find the `run_id`**: The report will show the `run_id`. Let's say it's `171234567890`.
 
-4.  **Inspect Tool Logs**: To see the raw output, navigate to the tool logs directory: `.orchestrator/runs/171234567890/tool_logs/`. Look for files corresponding to the failed tool call. You might find a file named `tool_1_pnpm_test_stderr.log`.
+3.  **Check the tool logs**:
+    Navigate to the tool logs directory for that run:
+    `.orchestrator/runs/171234567890/tool_logs/`
 
-5.  **Examine the Log**: Open the log file. You'll see the full `stderr` output from `pnpm test`, revealing the exact test that failed and why.
+    Inside, you'll find files like `pnpm-test-stdout.log` and `pnpm-test-stderr.log`.
 
-6.  **Review the Trace**: For even deeper context, you can inspect `trace.jsonl`. Search for the `spanId` of the failed tool run to see the events that led up to it, such as the agent's reasoning and the exact parameters of the command.
+4.  **Examine the logs**:
+    Open the `pnpm-test-stderr.log` file. It will contain the exact error message from the test runner, showing you which test failed and why.

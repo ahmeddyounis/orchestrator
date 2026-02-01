@@ -1,120 +1,52 @@
-# Tool Execution Safety Model
+# Tools & Execution Safety
 
-The Orchestrator CLI is designed to be safe by default. This document explains the guardrails, configuration options, and how to safely override defaults when necessary.
+The Orchestrator can execute shell commands (tools) to perform tasks like running tests, linting code, or installing dependencies. To keep your system safe, it operates under a strict execution policy.
 
-## Default Behavior
+## The Confirmation Prompt
 
-Out of the box, the CLI enforces a strict safety policy:
+By default, the Orchestrator will always ask for your permission before running any shell command. When a command is about to be executed, you will see a prompt like this:
 
-1.  **Confirmation Required**: All tool executions (shell commands, file edits) require explicit user confirmation unless they are on the **Allowlist**.
-2.  **Denylist**: Certain dangerous commands (e.g., `rm -rf /`, `mkfs`) are blocked entirely and cannot be executed, even with confirmation.
-3.  **Network Access**: Disabled by default. The agent cannot make external network requests unless explicitly allowed.
-4.  **Timeout**: Tool executions have a default timeout (e.g., 10 minutes) to prevent hanging processes.
+```
+? Execute the following command?
+> pnpm install
+(Y/n)
+```
+
+You must press `Y` to allow the command to run.
+
+This confirmation step is a critical safety feature to prevent the orchestrator from performing unwanted actions.
 
 ## Configuration
 
-You can configure tool execution policies in your `.orchestrator.yaml` or `~/.orchestrator/config.yaml` file under the `execution.tools` section.
+You can configure the execution policy in your `.orchestrator/config.json` file.
 
-### Schema
-
-```yaml
-execution:
-  tools:
-    # Master switch to enable/disable all tools
-    enabled: true # default: true (via flags, schema default is false but CLI enables it)
-
-    # Require confirmation for all tools NOT in the allowlist
-    requireConfirmation: true # default: true
-
-    # Commands that can run without confirmation
-    allowlistPrefixes:
-      - 'pnpm test'
-      - 'pnpm lint'
-      - 'tsc'
-      # ... see "Defaults" below
-
-    # Commands that are strictly forbidden
-    denylistPatterns:
-      - 'rm -rf'
-      - 'mkfs'
-      # ... see "Defaults" below
-
-    # Allow network access (e.g., curl, npm install)
-    allowNetwork: false # default: false
-
-    # Execution timeout in milliseconds
-    timeoutMs: 600000 # default: 10 minutes
-
-    # Maximum output size to capture
-    maxOutputBytes: 1048576 # default: 1MB
-
-    # Auto-approve all confirmations (use with caution!)
-    autoApprove: false # default: false
-
-    # fail if confirmation is required (for CI/CD)
-    interactive: true # default: true
+```json
+{
+  "exec": {
+    "confirm": true,
+    "safeMode": true
+  }
+}
 ```
 
-### Defaults
+### `exec.confirm`
 
-**Allowlist Prefixes (Safe to run):**
+-   **Type**: `boolean`
+-   **Default**: `true`
 
-- `pnpm test`, `pnpm lint`, `pnpm -r test`, `pnpm -r lint`, `pnpm -r build`
-- `turbo run test`, `turbo run build`
-- `tsc`, `vitest`, `eslint`, `prettier`
+This setting controls the confirmation prompt. When `true`, you will be prompted before every command.
 
-**Denylist Patterns (Blocked):**
+If you set this to `false`, the orchestrator will execute commands without asking for confirmation. **This is not recommended unless you fully trust the orchestrator's actions.**
 
-- `rm -rf`
-- `mkfs`
-- `:(){:|:&};:` (fork bomb)
-- `curl .*\|\s*sh` (curl | sh)
+### `exec.safeMode`
 
-## CLI Flags
+-   **Type**: `boolean`
+-   **Default**: `true`
 
-You can override these settings per-run using CLI flags:
+Safe mode provides an additional layer of protection by preventing the execution of commands that are deemed potentially risky or destructive. This includes:
 
-- **`--no-tools`**: Disable all tool usage. The agent can only think and plan.
-- **`--yes`**: Auto-approve all confirmations. **Use with extreme caution.** This bypasses the `requireConfirmation` check but _still respects the Denylist_.
-- **`--non-interactive`**: Run in non-interactive mode. If a tool requires confirmation and is not on the allowlist, the execution will fail. Ideal for CI/CD pipelines.
+-   Commands that could delete files (e.g., `rm -rf`).
+-   Commands that could modify system settings.
+-   Commands that attempt to access files outside of the project directory.
 
-## Verification
-
-Verification commands (e.g., tests, linters) are also executed via the `ToolExecutor`. This means they are subject to the same safety policies, including `allowlistPrefixes` and `denylistPatterns`.
-
-If your verification commands are not on the allowlist, you will be prompted for confirmation before they run. You can add your common verification commands to the `allowlistPrefixes` in your config to avoid being prompted.
-
-## Artifacts & Logs
-
-Tool execution logs are stored in the run's artifact directory for auditing and debugging.
-
-**Path:** `.orchestrator/runs/<run-id>/tool_logs/`
-
-Each tool run produces separate stdout and stderr log files if configured, or they are captured in the main trace.
-
-## Sandbox Modes (MVP)
-
-Currently, the CLI supports only the `none` sandbox mode (running directly on the host machine).
-
-- **`mode: none`**: Tools run directly in your shell. You are responsible for the safety of the environment.
-
-**Future Support:**
-
-- `docker`: Run tools inside an isolated Docker container.
-- `devcontainer`: Use a devcontainer definition for the environment.
-
-## Monorepo Example (pnpm + turbo)
-
-For a monorepo setup, you might want to allow building and testing specific packages without constant confirmation.
-
-```yaml
-# .orchestrator.yaml
-execution:
-  tools:
-    allowlistPrefixes:
-      # Allow standard pnpm/turbo commands
-      - 'pnpm -r test'
-      - 'turbo run build'
-      # Allow specific package scripts
-      - 'pnpm --filter @my-app/core test'
-```
+Even with `confirm` set to `false`, `safeMode` will still block these commands. It is strongly recommended to keep `safeMode` enabled.

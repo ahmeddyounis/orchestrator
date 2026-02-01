@@ -1,168 +1,80 @@
 # Configuration Reference
 
-The Orchestrator CLI uses a flexible configuration system that merges settings from multiple sources.
+The Orchestrator uses a straightforward JSON configuration file to manage API providers, default models, and other settings.
 
-## Configuration File Locations
+## Configuration Precedence
 
-Configuration is loaded from the following locations, in order of precedence (highest to lowest):
+Configuration settings are loaded from the following locations, with higher-precedence sources overriding lower ones:
 
-1.  **CLI Flags**: Options passed directly to the command (e.g., `--planner`).
-2.  **Explicit Config File**: File specified via `--config <path>`.
-3.  **Repo Config**: `.orchestrator.yaml` in the current working directory.
-4.  **User Config**: `~/.orchestrator/config.yaml` in your home directory.
-5.  **Defaults**: Internal default settings.
+1.  **Command-line flags**: Options passed directly to a command (e.g., `--l2`).
+2.  **Project-specific config**: A `.orchestrator/config.json` file in your project's root directory.
+3.  **User-level config**: A global `config.json` file located at `~/.orchestrator/config.json`.
+4.  **Internal defaults**: The orchestrator's built-in default settings.
+
+This means you can set a global default model in your user config and override it for a specific project in the project's config.
 
 ## Configuration Schema
 
-The configuration file is written in YAML. Below is the structure and available options.
+Here is an example of a `config.json` file with all the common options:
 
-```yaml
-# Version of the config schema
-configVersion: 1
-
-# Define AI providers
-providers:
-  # Unique Provider ID
-  openai-gpt4:
-    type: 'openai' # Provider type (e.g., openai, anthropic, ollama)
-    model: 'gpt-4' # Model name
-    api_key_env: 'OPENAI_API_KEY' # Environment variable containing the API key
-    supportsTools: true # Whether the model supports function calling
-
-  local-llama:
-    type: 'ollama'
-    model: 'llama3'
-
-  claude-agent:
-    type: 'claude_code'
-    # See docs/providers/claude-code.md for setup
-
-  custom-script:
-    type: 'stdio' # For custom providers communicating via stdio
-    command: './scripts/my-agent.sh'
-
-# Set default providers for specific roles
-defaults:
-  planner: 'openai-gpt4'
-  executor: 'openai-gpt4'
-  reviewer: 'local-llama'
-
-# budgets (Coming soon)
-budgets:
-  tokens: 100000
-  cost: 10.0
-
-# Execution Policy
-execution:
-  allowDirtyWorkingTree: false
-  tools:
-    enabled: true
-    requireConfirmation: true
-    allowlistPrefixes:
-      - 'npm test'
-      - 'ls -la'
-    denylistPatterns:
-      - 'rm -rf'
+```json
+{
+  "providers": {
+    "gemini": {
+      "apiKey": "YOUR_GEMINI_API_KEY"
+    },
+    "openai": {
+      "apiKey": "YOUR_OPENAI_API_KEY"
+    }
+  },
+  "defaults": {
+    "model": "gemini-1.5-pro-latest"
+  },
+  "exec": {
+    "confirm": true,
+    "safeMode": true
+  },
+  "log": {
+    "level": "info"
+  },
+  "memory": {
+    "enabled": false
+  }
+}
 ```
 
-## Provider Configuration
+### `providers` (Required)
 
-Providers are the core AI models or agents used by the Orchestrator. You can define multiple providers and assign them to different roles (`planner`, `executor`, `reviewer`).
+This section is where you configure your AI model providers.
 
-### Properties
+-   `"gemini"`: Settings for Google Gemini models.
+    -   `"apiKey"`: Your Gemini API key.
+-   `"openai"`: Settings for OpenAI models.
+    -   `"apiKey"`: Your OpenAI API key.
 
-- `type`: The type of provider. Common types include `openai`, `anthropic`, `google`, `ollama`, and `claude_code` (see [Claude Code Provider](providers/claude-code.md)).
-- `model`: The specific model identifier (e.g., `gpt-4-turbo`, `claude-3-opus-20240229`).
-- `api_key_env`: The name of the environment variable that holds the API key. **Security Note:** Do not commit API keys directly to configuration files. Use `api_key_env`.
-- `api_key`: (Optional) Direct API key string. Discouraged for security reasons.
-- `command`: (Optional) Used for `stdio` type providers to specify the executable command.
+**Security Note:** It is recommended to use your user-level config file (`~/.orchestrator/config.json`) for API keys to avoid committing them to your project's repository.
 
-## Roles
+### `defaults` (Optional)
 
-The Orchestrator divides work into three main roles:
+Set the default model to use for all runs.
 
-1.  **Planner**: Breaks down the high-level goal into a step-by-step plan.
-2.  **Executor**: Performs the actions (coding, command execution) defined in the plan.
-3.  **Reviewer**: Checks the work of the executor against the requirements.
+-   `"model"`: The ID of the model to use (e.g., `"gemini-1.5-pro-latest"`, `"gpt-4o"`).
 
-You can assign a specific `providerId` to each role in the `defaults` section.
+### `exec` (Optional)
 
-## Budgets (Placeholder)
+Control the execution of shell commands.
 
-_Note: Budget enforcement is currently in development._
+-   `"confirm"`: If `true` (the default), the CLI will prompt for confirmation before executing any command. Set to `false` to disable prompts.
+-   `"safeMode"`: If `true` (the default), the orchestrator will not execute commands that it deems potentially destructive or outside the project workspace.
 
-Budgets allow you to limit resource consumption per run.
+### `log` (Optional)
 
-```yaml
-budgets:
-  global_tokens: 50000
-```
+Configure logging verbosity.
 
-## Execution Policy
+-   `"level"`: The log level. Can be `"debug"`, `"info"`, `"warn"`, or `"error"`. Defaults to `"info"`.
 
-Control how the agent interacts with the local environment, including tool execution and git state.
+### `memory` (Optional)
 
-````yaml
-execution:
-  # Whether to allow running when the git working tree is dirty
-  allowDirtyWorkingTree: false # Default: false
+Configure the memory feature.
 
-  # Whether to skip creating git checkpoints (commits) before actions
-  noCheckpoints: false # Default: false
-
-  # Tool Execution Policy
-  tools:
-    # Master switch for tool execution.
-    # Set to true to allow the agent to run commands.
-    enabled: false # Default: false
-
-    # Whether to require human confirmation for every command.
-    requireConfirmation: true # Default: true
-
-    # Commands starting with these prefixes are allowed (subject to confirmation).
-    allowlistPrefixes:
-      - 'pnpm test'
-      - 'pnpm lint'
-      - 'pnpm -r test'
-      - 'pnpm -r lint'
-      - 'pnpm -r build'
-      - 'turbo run test'
-      - 'turbo run build'
-      - 'tsc'
-      - 'vitest'
-      - 'eslint'
-      - 'prettier'
-
-    # Commands matching these regex patterns are blocked automatically.
-    denylistPatterns:
-      - 'rm -rf'
-      - 'mkfs'
-      - ':(){:|:&};:' # fork bomb
-      - 'curl .*\|\s*sh' # pipe to shell
-
-    # Whether to allow tools to access the network (e.g., curl, npm install).
-    allowNetwork: false # Default: false
-
-    # Timeout for tool execution in milliseconds.
-    timeoutMs: 600000 # Default: 10 minutes
-
-    # Maximum size of stdout/stderr output to capture in bytes.
-    maxOutputBytes: 1048576 # Default: 1MB
-
-## Memory Configuration
-
-The memory system allows the agent to retain knowledge between runs. See the [Memory Docs](memory.md) for a full overview.
-
-```yaml
-memory:
-  # Master switch for the memory feature.
-  # Set to true to allow the agent to remember past interactions.
-  enabled: true # Default: false
-
-  # (Future) Assign a specific provider for memory-related summarization tasks.
-  # provider: 'openai-gpt4'
-````
-
-```
-
-```
+-   `"enabled"`: If `true`, the orchestrator will remember context from previous runs to improve its performance. See the [Memory Guide](memory.md) for more details.

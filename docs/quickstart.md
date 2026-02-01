@@ -1,103 +1,87 @@
-# Quickstart Guide
+# Quickstart
 
-This guide will help you get set up with the Orchestrator development environment.
+This guide will walk you through installing and running the Orchestrator on your TypeScript project. The Orchestrator is a CLI tool that helps you automate development tasks.
 
 ## Prerequisites
 
-- **Node.js**: Version 20 or higher (v25.4.0 recommended).
-- **pnpm**: Version 9 or higher.
+-   Node.js v20+
+-   A TypeScript project (we'll use a `pnpm` monorepo in this guide)
 
-## Installation
+## 1. Installation
 
-1. **Clone the repository:**
-
-   ```bash
-   git clone <repository-url>
-   cd orchestrator
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pnpm install
-   ```
-
-## Common Commands
-
-The project uses [Turbo](https://turbo.build/) to manage tasks across the monorepo.
-
-- **Build all packages:**
-
-  ```bash
-  pnpm build
-  ```
-
-- **Run all tests:**
-
-  ```bash
-  pnpm test
-  ```
-
-- **Lint code:**
-
-  ```bash
-  pnpm lint
-  ```
-
-- **Check types:**
-
-  ```bash
-  pnpm typecheck
-  ```
-
-- **Format code:**
-  ```bash
-  pnpm format
-  ```
-
-## Running the CLI
-
-After building the project, you can execute the CLI directly:
+Install the CLI package globally from npm:
 
 ```bash
-# Build the CLI first
-pnpm build
-
-# Run the CLI
-node packages/cli/dist/index.js --help
+npm install -g @orchestrator/cli
 ```
 
-For detailed command usage, see the [CLI Reference](./cli.md).
+## 2. Configuration
 
-## Viewing Run Artifacts
+Before you can run the orchestrator, you need to configure your API provider and other settings.
 
-After each run, the orchestrator stores detailed logs, reports, and patches in a dedicated directory. This is essential for debugging and understanding the agent's behavior.
+1.  Create a configuration file at `~/.orchestrator/config.json`:
 
-- **Location**: `.orchestrator/runs/<run_id>/`
+    ```bash
+    mkdir -p ~/.orchestrator
+    touch ~/.orchestrator/config.json
+    ```
 
-To quickly summarize a run's results, use the `report` command:
+2.  Add your provider configuration. For example, to use Gemini, you would add:
+
+    ```json
+    {
+        "providers": {
+            "gemini": {
+                "apiKey": "YOUR_API_KEY"
+            }
+        },
+        "defaults": {
+            "model": "gemini-1.5-pro-latest"
+        }
+    }
+    ```
+
+    Replace `"YOUR_API_KEY"` with your actual API key.
+
+For more details on configuration, see the [Configuration Reference](config.md).
+
+## 3. Indexing your Project
+
+The orchestrator needs to build an index of your codebase to understand it.
+
+Run the following command in the root of your project:
 
 ```bash
-# View a report for the last run
-node packages/cli/dist/index.js report
+orchestrator index
 ```
 
-For a deep dive into the artifacts and their schemas, see the [Observability Guide](./observability.md).
+This command may take a few minutes, depending on the size of your project. It will analyze your files and create an index in the `.orchestrator/` directory of your project.
 
-## Configuration
+For more details on indexing, see the [Indexing Guide](indexing.md).
 
-To configure the Orchestrator (providers, models, etc.), create a `.orchestrator.yaml` file in your project root or `~/.orchestrator/config.yaml`.
+## 4. Your First Run: A Quick Fix
 
-See the [Configuration Reference](./config.md) for details.
+Let's use the orchestrator to fix a simple bug.
 
-## Workspace Structure
+Imagine you have a bug where a function is missing a null check. You can ask the orchestrator to fix it.
 
-The project is organized as a monorepo in the `packages/` directory:
+```bash
+orchestrator run "In 'packages/utils/src/string-helpers.ts', the 'formatName' function throws an error if the user object is null. Add a null check to return an empty string instead."
+```
 
-- `packages/cli`: The command-line interface entry point.
-- `packages/core`: Core business logic and domain entities.
-- `packages/adapters`: Adapters for external integrations.
-- `packages/exec`: Task execution engine.
-- `packages/eval`: Evaluation logic.
-- `packages/memory`: Memory and state management.
-- `packages/repo`: Data access and repository layer.
-- `packages/shared`: Shared utilities, types, and constants.
+The orchestrator will:
+
+1.  **Analyze the request** and your codebase.
+2.  **Propose a code change** to fix the issue.
+3.  **Ask for your confirmation** before applying the change.
+4.  **Run tests** to verify that the fix works and doesn't introduce any new issues (if tests are configured).
+
+This is a simple example, but it shows the power of the orchestrator to automate development tasks.
+
+## Next Steps
+
+Now that you've seen a basic workflow, explore the other documentation to learn more about what you can do:
+
+-   [CLI Reference](cli.md)
+-   [Configuration](config.md)
+-   [Verification](verification.md)
