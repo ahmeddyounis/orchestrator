@@ -1,9 +1,4 @@
-import {
-  verification_pass,
-  file_contains,
-  script_exit,
-  CriterionResult,
-} from './criteria';
+import { verification_pass, file_contains, script_exit, CriterionResult } from './criteria';
 import { RunSummary } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -119,12 +114,12 @@ describe('Success Criteria Evaluators', () => {
     }, 10000);
 
     it('should fail if command is denied by policy', async () => {
-        const result = await script_exit(mockSummary, {
-            command: 'git status',
-            expectedExitCode: 0,
-        });
-        expect(result.passed).toBe(false);
-        expect(result.message).toContain('Command matched denylist pattern');
+      const result = await script_exit(mockSummary, {
+        command: 'git status',
+        expectedExitCode: 0,
+      });
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Command matched denylist pattern');
     }, 10000);
   });
 });

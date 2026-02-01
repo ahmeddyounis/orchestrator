@@ -16,15 +16,7 @@ const evalToolPolicy: ToolPolicy = {
     'git', // Don't mess with git history
     'npm install', // Avoid installing packages during eval
   ],
-  allowlistPrefixes: [
-    'ls',
-    'cat',
-    'grep',
-    'node',
-    'python',
-    'pnpm test',
-    'npm run test',
-  ],
+  allowlistPrefixes: ['ls', 'cat', 'grep', 'node', 'python', 'pnpm test', 'npm run test'],
   timeoutMs: 1000 * 30, // 30s timeout
   maxOutputBytes: 1024 * 1024, // 1MB limit
 };

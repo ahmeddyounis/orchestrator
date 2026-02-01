@@ -125,6 +125,8 @@ export class EvalRunner {
     const error = tasks.filter((t) => t.status === 'error').length;
     const skipped = tasks.filter((t) => t.status === 'skipped').length;
     const totalCostUsd = tasks.reduce((sum, t) => sum + (t.metrics?.estimatedCostUsd ?? 0), 0);
+    const totalIterations = tasks.reduce((sum, t) => sum + (t.metrics?.iterations ?? 0), 0);
+    const totalToolRuns = tasks.reduce((sum, t) => sum + (t.metrics?.toolRuns ?? 0), 0);
 
     return {
       totalTasks,
@@ -136,6 +138,9 @@ export class EvalRunner {
       totalCostUsd,
       avgDurationMs: totalTasks > 0 ? totalDurationMs / totalTasks : 0,
       passRate: totalTasks > 0 ? passed / totalTasks : 0,
+      avgIterations: totalTasks > 0 ? totalIterations / totalTasks : 0,
+      avgToolRuns: totalTasks > 0 ? totalToolRuns / totalTasks : 0,
+      avgCostUsd: totalTasks > 0 ? totalCostUsd / totalTasks : 0,
     };
   }
 
@@ -174,7 +179,7 @@ export class EvalRunner {
         verificationPassed,
         criteria: results,
         metrics: {
-          iterations: summary.patchStats ? 1 : 0, // Simplified
+          iterations: summary.iterations,
           toolRuns: summary.tools?.runs?.length,
           tokens: summary.costs?.totals?.totalTokens,
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
@@ -246,7 +251,7 @@ export class EvalRunner {
         verificationPassed,
         criteria: results,
         metrics: {
-          iterations: summary.patchStats ? 1 : 0, // Simplified
+          iterations: summary.iterations,
           toolRuns: summary.tools?.runs?.length,
           tokens: summary.costs?.totals?.totalTokens,
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,

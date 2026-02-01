@@ -104,6 +104,9 @@ export interface EvalAggregates {
   totalCostUsd?: number;
   avgDurationMs: number;
   passRate: number;
+  avgIterations: number;
+  avgToolRuns: number;
+  avgCostUsd: number;
 }
 
 export interface EvalComparison {

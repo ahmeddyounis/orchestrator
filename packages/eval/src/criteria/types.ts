@@ -6,10 +6,7 @@ export interface CriterionResult {
   details?: unknown;
 }
 
-export type CriterionEvaluator = (
-  summary: RunSummary,
-  details?: any,
-) => Promise<CriterionResult>;
+export type CriterionEvaluator = (summary: RunSummary, details?: any) => Promise<CriterionResult>;
 
 export interface Criterion {
   name: 'verification_pass' | 'file_contains' | 'script_exit';
