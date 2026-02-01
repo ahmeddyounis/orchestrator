@@ -99,7 +99,7 @@ export class SafeCommandRunner {
     // 4. Execution Setup
     const runId = ctx.runId;
     const toolRunId = ctx.toolRunId || randomUUID();
-    const projectRoot = process.cwd(); // Assuming root is CWD
+    const projectRoot = req.cwd || ctx.cwd || process.cwd(); // Assuming root is CWD
 
     // Artifacts paths
     const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId, 'tool_logs');

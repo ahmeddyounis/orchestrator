@@ -277,7 +277,7 @@ export class VerificationRunner {
   ): Promise<void> {
     try {
       const runId = ctx.runId;
-      const projectRoot = process.cwd();
+      const projectRoot = this.repoRoot;
       const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId);
 
       if (!fs.existsSync(runsDir)) {
@@ -296,7 +296,7 @@ export class VerificationRunner {
       // Find run directory
       const runId = ctx.runId;
       // SafeCommandRunner uses process.cwd() for .orchestrator location
-      const projectRoot = process.cwd();
+      const projectRoot = this.repoRoot;
       const runsDir = path.join(projectRoot, '.orchestrator', 'runs', runId);
 
       // Ensure runs dir exists
