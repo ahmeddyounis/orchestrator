@@ -52,7 +52,11 @@ export function registerRunCommand(program: Command) {
     .option('--no-tests', 'Disable automatic testing')
     .option('--memory <mode>', 'Memory: on|off')
     .option('--memory-path <path>', 'Override memory storage path')
-    .option('--memory-topk <n>', 'Override memory retrieval topK (integer >= 1)')
+    .option('--memory-mode <mode>', 'Retrieval mode: lexical, vector, hybrid')
+    .option('--memory-topk-lexical <n>', 'Override lexical retrieval topK (integer >= 1)')
+    .option('--memory-topk-vector <n>', 'Override vector retrieval topK (integer >= 1)')
+    .option('--memory-vector-backend <backend>', 'Vector backend: sqlite, qdrant, chroma, pgvector')
+    .option('--memory-remote-opt-in', 'Enable remote vector backend')
     .action(async (goal, options) => {
       const globalOpts = program.opts();
       const renderer = new OutputRenderer(!!globalOpts.json);
@@ -114,14 +118,52 @@ export function registerRunCommand(program: Command) {
       if (options.memoryPath) {
         memory.storage = { path: options.memoryPath };
       }
-      if (options.memoryTopk !== undefined) {
-        const topK = Number(options.memoryTopk);
-        if (!Number.isInteger(topK) || topK < 1) {
+
+      const retrieval: DeepPartial<Config['memory']['retrieval']> = {};
+      if (options.memoryMode) {
+        if (!['lexical', 'vector', 'hybrid'].includes(options.memoryMode)) {
           throw new UsageError(
-            `Invalid --memory-topk "${options.memoryTopk}". Must be an integer >= 1.`,
+            `Invalid --memory-mode "${options.memoryMode}". Must be lexical, vector, or hybrid.`,
           );
         }
-        memory.retrieval = { topK };
+        retrieval.mode = options.memoryMode;
+      }
+      if (options.memoryTopkLexical !== undefined) {
+        const topK = Number(options.memoryTopkLexical);
+        if (!Number.isInteger(topK) || topK < 1) {
+          throw new UsageError(
+            `Invalid --memory-topk-lexical "${options.memoryTopkLexical}". Must be an integer >= 1.`,
+          );
+        }
+        retrieval.topKLexical = topK;
+      }
+      if (options.memoryTopkVector !== undefined) {
+        const topK = Number(options.memoryTopkVector);
+        if (!Number.isInteger(topK) || topK < 1) {
+          throw new UsageError(
+            `Invalid --memory-topk-vector "${options.memoryTopkVector}". Must be an integer >= 1.`,
+          );
+        }
+        retrieval.topKVector = topK;
+      }
+      if (Object.keys(retrieval).length > 0) {
+        memory.retrieval = retrieval;
+      }
+
+      const vector: DeepPartial<Config['memory']['vector']> = {};
+      if (options.memoryVectorBackend) {
+        if (!['sqlite', 'qdrant', 'chroma', 'pgvector'].includes(options.memoryVectorBackend)) {
+          throw new UsageError(
+            `Invalid --memory-vector-backend "${options.memoryVectorBackend}". Must be sqlite, qdrant, chroma, or pgvector.`,
+          );
+        }
+        vector.backend = options.memoryVectorBackend;
+      }
+      if (options.memoryRemoteOptIn) {
+        vector.remoteOptIn = true;
+      }
+      if (Object.keys(vector).length > 0) {
+        memory.vector = vector;
       }
 
       const config = ConfigLoader.load({

@@ -151,14 +151,64 @@ export const MemoryConfigSchema = z
       }),
     retrieval: z
       .object({
-        mode: z.enum(['lexical']).default('lexical'),
-        topK: z.number().int().min(1).default(8),
+        mode: z.enum(['lexical', 'vector', 'hybrid']).default('lexical'),
+        topKLexical: z.number().int().min(1).default(8),
+        topKVector: z.number().int().min(1).default(8),
+        hybridWeights: z
+          .object({
+            lexical: z.number().min(0).max(1).default(0.5),
+            vector: z.number().min(0).max(1).default(0.5),
+          })
+          .default({ lexical: 0.5, vector: 0.5 }),
+        fallbackToLexicalOnVectorError: z.boolean().optional(),
         staleDownrank: z.boolean().default(true),
       })
       .default({
         mode: 'lexical',
-        topK: 8,
+        topKLexical: 8,
+        topKVector: 8,
+        hybridWeights: { lexical: 0.5, vector: 0.5 },
         staleDownrank: true,
+      }),
+    vector: z
+      .object({
+        enabled: z.boolean().default(false),
+        backend: z.enum(['sqlite', 'qdrant', 'chroma', 'pgvector']).default('sqlite'),
+        embedder: EmbeddingsConfigSchema.default({
+          provider: 'local-hash',
+          dims: 384,
+          batchSize: 32,
+        }),
+        remoteOptIn: z.boolean().default(false),
+        qdrant: z
+          .object({
+            url: z.string(),
+            apiKeyEnv: z.string().optional(),
+            collection: z.string().default('orchestrator_memory'),
+          })
+          .optional(),
+        chroma: z
+          .object({
+            url: z.string(),
+            collection: z.string().default('orchestrator_memory'),
+          })
+          .optional(),
+        pgvector: z
+          .object({
+            connectionStringEnv: z.string(),
+            table: z.string().default('orchestrator_memory'),
+          })
+          .optional(),
+      })
+      .default({
+        enabled: false,
+        backend: 'sqlite',
+        embedder: {
+          provider: 'local-hash',
+          dims: 384,
+          batchSize: 32,
+        },
+        remoteOptIn: false,
       }),
     writePolicy: z
       .object({
@@ -175,10 +225,89 @@ export const MemoryConfigSchema = z
         redactSecrets: true,
       }),
   })
-  .transform((cfg) => ({
-    ...cfg,
-    writePolicy: { ...cfg.writePolicy, enabled: cfg.writePolicy.enabled ?? cfg.enabled },
-  }));
+  .transform((cfg) => {
+    const { retrieval, vector, ...rest } = cfg;
+    const isVectorMode = retrieval.mode === 'vector' || retrieval.mode === 'hybrid';
+
+    return {
+      ...rest,
+      retrieval: {
+        ...retrieval,
+        fallbackToLexicalOnVectorError:
+          retrieval.fallbackToLexicalOnVectorError ?? retrieval.mode === 'hybrid',
+      },
+      vector: {
+        ...vector,
+        enabled: vector.enabled || isVectorMode,
+      },
+      writePolicy: { ...cfg.writePolicy, enabled: cfg.writePolicy.enabled ?? cfg.enabled },
+    };
+  })
+  .refine(
+    (data) => {
+      const { backend, remoteOptIn } = data.vector;
+      if (backend !== 'sqlite' && !remoteOptIn) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        'Remote vector backends (qdrant, chroma, pgvector) require `vector.remoteOptIn` to be true.',
+      path: ['vector', 'remoteOptIn'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.vector.backend === 'qdrant' && !data.vector.qdrant?.url) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: '`vector.qdrant.url` is required when backend is qdrant.',
+      path: ['vector', 'qdrant', 'url'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.vector.backend === 'chroma' && !data.vector.chroma?.url) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: '`vector.chroma.url` is required when backend is chroma.',
+      path: ['vector', 'chroma', 'url'],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.vector.backend === 'pgvector' && !data.vector.pgvector?.connectionStringEnv) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: '`vector.pgvector.connectionStringEnv` is required when backend is pgvector.',
+      path: ['vector', 'pgvector', 'connectionStringEnv'],
+    },
+  )
+  .refine(
+    (data) => {
+      const { lexical, vector } = data.retrieval.hybridWeights;
+      const sum = lexical + vector;
+      // Allow for slight floating point inaccuracies
+      if (sum < 0.99 || sum > 1.01) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: '`hybridWeights` (lexical + vector) must sum to 1.0.',
+      path: ['retrieval', 'hybridWeights'],
+    },
+  );
 
 export const TelemetryConfigSchema = z.object({
   enabled: z.boolean().default(false),
