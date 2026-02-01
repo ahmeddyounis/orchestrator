@@ -157,8 +157,8 @@ async function checkProviderConfig(configPath?: string): Promise<DoctorCheck> {
       status: 'ok',
       message: 'Provider configuration looks good.',
     };
-  } catch (e) {
-    if (e instanceof Error && e.message.includes('not found')) {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.includes('not found')) {
       return {
         name: 'Provider configuration',
         status: 'warn',
@@ -169,7 +169,7 @@ async function checkProviderConfig(configPath?: string): Promise<DoctorCheck> {
     return {
       name: 'Provider configuration',
       status: 'error',
-      message: `Error loading configuration: ${(e as Error).message}`,
+      message: `Error loading configuration: ${(err as Error).message}`,
     };
   }
 }
@@ -202,7 +202,7 @@ async function checkTelemetryConfig(configPath?: string): Promise<DoctorCheck> {
       status: 'ok',
       message: `Telemetry is enabled in '${telemetry.mode}' mode. Run artifacts are stored locally.`,
     };
-  } catch (e) {
+  } catch (_) {
     // Ignore config loading errors, as they are handled by other checks
     return {
       name: 'Telemetry',

@@ -15,7 +15,7 @@ import {
   type Config,
   UsageError,
 } from '@orchestrator/shared';
-import { OutputRenderer } from '../output/renderer';
+import { OutputRenderer, type OutputResult } from '../output/renderer';
 
 function parseBudgetFlag(value: string, previous: unknown) {
   const parsed = parseBudget(value);
@@ -156,25 +156,23 @@ export function registerFixCommand(program: Command) {
 
       const result = await orchestrator.run(goal, { thinkLevel, runId });
 
-      const output = {
-        status: result.status,
+      const output: OutputResult = {
+        status: result.status === 'success' ? 'SUCCESS' : 'FAILURE',
         goal,
         runId: result.runId,
-        branch: branchName,
-        filesChanged: result.filesChanged || [],
-        _patch_paths: result.patchPaths || [],
+        artifactsDir: orchestrator.getArtifactsDir(),
+        changedFiles: result.filesChanged || [],
         cost: costTracker.getSummary(),
-        summary: result.summary,
+        verification: result.verification,
+        stopReason: result.summary,
+        lastFailureSignature: result.lastFailureSignature,
       };
 
+      renderer.render(output);
+
       if (result.status === 'success') {
-        renderer.render(output);
         process.exit(0);
       } else {
-        renderer.error(result.summary || 'Fix failed');
-        if (globalOpts.json) {
-          console.log(JSON.stringify(output, null, 2));
-        }
         process.exit(1);
       }
     });

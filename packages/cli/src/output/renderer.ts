@@ -1,5 +1,7 @@
+import pc from 'picocolors';
+
 export interface OutputResult {
-  status?: string;
+  status?: 'SUCCESS' | 'FAILURE';
   goal?: string;
   suite?: string;
   runId?: string;
@@ -30,6 +32,8 @@ export interface OutputResult {
     failedChecks?: string[];
     reportPaths?: string[];
   };
+  changedFiles?: string[];
+  stopReason?: string;
   lastFailureSignature?: string;
   [key: string]: unknown;
 }
@@ -46,6 +50,93 @@ export class OutputRenderer {
   }
 
   private renderHuman(data: OutputResult): void {
+    if (data.status === 'SUCCESS') {
+      this.renderSuccess(data);
+    } else if (data.status === 'FAILURE') {
+      this.renderFailure(data);
+    } else {
+      this.renderVerbose(data);
+    }
+  }
+
+  private renderSuccess(data: OutputResult): void {
+    console.log(`\n${pc.green('✅ Run succeeded.')}`);
+
+    if (data.changedFiles && data.changedFiles.length > 0) {
+      console.log(pc.bold('\nChanged files:'));
+      data.changedFiles.slice(0, 10).forEach((file) => console.log(`  - ${file}`));
+      if (data.changedFiles.length > 10) {
+        console.log(`  ... and ${data.changedFiles.length - 10} more.`);
+      }
+    }
+
+    if (data.verification) {
+      console.log(pc.bold('\nVerification:'));
+      if (!data.verification.enabled) {
+        console.log(pc.gray('  Not run.'));
+      } else {
+        const icon = data.verification.passed ? pc.green('✅') : pc.red('❌');
+        console.log(
+          `  ${icon} ${data.verification.summary ?? (data.verification.passed ? 'Verified' : 'Failed')}`,
+        );
+      }
+    }
+
+    this.renderCost(data);
+
+    console.log(pc.bold('\nArtifacts:'));
+    if (data.runId) {
+      console.log(`  Run ID: ${data.runId}`);
+    }
+    if (data.artifactsDir) {
+      console.log(`  Diff: ${data.artifactsDir}/run.diff`);
+      console.log(`  Report: ${data.artifactsDir}/report.json`);
+    }
+
+    console.log(pc.bold('\nNext steps:'));
+    if (data.runId) {
+      console.log(
+        `  - To review the full report, run: ${pc.cyan(`orchestrator report ${data.runId}`)}`,
+      );
+    }
+    console.log(`  - To apply changes, commit them to your repository.`);
+  }
+
+  private renderFailure(data: OutputResult): void {
+    console.log(`\n${pc.red('❌ Run failed.')}`);
+
+    if (data.stopReason) {
+      console.log(`  ${pc.bold('Reason:')} ${data.stopReason}`);
+    }
+    if (data.lastFailureSignature) {
+      console.log(`  ${pc.bold('Error:')} ${data.lastFailureSignature}`);
+    }
+
+    if (data.artifactsDir) {
+      console.log(pc.bold('\nDiagnostics:'));
+      console.log(`  - Logs: ${data.artifactsDir}/logs/`);
+      console.log(`  - Verification reports: ${data.artifactsDir}/verification/`);
+    }
+
+    console.log(pc.bold('\nNext steps:'));
+    console.log(`  - Try increasing the budget with the ${pc.cyan('--max-total-cost')} flag.`);
+    console.log(`  - Try a different executor with the ${pc.cyan('--executor')} flag.`);
+    console.log(`  - Run full tests with ${pc.cyan('--verify')}.`);
+  }
+
+  private renderCost(data: OutputResult): void {
+    if (data.cost?.total) {
+      console.log(pc.bold('\nCost & Time:'));
+      const { total } = data.cost;
+      const costStr =
+        typeof total.estimatedCostUsd === 'number'
+          ? ` ($${total.estimatedCostUsd.toFixed(4)})`
+          : '';
+      console.log(`  - Total: ${total.totalTokens} tokens${costStr}`);
+    }
+  }
+
+  private renderVerbose(data: OutputResult): void {
     if (data.status) console.log(`Status: ${data.status}`);
     if (data.goal) console.log(`Goal: ${data.goal}`);
     if (data.suite) console.log(`Suite: ${data.suite}`);
@@ -118,14 +209,18 @@ export class OutputRenderer {
 
   log(message: string): void {
     if (this.isJson) {
-      console.error(message);
+      // JSON mode should not have logs
     } else {
-      console.log(message);
+      console.log(pc.gray(message));
     }
   }
 
   error(message: string | Error): void {
     const msg = message instanceof Error ? message.message : message;
-    console.error(msg);
+    if (this.isJson) {
+      console.error(JSON.stringify({ error: msg }));
+    } else {
+      console.error(pc.red(msg));
+    }
   }
 }

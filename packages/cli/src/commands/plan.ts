@@ -17,7 +17,7 @@ import {
   UsageError,
 } from '@orchestrator/shared';
 import { OpenAIAdapter, AnthropicAdapter, ClaudeCodeAdapter } from '@orchestrator/adapters';
-import { OutputRenderer } from '../output/renderer';
+import { OutputRenderer, type OutputResult } from '../output/renderer';
 import * as fs from 'fs/promises';
 import path from 'path';
 
@@ -162,15 +162,18 @@ export function registerPlanCommand(program: Command) {
       );
 
       const planPath = path.join(artifacts.root, 'plan.json');
-      renderer.render({
-        status: 'success',
+      const output: OutputResult = {
+        status: 'SUCCESS',
         goal,
         runId,
         artifactsDir: artifacts.root,
         providers: { planner: plannerId },
-        plan: planSteps,
         cost: costSummary,
-        nextSteps: [`Review plan at ${planPath}`, `Run with: orchestrator run "${goal}"`],
-      });
+        nextSteps: [
+          `Review the generated plan at: ${planPath}`,
+          `To execute the plan, run: orchestrator run "${goal}"`,
+        ],
+      };
+      renderer.render(output);
     });
 }

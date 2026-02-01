@@ -16,7 +16,7 @@ import {
   type Config,
   UsageError,
 } from '@orchestrator/shared';
-import { OutputRenderer } from '../output/renderer';
+import { OutputRenderer, type OutputResult } from '../output/renderer';
 import { ConsoleUI } from '../ui/console';
 
 function parseBudgetFlag(value: string, previous: unknown) {
@@ -228,29 +228,23 @@ export function registerRunCommand(program: Command) {
       // Orchestrator already saves patches, but we might want to capture the final state relative to HEAD?
       // Orchestrator saves 'finalDiff' in runL0/runL1 implicitly via PatchStore.
 
-      const output = {
-        status: result.status,
+      const output: OutputResult = {
+        status: result.status === 'success' ? 'SUCCESS' : 'FAILURE',
         goal,
         runId: result.runId,
-        branch: branchName,
-        filesChanged: result.filesChanged || [],
-        patchPaths: result.patchPaths || [],
+        artifactsDir: orchestrator.getArtifactsDir(),
+        changedFiles: result.filesChanged || [],
         cost: costTracker.getSummary(),
-        summary: result.summary,
         verification: result.verification,
+        stopReason: result.summary,
         lastFailureSignature: result.lastFailureSignature,
       };
 
+      renderer.render(output);
+
       if (result.status === 'success') {
-        renderer.render(output);
         process.exit(0);
       } else {
-        renderer.error(result.summary || 'Run failed');
-        // For JSON output we might want to render the error object instead of just text?
-        // OutputRenderer handles structured object.
-        if (globalOpts.json) {
-          console.log(JSON.stringify(output, null, 2));
-        }
         process.exit(1);
       }
     });
