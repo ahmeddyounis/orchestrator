@@ -28,7 +28,8 @@ orchestrator run "<your task description>" [options]
 
 **Options:**
 
-- `--l2`: (Optional) Enable Level 2 reasoning for more complex tasks. This allows the orchestrator to perform deeper analysis and chain multiple steps together.
+- `--think <level>`: (Optional) Set the orchestration level (e.g., `L1`, `L2`, `L3`). Higher levels enable more complex reasoning and problem-solving strategies. Defaults to `L2`.
+- `--best-of <N>`: (Optional, L3 only) Generate `N` candidate solutions and select the best one. See the [L3 Documentation](l3.md) for details.
 - `--no-verify`: (Optional) Disable automatic verification (running tests and linting) after making changes.
 - `--memory`: (Optional) Enable memory to allow the orchestrator to remember context from previous runs.
 
@@ -46,14 +47,14 @@ orchestrator run "Add a dark mode toggle to the settings page."
 
 ### Example 2: Complex Task with L2 Reasoning
 
-For more complex problems, you can use the `--l2` flag. This is useful for tasks that require deep analysis or refactoring across multiple files.
+For more complex problems, you can use `--think L2`. This is useful for tasks that require deep analysis or refactoring across multiple files.
 
 Let's say you need to refactor a core piece of your application.
 
 **Initial Prompt:**
 
 ```bash
-orchestrator run --l2 "The current user authentication logic is monolithic and hard to test. Refactor it into a modular structure with separate services for session management, password hashing, and user data retrieval."
+orchestrator run --think L2 "The current user authentication logic is monolithic and hard to test. Refactor it into a modular structure with separate services for session management, password hashing, and user data retrieval."
 ```
 
 **How L2 Works:**
@@ -67,6 +68,27 @@ orchestrator run --l2 "The current user authentication logic is monolithic and h
 3.  **Iterative Execution**: It will execute the plan step-by-step, verifying its work at each stage.
 
 This approach allows the orchestrator to handle complex, multi-faceted tasks that would be difficult to complete in a single step.
+
+---
+
+### Example 3: Automated Diagnosis and Repair with L3
+
+Use `--think L3` for the most complex problems, such as debugging a persistent failing test where the root cause is unclear. L3 generates multiple solutions and uses a `best-of-N` strategy to find the optimal fix.
+
+**Initial Prompt:**
+
+```bash
+orchestrator run --think L3 --best-of 3 --prompt "The 'calculateTotal' test is failing due to a floating point precision error. Investigate and fix it."
+```
+
+**How L3 Works:**
+
+1.  **Best-of-N Generation**: It generates 3 distinct candidate solutions for the problem.
+2.  **Objective-First Ranking**: An AI **Reviewer** ranks the candidates based on how well they address the prompt.
+3.  **Verification and Diagnosis**: Each candidate is tested. If tests fail, an AI **Judge** diagnoses the reason for the failure.
+4.  **Final Selection**: The orchestrator selects the best candidate that both passes the tests and best aligns with the original goal.
+
+For a complete explanation of the process and the artifacts it produces, see the [L3 Orchestration Guide](l3.md).
 
 ---
 

@@ -73,6 +73,24 @@ Configure logging verbosity.
 
 - `"level"`: The log level. Can be `"debug"`, `"info"`, `"warn"`, or `"error"`. Defaults to `"info"`.
 
+### `orchestration` (Optional)
+
+Fine-tune the behavior of different orchestration levels. For a detailed guide on L3, see the [L3 Orchestration documentation](l3.md).
+
+```json
+"orchestration": {
+  "l3": {
+    "maxBestOf": 5,
+    "maxRounds": 1,
+    "maxL3Retries": 1
+  }
+}
+```
+
+-   `"l3.maxBestOf"`: A safety limit for the `--best-of` flag to prevent generating too many candidates and incurring high costs. Defaults to `5`.
+-   `"l3.maxRounds"`: The maximum number of refinement rounds the L3 agent can perform. Defaults to `1`.
+-   `"l3.maxL3Retries"`: The number of times the orchestrator will retry an L3 run if it fails to produce a valid solution. Defaults to `1`.
+
 ### `memory` (Optional)
 
 Configure the memory feature. See the [Memory Guide](memory.md) for a high-level overview and the [Vector and Hybrid Memory Guide](memory-vector.md) for advanced usage.
