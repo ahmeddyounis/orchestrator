@@ -89,7 +89,7 @@ export interface RunResult {
 }
 
 export interface RunOptions {
-  thinkLevel: 'L0' | 'L1' | 'L2';
+  thinkLevel: 'L0' | 'L1' | 'L2' | 'L3';
   runId?: string;
 }
 
@@ -134,6 +134,7 @@ export class Orchestrator {
   private toolPolicy?: ToolPolicy;
   private ui?: UserInterface;
   private suppressEpisodicMemoryWrite = false;
+  private escalationCount = 0;
 
   constructor(options: OrchestratorOptions) {
     this.config = options.config;
@@ -160,6 +161,8 @@ export class Orchestrator {
 
     if (options.thinkLevel === 'L0') {
       return this.runL0(goal, runId);
+    } else if (options.thinkLevel === 'L3') {
+      return this.runL3(goal, runId);
     } else if (options.thinkLevel === 'L2') {
       return this.runL2(goal, runId);
     } else {
@@ -409,6 +412,8 @@ export class Orchestrator {
       status,
       stopReason: runResult.stopReason,
       thinkLevel: parseInt(options.thinkLevel.slice(1), 10),
+      l3: options.thinkLevel === 'L3' ? this.config.l3 : undefined,
+      escalated: this.escalationCount > 0,
       selectedProviders: {
         planner: this.config.defaults?.planner || 'default',
         executor: this.config.defaults?.executor || 'default',
@@ -1601,15 +1606,44 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
     let iterations = 0;
     let failureSignature = verification.failureSignature;
     let consecutiveSameSignature = 0;
+    let consecutivePatchApplyFailures = 0;
 
     const patchPaths = l1Result.patchPaths || [];
     const touchedFiles = new Set(l1Result.filesChanged);
-
     const executorId = this.config.defaults?.executor || 'openai';
     const executor = this.registry.getAdapter(executorId);
 
     while (iterations < maxIterations) {
       iterations++;
+
+      // Escalation checks
+      const escalationConfig = this.config.escalation;
+      if (
+        escalationConfig?.enabled &&
+        this.escalationCount < (escalationConfig.maxEscalations ?? 1)
+      ) {
+        if (
+          consecutiveSameSignature >= (escalationConfig.toL3AfterNonImprovingIterations ?? 2) ||
+          consecutivePatchApplyFailures >= (escalationConfig.toL3AfterPatchApplyFailures ?? 2)
+        ) {
+          await eventBus.emit({
+            type: 'RunEscalated',
+            schemaVersion: 1,
+            runId,
+            timestamp: new Date().toISOString(),
+            payload: {
+              from: 'L2',
+              to: 'L3',
+              reason:
+                consecutiveSameSignature >= (escalationConfig.toL3AfterNonImprovingIterations ?? 2)
+                  ? 'non_improving'
+                  : 'patch_apply_failure',
+            },
+          });
+          this.escalationCount++;
+          return this.runL3(goal, runId);
+        }
+      }
 
       await eventBus.emit({
         type: 'IterationStarted',
@@ -1814,6 +1848,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       });
 
       if (applyResult.applied) {
+        consecutivePatchApplyFailures = 0;
         applyResult.filesChanged?.forEach((f) => touchedFiles.add(f));
         await eventBus.emit({
           type: 'PatchApplied',
@@ -1827,6 +1862,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           },
         });
       } else {
+        consecutivePatchApplyFailures++;
         await eventBus.emit({
           type: 'PatchApplyFailed',
           schemaVersion: 1,
@@ -1977,6 +2013,106 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       },
       eventBus,
     );
+
+    return runResult;
+  }
+
+  async runL3(goal: string, runId: string): Promise<RunResult> {
+    const startTime = Date.now();
+    const l3Config = this.config.l3 ?? { bestOfN: 3 };
+    const bestOfN = l3Config.bestOfN ?? 3;
+
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
+    const logger = new JsonlLogger(artifacts.trace);
+    const eventBus: EventBus = {
+      emit: async (e) => await logger.log(e),
+    };
+
+    await eventBus.emit({
+      type: 'RunStarted',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId,
+      payload: { taskId: runId, goal, thinkLevel: 'L3' },
+    });
+
+    const promises: Promise<RunResult>[] = [];
+    for (let i = 0; i < bestOfN; i++) {
+      const branchRunId = `${runId}-l3-${i}`;
+      promises.push(this.runL1(goal, branchRunId));
+    }
+
+    const results = await Promise.allSettled(promises);
+    const successfulResults = results
+      .filter((r) => r.status === 'fulfilled' && r.value.status === 'success')
+      .map((r) => (r as PromiseFulfilledResult<RunResult>).value);
+
+    if (successfulResults.length > 0) {
+      // For now, just pick the first success. Later, a judge can be used.
+      const bestResult = successfulResults[0];
+
+      // TODO: Merge the changes from the successful branch back to the main run branch.
+      // For now, we'll just return the result.
+
+      await eventBus.emit({
+        type: 'RunFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { status: 'success', summary: `L3 success (best of ${bestOfN})` },
+      });
+
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'success',
+        { thinkLevel: 'L3' },
+        bestResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
+      await this.writeEpisodicMemory(summary, { artifactsRoot: artifacts.root }, eventBus);
+
+      return {
+        ...bestResult,
+        runId, // Return the main runId
+        summary: `L3 success from branch ${bestResult.runId}`,
+      };
+    }
+
+    const failureSummary = `L3 failed: No successful outcomes from ${bestOfN} attempts.`;
+    await eventBus.emit({
+      type: 'RunFinished',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId,
+      payload: { status: 'failure', summary: failureSummary },
+    });
+
+    const firstFailure = results.find((r) => r.status === 'fulfilled') as
+      | PromiseFulfilledResult<RunResult>
+      | undefined;
+
+    const runResult: RunResult = {
+      status: 'failure',
+      runId,
+      summary: failureSummary,
+      stopReason: firstFailure?.value.stopReason ?? 'error',
+    };
+
+    const summary = await this._buildRunSummary(
+      runId,
+      goal,
+      startTime,
+      'failure',
+      { thinkLevel: 'L3' },
+      runResult,
+      artifacts,
+    );
+    await SummaryWriter.write(summary, artifacts.root);
+    await this.writeEpisodicMemory(summary, { artifactsRoot: artifacts.root }, eventBus);
 
     return runResult;
   }

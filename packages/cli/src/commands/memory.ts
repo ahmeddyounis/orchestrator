@@ -227,9 +227,7 @@ async function reembed(options: {
   const entriesToProcess = memoryEntries.slice(0, limit);
 
   if (options.dryRun) {
-    console.log(
-      `[Dry Run] Found ${entriesToProcess.length} entries that would be re-embedded.`,
-    );
+    console.log(`[Dry Run] Found ${entriesToProcess.length} entries that would be re-embedded.`);
     return;
   }
 
@@ -382,7 +380,6 @@ async function search(
     );
   });
 }
-
 
 export function registerMemoryCommand(program: Command) {
   const memoryCommand = program.command('memory').description('Manage orchestrator memory.');

@@ -30,13 +30,14 @@ export function registerRunCommand(program: Command) {
     .command('run')
     .argument('<goal>', 'The goal to run')
     .description('Run an agentic task to achieve a goal')
-    .option('--think <level>', 'Think level: L0, L1, L2, or auto', 'auto')
+    .option('--think <level>', 'Think level: L0, L1, L2, L3, or auto', 'auto')
     .option(
       '--budget <limits>',
       'Set budget limits (e.g. cost=5,iter=6,tool=10,time=20m)',
       parseBudgetFlag,
       {},
     )
+    .option('--best-of <n>', 'Override L3 best-of-N setting (integer >= 1)')
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
@@ -69,9 +70,14 @@ export function registerRunCommand(program: Command) {
       if (thinkLevel === 'auto') {
         thinkLevel = 'L1';
       }
-      if (thinkLevel !== 'L0' && thinkLevel !== 'L1' && thinkLevel !== 'L2') {
+      if (
+        thinkLevel !== 'L0' &&
+        thinkLevel !== 'L1' &&
+        thinkLevel !== 'L2' &&
+        thinkLevel !== 'L3'
+      ) {
         throw new UsageError(
-          `Invalid think level "${options.think}". Must be L0, L1, L2, or auto.`,
+          `Invalid think level "${options.think}". Must be L0, L1, L2, L3, or auto.`,
         );
       }
 
@@ -166,10 +172,20 @@ export function registerRunCommand(program: Command) {
         memory.vector = vector;
       }
 
+      const l3: DeepPartial<Config['l3']> = {};
+      if (options.bestOf) {
+        const bestOfN = Number(options.bestOf);
+        if (!Number.isInteger(bestOfN) || bestOfN < 1) {
+          throw new UsageError(`Invalid --best-of "${options.bestOf}". Must be an integer >= 1.`);
+        }
+        l3.bestOfN = bestOfN;
+      }
+
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
         flags: {
           thinkLevel,
+          l3: Object.keys(l3).length > 0 ? l3 : undefined,
           budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
           defaults: {
             planner: options.planner,

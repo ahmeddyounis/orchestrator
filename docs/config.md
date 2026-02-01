@@ -80,6 +80,7 @@ Configure the memory feature. See the [Memory Guide](memory.md) for a high-level
 - `"enabled"`: If `true`, the orchestrator will remember context from previous runs.
 
 A minimal configuration just enables the feature:
+
 ```json
 "memory": {
   "enabled": true
@@ -103,13 +104,13 @@ For advanced semantic search, you can configure retrieval modes and vector backe
   "vector": {
     "backend": "sqlite", // "sqlite", "qdrant", "chroma", "pgvector"
     "remoteOptIn": false,
-    
+
     // Config for "qdrant" backend
     "qdrant": {
       "url": "http://localhost:6333",
       "collectionName": "my-project"
     },
-    
+
     // Config for "chroma" backend
     "chroma": {
       "url": "http://localhost:8000",
@@ -131,4 +132,3 @@ For advanced semantic search, you can configure retrieval modes and vector backe
 - **`vector.backend`**: The database for storing vectors. `sqlite` is the local default. `qdrant`, `chroma`, and `pgvector` are for remote databases.
 - **`vector.remoteOptIn`**: Must be set to `true` to use a remote vector backend. This is a security measure to acknowledge that data (embeddings and file IDs) will be sent over the network.
 - **`embeddings.provider`**: Determines how embeddings are created. `local-hash` is fast and fully private. Using a provider like `openai` yields better results but sends file content to the provider's API.
-

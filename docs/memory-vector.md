@@ -8,7 +8,7 @@ You can control the retrieval mode using the `memory.retrieval.mode` configurati
 
 - **`lexical` (Default):** Uses a traditional full-text search (FTS) engine. This mode is fast, works entirely locally, and is effective for finding exact keywords and phrases.
 
-- **`vector`:** Uses a vector database to find semantically similar context. Instead of matching keywords, it matches the *meaning* of the query. This requires generating embeddings for your code and queries.
+- **`vector`:** Uses a vector database to find semantically similar context. Instead of matching keywords, it matches the _meaning_ of the query. This requires generating embeddings for your code and queries.
 
 - **`hybrid`:** A combination of `lexical` and `vector` search. It retrieves results from both methods and then re-ranks them to produce a final, often superior, set of results. This is the recommended mode when using vector memory.
 
@@ -28,18 +28,18 @@ A critical aspect of vector memory is understanding what data is stored where.
 
 - **Local Storage:** The original source code and file content **always** remain on your local machine.
 - **Vector Database:** The vector database stores:
-    - The numerical vectors (embeddings).
-    - Minimal metadata, such as the file path or an internal ID to link the vector back to the local content.
+  - The numerical vectors (embeddings).
+  - Minimal metadata, such as the file path or an internal ID to link the vector back to the local content.
 
 When using a **remote vector backend**, only these vectors and their associated metadata are sent and stored remotely. The raw code content is NOT sent to the remote vector database. However, when using a **provider-based embedder**, the content is sent to the embedding provider (e.g., OpenAI) to generate the vectors.
 
 **Summary of Data Flow:**
 
-| Component                | Data Sent/Stored                               | Location                               |
-| ------------------------ | ---------------------------------------------- | -------------------------------------- |
-| **Local Code**           | -                                              | Your local machine                     |
-| **Embedding Provider**   | Source code chunks to be embedded              | Third-party service (e.g., OpenAI)     |
-| **Vector Backend**       | Numerical vectors + file identifiers           | Local (SQLite) or Remote (Qdrant, etc.) |
+| Component              | Data Sent/Stored                     | Location                                |
+| ---------------------- | ------------------------------------ | --------------------------------------- |
+| **Local Code**         | -                                    | Your local machine                      |
+| **Embedding Provider** | Source code chunks to be embedded    | Third-party service (e.g., OpenAI)      |
+| **Vector Backend**     | Numerical vectors + file identifiers | Local (SQLite) or Remote (Qdrant, etc.) |
 
 ## Backends
 
@@ -55,12 +55,12 @@ This is the default backend. It's self-contained and stores all vectors in a sin
 {
   "memory": {
     "retrieval": {
-      "mode": "hybrid"
+      "mode": "hybrid",
     },
     "vector": {
-      "backend": "sqlite"
-    }
-  }
+      "backend": "sqlite",
+    },
+  },
 }
 ```
 
@@ -76,7 +76,7 @@ This is the default backend. It's self-contained and stores all vectors in a sin
 {
   "memory": {
     "retrieval": {
-      "mode": "hybrid"
+      "mode": "hybrid",
     },
     "vector": {
       "backend": "qdrant",
@@ -84,10 +84,10 @@ This is the default backend. It's self-contained and stores all vectors in a sin
       "remoteOptIn": true,
       "qdrant": {
         "url": "http://localhost:6333", // Your Qdrant instance URL
-        "collectionName": "my-project-repo"
-      }
-    }
-  }
+        "collectionName": "my-project-repo",
+      },
+    },
+  },
 }
 ```
 
@@ -109,7 +109,7 @@ gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-o
 {
   "memory": {
     "retrieval": {
-      "mode": "hybrid"
+      "mode": "hybrid",
     },
     "vector": {
       "backend": "chroma",
@@ -117,10 +117,10 @@ gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-o
       "remoteOptIn": true,
       "chroma": {
         "url": "http://localhost:8000", // Your Chroma instance URL
-        "collectionName": "my-project-repo"
-      }
-    }
-  }
+        "collectionName": "my-project-repo",
+      },
+    },
+  },
 }
 ```
 
@@ -136,17 +136,17 @@ gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-o
 {
   "memory": {
     "retrieval": {
-      "mode": "hybrid"
+      "mode": "hybrid",
     },
     "vector": {
       "backend": "pgvector",
       // Required for remote backends
       "remoteOptIn": true,
       "pgvector": {
-        "connectionStringEnv": "DATABASE_URL" // Environment variable with the connection string
-      }
-    }
-  }
+        "connectionStringEnv": "DATABASE_URL", // Environment variable with the connection string
+      },
+    },
+  },
 }
 ```
 

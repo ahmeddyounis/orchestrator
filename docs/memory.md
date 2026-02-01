@@ -20,11 +20,12 @@ On subsequent runs, the orchestrator can query this memory to retrieve relevant 
 You can enable long-term memory in your configuration file by setting `memory.enabled` to `true`.
 
 **`.orchestrator.jsonc`:**
+
 ```jsonc
 {
   "memory": {
-    "enabled": true
-  }
+    "enabled": true,
+  },
 }
 ```
 
@@ -33,7 +34,7 @@ You can enable long-term memory in your configuration file by setting `memory.en
 The real power of the memory system comes from its different retrieval modes, which determine how the orchestrator finds relevant information from its long-term store.
 
 - **`lexical` (Default):** A fast and reliable keyword-based search.
-- **`vector`:** A powerful semantic search that understands the *meaning* of your query, not just the keywords.
+- **`vector`:** A powerful semantic search that understands the _meaning_ of your query, not just the keywords.
 - **`hybrid`:** The recommended mode, which combines the strengths of both `lexical` and `vector` search.
 
 For a detailed explanation of these modes, how they work, and how to configure advanced backends (like Qdrant, Chroma, or pgvector), please see the **[Vector and Hybrid Memory](./memory-vector.md)** documentation.
@@ -58,4 +59,3 @@ gemini memory wipe --vector
 # Wipe both
 gemini memory wipe --all
 ```
-

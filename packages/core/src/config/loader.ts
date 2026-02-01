@@ -129,6 +129,11 @@ export class ConfigLoader {
         memory.maxChars ??= 2500;
         memory.writePolicy.storeEpisodes ??= true;
         break;
+      case 'L3':
+        memory.retrieval.topK ??= 10;
+        memory.maxChars ??= 4000;
+        memory.writePolicy.storeEpisodes ??= true;
+        break;
     }
 
     return { ...config, memory };

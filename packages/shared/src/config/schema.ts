@@ -317,7 +317,24 @@ export const TelemetryConfigSchema = z.object({
 
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
-  thinkLevel: z.enum(['L0', 'L1', 'L2']).default('L1'),
+  thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
+  l3: z
+    .object({
+      bestOfN: z.number().int().min(1).max(5).default(3),
+      enableReviewer: z.boolean().default(true),
+      enableJudge: z.boolean().default(true),
+      enableTargetedToT: z.boolean().default(true),
+      maxToTBranches: z.number().int().min(1).default(3),
+    })
+    .optional(),
+  escalation: z
+    .object({
+      enabled: z.boolean().default(true),
+      toL3AfterNonImprovingIterations: z.number().int().min(1).default(2),
+      toL3AfterPatchApplyFailures: z.number().int().min(1).default(2),
+      maxEscalations: z.number().int().min(0).default(1),
+    })
+    .optional(),
   budget: BudgetSchema.optional(),
   memory: MemoryConfigSchema.default(MemoryConfigSchema.parse({})),
   providers: z.record(z.string(), ProviderConfigSchema).optional(),

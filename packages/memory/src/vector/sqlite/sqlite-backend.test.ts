@@ -166,11 +166,31 @@ describe('SQLiteVectorBackend', () => {
     it('should handle upserting 5 items and querying topK with correct ordering', async () => {
       // From spec M16-09
       const items: VectorItem[] = [
-        { id: 'v1', vector: new Float32Array([0.1, 0.1, 0.1]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.17
-        { id: 'v2', vector: new Float32Array([0.9, 0.9, 0.9]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.9
-        { id: 'v3', vector: new Float32Array([0.5, 0.5, 0.5]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.5
-        { id: 'v4', vector: new Float32Array([0.2, 0.2, 0.2]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.2
-        { id: 'v5', vector: new Float32Array([0.8, 0.8, 0.8]), metadata: { type: 't', stale: false, updatedAt: 1 } }, // Score ~0.8
+        {
+          id: 'v1',
+          vector: new Float32Array([0.1, 0.1, 0.1]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        }, // Score ~0.17
+        {
+          id: 'v2',
+          vector: new Float32Array([0.9, 0.9, 0.9]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        }, // Score ~0.9
+        {
+          id: 'v3',
+          vector: new Float32Array([0.5, 0.5, 0.5]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        }, // Score ~0.5
+        {
+          id: 'v4',
+          vector: new Float32Array([0.2, 0.2, 0.2]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        }, // Score ~0.2
+        {
+          id: 'v5',
+          vector: new Float32Array([0.8, 0.8, 0.8]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        }, // Score ~0.8
       ];
       await backend.upsert(ctx, 'new-repo', items);
 
@@ -224,9 +244,21 @@ describe('SQLiteVectorBackend', () => {
 
     it('should delete multiple specified items', async () => {
       const items: VectorItem[] = [
-        { id: 'd1', vector: new Float32Array([1, 0, 0]), metadata: { type: 't', stale: false, updatedAt: 1 } },
-        { id: 'd2', vector: new Float32Array([0, 1, 0]), metadata: { type: 't', stale: false, updatedAt: 1 } },
-        { id: 'd3', vector: new Float32Array([0, 0, 1]), metadata: { type: 't', stale: false, updatedAt: 1 } },
+        {
+          id: 'd1',
+          vector: new Float32Array([1, 0, 0]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        },
+        {
+          id: 'd2',
+          vector: new Float32Array([0, 1, 0]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        },
+        {
+          id: 'd3',
+          vector: new Float32Array([0, 0, 1]),
+          metadata: { type: 't', stale: false, updatedAt: 1 },
+        },
       ];
       await backend.upsert(ctx, repoId, items);
 
