@@ -1,4 +1,4 @@
-export declare const name = '@orchestrator/exec';
+export declare const name = "@orchestrator/exec";
 export * from './classify';
 export * from './runner';
 export * from './sandbox';

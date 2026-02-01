@@ -1,4 +1,4 @@
-export declare const name = '@orchestrator/adapters';
+export declare const name = "@orchestrator/adapters";
 export * from './types';
 export * from './adapter';
 export * from './errors';

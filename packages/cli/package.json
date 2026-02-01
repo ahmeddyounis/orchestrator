@@ -11,7 +11,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "clean": "rm -rf dist",
+    "build": "pnpm clean && pnpm build:bundle && pnpm build:types",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --log-level=warning",
+    "build:types": "tsc --emitDeclarationOnly --outDir dist",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "esbuild": "^0.23.0",
     "typescript": "^5.3.3"
   },
   "dependencies": {

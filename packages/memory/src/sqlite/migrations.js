@@ -1,8 +1,8 @@
-'use strict';
-Object.defineProperty(exports, '__esModule', { value: true });
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.runMigrations = runMigrations;
 const migrations = [
-  `
+    `
     CREATE TABLE IF NOT EXISTS memory_entries (
       id TEXT PRIMARY KEY,
       repoId TEXT NOT NULL,
@@ -18,7 +18,7 @@ const migrations = [
       updatedAt INTEGER NOT NULL
     );
   `,
-  `
+    `
     CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
       title,
       content,
@@ -26,7 +26,7 @@ const migrations = [
       content_rowid='rowid'
     );
   `,
-  `
+    `
     CREATE TRIGGER IF NOT EXISTS memory_entries_after_insert
     AFTER INSERT ON memory_entries
     BEGIN
@@ -34,7 +34,7 @@ const migrations = [
       VALUES (new.rowid, new.title, new.content);
     END;
   `,
-  `
+    `
     CREATE TRIGGER IF NOT EXISTS memory_entries_after_delete
     AFTER DELETE ON memory_entries
     BEGIN
@@ -42,7 +42,7 @@ const migrations = [
       VALUES ('delete', old.rowid, old.title, old.content);
     END;
   `,
-  `
+    `
     CREATE TRIGGER IF NOT EXISTS memory_entries_after_update
     AFTER UPDATE ON memory_entries
     BEGIN
@@ -54,15 +54,16 @@ const migrations = [
   `,
 ];
 function runMigrations(db) {
-  db.exec('BEGIN');
-  try {
-    migrations.forEach((migration) => {
-      db.exec(migration);
-    });
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+    db.exec('BEGIN');
+    try {
+        migrations.forEach((migration) => {
+            db.exec(migration);
+        });
+        db.exec('COMMIT');
+    }
+    catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+    }
 }
 //# sourceMappingURL=migrations.js.map

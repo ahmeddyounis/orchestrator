@@ -1,4 +1,4 @@
-export declare const name = '@orchestrator/shared';
+export declare const name = "@orchestrator/shared";
 export * from './types/events';
 export * from './logger/jsonlLogger';
 export * from './logger';
