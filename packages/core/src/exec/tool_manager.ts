@@ -11,6 +11,9 @@ import {
   ToolRunResult,
   Manifest,
   writeManifest,
+  AppError,
+  UsageError,
+  ToolError,
 } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -48,18 +51,30 @@ class ObservableSafeCommandRunner extends SafeCommandRunner {
     try {
       return await super.run(req, policy, ui, ctx);
     } catch (err) {
+      const error = err as AppError;
+
       // Check for denial errors
-      const error = err as Error;
-      if (error.name === 'PolicyDeniedError' || error.name === 'ConfirmationDeniedError') {
+      if (error instanceof UsageError || error instanceof ToolError) {
+        let reason = 'unknown';
+        if (typeof error.details === 'object' && error.details && 'reason' in error.details) {
+          reason = error.details.reason as string;
+        } else if (error.message.includes('network access')) {
+          reason = 'network_denied';
+        } else if (error.message.includes('shell')) {
+          reason = 'shell_disallowed';
+        } else if (error.message.includes('User denied')) {
+          reason = 'user_denied';
+        }
+
         await this.eventBus.emit({
-          type: 'ToolRunDenied',
+          type: 'ToolRunBlocked',
           schemaVersion: 1,
           timestamp: new Date().toISOString(),
           runId: this.runId,
           payload: {
             toolRunId: this.toolRunId,
             command: req.command,
-            reason: error.message,
+            reason: reason,
           },
         });
       }

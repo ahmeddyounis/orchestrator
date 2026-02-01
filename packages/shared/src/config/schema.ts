@@ -119,7 +119,9 @@ export const ToolPolicySchema = z.object({
   denylistPatterns: z
     .array(z.string())
     .default(['rm -rf', 'mkfs', ':(){:|:&};:', 'curl .*\\|\\s*sh']),
-  allowNetwork: z.boolean().default(false),
+  networkPolicy: z.enum(['deny', 'allow']).default('deny'),
+  envAllowlist: z.array(z.string()).default([]),
+  allowShell: z.boolean().default(false),
   timeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(1_024_1024),
   autoApprove: z.boolean().default(false),
@@ -315,15 +317,19 @@ export const TelemetryConfigSchema = z.object({
   redact: z.boolean().default(true),
 });
 
-export const SecurityConfigSchema = z.object({
-  redaction: z.object({
-    enabled: z.boolean().default(true),
-    allowPatterns: z.array(z.string()).optional(),
-    maxRedactionsPerFile: z.number().default(200),
-  }).default({ enabled: true, maxRedactionsPerFile: 200 }),
-}).default({
-  redaction: { enabled: true, maxRedactionsPerFile: 200 },
-});
+export const SecurityConfigSchema = z
+  .object({
+    redaction: z
+      .object({
+        enabled: z.boolean().default(true),
+        allowPatterns: z.array(z.string()).optional(),
+        maxRedactionsPerFile: z.number().default(200),
+      })
+      .default({ enabled: true, maxRedactionsPerFile: 200 }),
+  })
+  .default({
+    redaction: { enabled: true, maxRedactionsPerFile: 200 },
+  });
 
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),

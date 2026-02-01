@@ -82,7 +82,7 @@ export class SimpleContextFuser implements ContextFuser {
     for (const item of repoPack.items) {
       const header = `// ${item.path}:${item.startLine}`;
       let content = item.content;
-      
+
       if (this.redactionEnabled && this.scanner) {
         const findings = this.scanner.scan(content);
         if (findings.length > 0) {

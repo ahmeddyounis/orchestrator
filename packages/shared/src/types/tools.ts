@@ -13,7 +13,9 @@ export interface ToolPolicy {
   requireConfirmation: boolean;
   allowlistPrefixes: string[];
   denylistPatterns: string[];
-  allowNetwork: boolean;
+  networkPolicy: 'deny' | 'allow';
+  envAllowlist: string[];
+  allowShell: boolean;
   maxOutputBytes: number;
   timeoutMs: number;
   autoApprove?: boolean;

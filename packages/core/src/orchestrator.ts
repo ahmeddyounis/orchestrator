@@ -1566,12 +1566,14 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       };
     }
 
-        const eventBus: EventBus = {
-          emit: async (e) => {
-            const redactedEvent = this.config.security?.redaction?.enabled ? (redactObject(e) as OrchestratorEvent) : e;
-            await logger.log(redactedEvent);
-          },
-        };
+    const eventBus: EventBus = {
+      emit: async (e) => {
+        const redactedEvent = this.config.security?.redaction?.enabled
+          ? (redactObject(e) as OrchestratorEvent)
+          : e;
+        await logger.log(redactedEvent);
+      },
+    };
     const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
     const verificationRunner = new VerificationRunner(
       proceduralMemory,
@@ -2526,15 +2528,10 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
       if (passingResults.length > 0) {
         // Select minimal passing candidate
-        const selected = await selectBestCandidate(
-          passingResults,
-          artifacts.root,
-          stepsCompleted,
-        );
+        const selected = await selectBestCandidate(passingResults, artifacts.root, stepsCompleted);
         if (selected) {
-          bestCandidate = generationResult.candidates.find(
-            (c) => c.index === selected.candidate.index,
-          ) || null;
+          bestCandidate =
+            generationResult.candidates.find((c) => c.index === selected.candidate.index) || null;
           l3Metadata.passingCandidateSelected = true;
           l3Metadata.selectedCandidateId = String(selected.candidate.index);
         }
@@ -2616,9 +2613,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             stepsCompleted,
           );
           if (selected) {
-            bestCandidate = generationResult.candidates.find(
-              (c) => c.index === selected.candidate.index,
-            ) || null;
+            bestCandidate =
+              generationResult.candidates.find((c) => c.index === selected.candidate.index) || null;
             l3Metadata.selectedCandidateId = String(selected.candidate.index);
           }
         }

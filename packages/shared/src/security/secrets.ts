@@ -10,7 +10,6 @@ const SecretFindingSchema = z.object({
 
 export type SecretFinding = z.infer<typeof SecretFindingSchema>;
 
-
 type SecretPattern = {
   kind: string;
   pattern: RegExp;
@@ -23,7 +22,8 @@ const SECRET_PATTERNS: SecretPattern[] = [
   // Private key blocks
   {
     kind: 'private-key',
-    pattern: /-----BEGIN ((RSA|OPENSSH|EC|PGP) )?PRIVATE KEY-----[\s\S]*?-----END \1?PRIVATE KEY-----/g,
+    pattern:
+      /-----BEGIN ((RSA|OPENSSH|EC|PGP) )?PRIVATE KEY-----[\s\S]*?-----END \1?PRIVATE KEY-----/g,
     confidence: 'high',
   },
   // AWS Keys
@@ -57,7 +57,6 @@ const SECRET_PATTERNS: SecretPattern[] = [
   },
 ];
 
-
 export class SecretScanner {
   scan(text: string): SecretFinding[] {
     const findings: SecretFinding[] = [];
@@ -78,16 +77,17 @@ export class SecretScanner {
     // Filter out overlapping findings, keeping the highest confidence one.
     const confidenceOrder = ['low', 'medium', 'high'];
     findings.sort((a, b) => {
-      const confidenceDiff = confidenceOrder.indexOf(b.confidence) - confidenceOrder.indexOf(a.confidence);
+      const confidenceDiff =
+        confidenceOrder.indexOf(b.confidence) - confidenceOrder.indexOf(a.confidence);
       if (confidenceDiff !== 0) {
         return confidenceDiff;
       }
-      return (b.end - b.start) - (a.end - a.start); // longer match first
+      return b.end - b.start - (a.end - a.start); // longer match first
     });
 
     const finalFindings: SecretFinding[] = [];
     for (const finding of findings) {
-      const overlaps = finalFindings.some(f => finding.start < f.end && finding.end > f.start);
+      const overlaps = finalFindings.some((f) => finding.start < f.end && finding.end > f.start);
       if (!overlaps) {
         finalFindings.push(finding);
       }
@@ -128,6 +128,6 @@ export function redactObject(obj: any): any {
         return [key, redactObject(value)];
       }
       return [key, value];
-    })
+    }),
   );
 }

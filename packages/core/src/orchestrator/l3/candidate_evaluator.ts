@@ -1,8 +1,4 @@
-import {
-  VerificationReport,
-  VerificationProfile,
-  VerificationScope,
-} from '../../verify/types';
+import { VerificationReport, VerificationProfile, VerificationScope } from '../../verify/types';
 import { VerificationRunner } from '../../verify/runner';
 import { GitService, PatchApplier } from '@orchestrator/repo';
 import { RunnerContext, UserInterface } from '@orchestrator/exec';
@@ -37,7 +33,7 @@ export class CandidateEvaluator {
     scope: VerificationScope,
     ui: UserInterface,
     ctx: RunnerContext,
-    iteration: number
+    iteration: number,
   ): Promise<EvaluationResult> {
     const checkpoint = await this.git.createCheckpoint(
       `before-candidate-${iteration}-${candidate.index}-evaluation`,
@@ -98,7 +94,7 @@ export class CandidateEvaluator {
 
     // For failing candidates, score is based on number of failed checks.
     // More failed checks is worse (more negative).
-    const failedChecks = report.checks.filter(r => !r.passed).length;
+    const failedChecks = report.checks.filter((r) => !r.passed).length;
     let score = -1 * failedChecks * 100;
 
     // Further penalize by diff size.
@@ -132,7 +128,7 @@ export async function selectBestCandidate(
     const selectionDir = path.join(artifactsRoot, 'selection');
     await fs.mkdir(selectionDir, { recursive: true });
     const rankingPath = path.join(selectionDir, `iter_${iteration}_ranking.json`);
-    const ranking = sortedResults.map(r => ({
+    const ranking = sortedResults.map((r) => ({
       candidateIndex: r.candidate.index,
       score: r.score,
       status: r.report.passed ? 'PASS' : 'FAIL',
@@ -140,7 +136,7 @@ export async function selectBestCandidate(
     await fs.writeFile(rankingPath, JSON.stringify(ranking, null, 2));
   }
 
-  const passingCandidates = results.filter(r => r.report.passed);
+  const passingCandidates = results.filter((r) => r.report.passed);
 
   if (passingCandidates.length > 0) {
     // If there's any passing candidate, the best one MUST be a passing one.

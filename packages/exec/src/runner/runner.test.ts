@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SafeCommandRunner, UserInterface, RunnerContext } from './runner';
-import { PolicyDeniedError, ConfirmationDeniedError, TimeoutError } from './errors';
-import { ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
+import { ToolRunRequest, ToolPolicy, ToolError, UsageError } from '@orchestrator/shared';
 import * as fs from 'fs';
 import { Mock } from 'vitest';
 import { EventEmitter } from 'events';
@@ -78,18 +77,18 @@ describe('SafeCommandRunner', () => {
     vi.restoreAllMocks();
   });
 
-  it('should throw PolicyDeniedError if disabled', async () => {
+  it('should throw UsageError if disabled', async () => {
     const policy = { ...defaultPolicy, enabled: false };
     const req: ToolRunRequest = { command: 'echo hello', reason: 'test', cwd: '/tmp' };
 
-    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(PolicyDeniedError);
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(UsageError);
   });
 
-  it('should throw PolicyDeniedError if command is denylisted', async () => {
+  it('should throw UsageError if command is denylisted', async () => {
     const req: ToolRunRequest = { command: 'rm -rf /', reason: 'test', cwd: '/tmp' };
 
     await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(
-      PolicyDeniedError,
+      UsageError,
     );
   });
 
@@ -125,12 +124,12 @@ describe('SafeCommandRunner', () => {
     expect(mockUi.confirm).toHaveBeenCalled();
   });
 
-  it('should throw ConfirmationDeniedError if user denies', async () => {
+  it('should throw UsageError if user denies', async () => {
     vi.mocked(mockUi.confirm).mockResolvedValue(false);
     const req: ToolRunRequest = { command: 'other-cmd', reason: 'test', cwd: '/tmp' };
 
     await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(
-      ConfirmationDeniedError,
+      UsageError,
     );
   });
 
@@ -149,7 +148,7 @@ describe('SafeCommandRunner', () => {
     // Mock fs read for partial output
     (fs.readFileSync as unknown as Mock).mockReturnValue('partial output');
 
-    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(TimeoutError);
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(ToolError);
   });
 
   it('should truncate output if limit exceeded', async () => {

@@ -1,5 +1,12 @@
 import { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
-import { EventBus, Logger, Config, ModelRequest, ModelResponse, CandidateGenerated } from '@orchestrator/shared';
+import {
+  EventBus,
+  Logger,
+  Config,
+  ModelRequest,
+  ModelResponse,
+  CandidateGenerated,
+} from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import * as path from 'path';
@@ -72,7 +79,9 @@ export class CandidateGenerator {
         break;
       }
     }
-    return firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
+    return firstContentIdx === -1
+      ? ''
+      : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
   }
 
   private calculatePatchStats(patch: string): {
@@ -81,7 +90,8 @@ export class CandidateGenerator {
     linesDeleted: number;
   } {
     const filesChanged = (patch.match(/diff --git/g) || []).length;
-    const linesAdded = (patch.match(/^\+/gm) || []).length - (patch.match(/^\+\+\+/gm) || []).length;
+    const linesAdded =
+      (patch.match(/^\+/gm) || []).length - (patch.match(/^\+\+\+/gm) || []).length;
     const linesDeleted = (patch.match(/^-/gm) || []).length - (patch.match(/^---/gm) || []).length;
     return { filesChanged, linesAdded, linesDeleted };
   }
@@ -124,14 +134,17 @@ INSTRUCTIONS:
             schemaVersion: 1,
             timestamp: new Date().toISOString(),
             runId,
-            payload: { reason: 'budget_exceeded', details: `Cost budget exceeded ($${budget.cost})` },
+            payload: {
+              reason: 'budget_exceeded',
+              details: `Cost budget exceeded ($${budget.cost})`,
+            },
           });
           break;
         }
       }
 
       const startTime = Date.now();
-      
+
       // M17-02: Build request with low temperature by default for deterministic output
       const request: ModelRequest = {
         messages: [
@@ -160,18 +173,12 @@ INSTRUCTIONS:
       const patchesDir = path.join(artifactsRoot, 'patches');
       await fs.mkdir(patchesDir, { recursive: true });
 
-      const rawArtifactPath = path.join(
-        patchesDir,
-        `iter_${stepIndex}_candidate_${i}_raw.txt`,
-      );
+      const rawArtifactPath = path.join(patchesDir, `iter_${stepIndex}_candidate_${i}_raw.txt`);
       await fs.writeFile(rawArtifactPath, rawOutput);
 
       let patchStats;
       if (valid && patch) {
-        const patchArtifactPath = path.join(
-          patchesDir,
-          `iter_${stepIndex}_candidate_${i}.patch`,
-        );
+        const patchArtifactPath = path.join(patchesDir, `iter_${stepIndex}_candidate_${i}.patch`);
         await fs.writeFile(patchArtifactPath, patch);
         patchStats = this.calculatePatchStats(patch);
       }
@@ -208,7 +215,7 @@ INSTRUCTIONS:
 
   async generateAndSelectCandidate(stepContext: StepContext, n: number): Promise<Candidate | null> {
     const result = await this.generateAndReviewCandidates(stepContext, n);
-    
+
     if (result.candidates.length === 0) {
       return null;
     }
@@ -224,8 +231,8 @@ INSTRUCTIONS:
 
     const sortedRankings = result.reviews.sort((a, b) => b.score - a.score);
     const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
-    
-    return result.candidates.find(c => c.index === bestCandidateId) || result.candidates[0];
+
+    return result.candidates.find((c) => c.index === bestCandidateId) || result.candidates[0];
   }
 
   /**

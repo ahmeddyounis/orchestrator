@@ -135,16 +135,18 @@ export class MemoryWriter {
           }
         : undefined,
     };
-    
-    const redactedContentPayload = this.redactionEnabled ? redactObject(contentPayload) : contentPayload;
-    
+
+    const redactedContentPayload = this.redactionEnabled
+      ? redactObject(contentPayload)
+      : contentPayload;
+
     let content = JSON.stringify(redactedContentPayload, null, 2);
     if (this.redactionEnabled && this.scanner) {
-        const findings = this.scanner.scan(content);
-        if (findings.length > 0) {
-            content = redact(content, findings);
-            await this.logRedactions(findings.length, `episodic memory content for run ${runId}`);
-        }
+      const findings = this.scanner.scan(content);
+      if (findings.length > 0) {
+        content = redact(content, findings);
+        await this.logRedactions(findings.length, `episodic memory content for run ${runId}`);
+      }
     }
 
     if (content.length > MAX_CONTENT_LENGTH) {
@@ -157,7 +159,7 @@ export class MemoryWriter {
     };
 
     const redactedEvidence = this.redactionEnabled ? redactObject(evidence) : evidence;
-    
+
     const newMemory: EpisodicMemory = {
       type: 'episodic',
       id: randomUUID(),
@@ -208,11 +210,11 @@ export class MemoryWriter {
 
     let normalizedCommand = request.command.trim().replace(/\s+/g, ' ');
     if (this.redactionEnabled && this.scanner) {
-        const findings = this.scanner.scan(normalizedCommand);
-        if (findings.length > 0) {
-            normalizedCommand = redact(normalizedCommand, findings);
-            await this.logRedactions(findings.length, 'procedural memory command');
-        }
+      const findings = this.scanner.scan(normalizedCommand);
+      if (findings.length > 0) {
+        normalizedCommand = redact(normalizedCommand, findings);
+        await this.logRedactions(findings.length, 'procedural memory command');
+      }
     }
 
     const existingMemory = [...memoryStore.values()].find(
@@ -225,7 +227,7 @@ export class MemoryWriter {
       durationMs,
       toolRunId,
     };
-    
+
     const redactedEvidence = this.redactionEnabled ? redactObject(evidence) : evidence;
 
     if (existingMemory) {

@@ -87,9 +87,9 @@ Fine-tune the behavior of different orchestration levels. For a detailed guide o
 }
 ```
 
--   `"l3.maxBestOf"`: A safety limit for the `--best-of` flag to prevent generating too many candidates and incurring high costs. Defaults to `5`.
--   `"l3.maxRounds"`: The maximum number of refinement rounds the L3 agent can perform. Defaults to `1`.
--   `"l3.maxL3Retries"`: The number of times the orchestrator will retry an L3 run if it fails to produce a valid solution. Defaults to `1`.
+- `"l3.maxBestOf"`: A safety limit for the `--best-of` flag to prevent generating too many candidates and incurring high costs. Defaults to `5`.
+- `"l3.maxRounds"`: The maximum number of refinement rounds the L3 agent can perform. Defaults to `1`.
+- `"l3.maxL3Retries"`: The number of times the orchestrator will retry an L3 run if it fails to produce a valid solution. Defaults to `1`.
 
 ### `memory` (Optional)
 

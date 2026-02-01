@@ -1,7 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { SafeCommandRunner, UserInterface, RunnerContext } from './runner';
-import { ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
-import { PolicyDeniedError, TimeoutError } from './errors';
+import { ToolRunRequest, ToolPolicy, ToolError, UsageError } from '@orchestrator/shared';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -49,7 +48,7 @@ describe('SafeCommandRunner Integration', () => {
     };
 
     const req: ToolRunRequest = {
-      command: 'node -e \'console.log("SAFE_123")\'',
+      command: 'node packages/exec/src/runner/test-script.js',
       reason: 'Integration test allowlist',
       cwd: process.cwd(),
     };
@@ -74,7 +73,7 @@ describe('SafeCommandRunner Integration', () => {
       cwd: process.cwd(),
     };
 
-    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(PolicyDeniedError);
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(UsageError);
   });
 
   it('should timeout if command takes too long', async () => {
@@ -86,11 +85,11 @@ describe('SafeCommandRunner Integration', () => {
 
     // Run for 3 seconds
     const req: ToolRunRequest = {
-      command: "node -e 'setTimeout(() => {}, 3000)'",
+      command: "node packages/exec/src/runner/test-timeout-script.js",
       reason: 'Integration test timeout',
       cwd: process.cwd(),
     };
 
-    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(TimeoutError);
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(ToolError);
   });
 });

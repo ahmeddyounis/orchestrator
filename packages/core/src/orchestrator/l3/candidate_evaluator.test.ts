@@ -3,7 +3,11 @@ import { CandidateEvaluator, selectBestCandidate } from './candidate_evaluator';
 import type { EvaluationResult, EvaluatorCandidate } from './candidate_evaluator';
 import type { GitService, PatchApplier } from '@orchestrator/repo';
 import type { VerificationRunner } from '../../verify/runner';
-import type { VerificationReport, VerificationProfile, VerificationScope } from '../../verify/types';
+import type {
+  VerificationReport,
+  VerificationProfile,
+  VerificationScope,
+} from '../../verify/types';
 import type { RunnerContext, UserInterface } from '@orchestrator/exec';
 import { Logger } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
@@ -57,7 +61,10 @@ describe('CandidateEvaluator', () => {
     };
     (mockVerificationRunner.run as ReturnType<typeof vi.fn>).mockResolvedValue(passingReport);
     (mockGit.createCheckpoint as ReturnType<typeof vi.fn>).mockResolvedValue('checkpoint-sha');
-    (mockPatchApplier.applyUnifiedDiff as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: true, filesChanged: ['file.ts'] });
+    (mockPatchApplier.applyUnifiedDiff as ReturnType<typeof vi.fn>).mockResolvedValue({
+      applied: true,
+      filesChanged: ['file.ts'],
+    });
 
     const result = await evaluator.evaluate(
       candidate,
@@ -110,16 +117,19 @@ describe('CandidateEvaluator', () => {
     };
     (mockVerificationRunner.run as ReturnType<typeof vi.fn>).mockResolvedValue(failingReport);
     (mockGit.createCheckpoint as ReturnType<typeof vi.fn>).mockResolvedValue('checkpoint-sha');
-    (mockPatchApplier.applyUnifiedDiff as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: true, filesChanged: ['file.ts'] });
+    (mockPatchApplier.applyUnifiedDiff as ReturnType<typeof vi.fn>).mockResolvedValue({
+      applied: true,
+      filesChanged: ['file.ts'],
+    });
 
     const result = await evaluator.evaluate(
-        candidate,
-        mockVerificationProfile,
-        mockVerificationScope,
-        mockUi,
-        mockRunnerContext,
-        1,
-      );
+      candidate,
+      mockVerificationProfile,
+      mockVerificationScope,
+      mockUi,
+      mockRunnerContext,
+      1,
+    );
 
     expect(result.report.passed).toBe(false);
     expect(result.score).toBeLessThan(0);
@@ -133,7 +143,7 @@ describe('selectBestCandidate', () => {
     (fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
-  
+
   it('should return undefined for empty results', async () => {
     expect(await selectBestCandidate([])).toBeUndefined();
   });

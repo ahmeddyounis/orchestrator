@@ -37,21 +37,18 @@ export interface ReviewerInput {
 }
 
 export interface ReviewerContext {
-    runId: string;
-    eventBus: EventBus;
-    costTracker: CostTracker;
-    reviewer: ProviderAdapter;
-    artifactsRoot: string;
-    logger: Logger;
+  runId: string;
+  eventBus: EventBus;
+  costTracker: CostTracker;
+  reviewer: ProviderAdapter;
+  artifactsRoot: string;
+  logger: Logger;
 }
 
 export class Reviewer {
   constructor() {}
 
-  async review(
-    input: ReviewerInput,
-    context: ReviewerContext,
-  ): Promise<ReviewerOutput> {
+  async review(input: ReviewerInput, context: ReviewerContext): Promise<ReviewerOutput> {
     const { reviewer, runId, logger, artifactsRoot } = context;
 
     const systemPrompt = this.buildPrompt(input);
@@ -64,7 +61,7 @@ export class Reviewer {
       temperature: 0.1,
       schema: reviewerOutputSchema,
     };
-    
+
     const response = await reviewer.generate(request, { runId, logger });
 
     const reviewArtifactPath = path.join(

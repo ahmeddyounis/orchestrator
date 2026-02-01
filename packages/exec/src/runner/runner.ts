@@ -10,6 +10,48 @@ import {
   UsageError,
 } from '@orchestrator/shared';
 import { parseCommand } from '../classify/parser';
+import * as classifier from '../classify/classifier';
+
+// Detects characters that require a shell to interpret.
+function isShellCommand(command: string): boolean {
+  return /[|&;()<>`!$]/.test(command);
+}
+
+// Common secret env vars to strip.
+// This is not exhaustive but covers many common cases.
+const SENSITIVE_ENV_VARS = ['SECRET', 'TOKEN', 'API_KEY', 'PASSWORD', 'CREDENTIALS', 'ACCESS_KEY'];
+
+function getSafeEnv(
+  policy: Pick<ToolPolicy, 'envAllowlist'>,
+  baseEnv: NodeJS.ProcessEnv,
+  requestEnv?: Record<string, string>,
+): Record<string, string> {
+  const safeEnv: Record<string, string> = {};
+  const allowlist = new Set(policy.envAllowlist);
+
+  // Always include PATH for basic command resolution.
+  if (baseEnv.PATH) {
+    safeEnv.PATH = baseEnv.PATH;
+  }
+
+  const combinedEnv = { ...baseEnv, ...requestEnv };
+
+  for (const key of Object.keys(combinedEnv)) {
+    // 1. Is it on the explicit allowlist?
+    if (allowlist.has(key)) {
+      safeEnv[key] = combinedEnv[key]!;
+      continue;
+    }
+
+    // 2. Is it a sensitive-looking var? (and not allowlisted)
+    const upperKey = key.toUpperCase();
+    if (SENSITIVE_ENV_VARS.some((suffix) => upperKey.endsWith(suffix))) {
+      continue; // Strip it
+    }
+  }
+
+  return safeEnv;
+}
 
 export interface RunnerContext {
   runId: string;
@@ -47,9 +89,24 @@ export class SafeCommandRunner {
       };
     }
 
-    // 3. Policy Check: Confirmation
     const isAllowlisted = policy.allowlistPrefixes.some((prefix) => req.command.startsWith(prefix));
 
+    // 3. Network Policy Check
+    if (policy.networkPolicy === 'deny' && !isAllowlisted) {
+      const parsed = parseCommand(req.command);
+              if (
+                classifier.isNetworkCommand(parsed) ||        req.classification === 'install' ||
+        req.classification === 'network'
+      ) {
+        return {
+          isAllowed: false,
+          needsConfirmation: false,
+          reason: `Command requires network access, which is denied by policy: ${req.command}`,
+        };
+      }
+    }
+
+    // 4. Policy Check: Confirmation
     let needsConfirmation = policy.requireConfirmation;
 
     if (isAllowlisted) {
@@ -118,10 +175,35 @@ export class SafeCommandRunner {
     stdoutPath: string,
     stderrPath: string,
   ): Promise<ToolRunResult> {
-    const parsed = parseCommand(req.command);
-    if (!parsed.bin) {
-      throw new ToolError(`Could not parse command: ${req.command}`);
+    // Shell policy enforcement
+    const needsShell = isShellCommand(req.command);
+    if (needsShell && !policy.allowShell) {
+      throw new ToolError(
+        `Command requires a shell, which is disallowed by policy: ${req.command}`,
+        { details: { reason: 'shell_disallowed' } },
+      );
     }
+
+    const useShell = needsShell && policy.allowShell;
+    let bin: string;
+    let args: string[];
+
+    if (useShell) {
+      // When shell is true, spawn receives the command as is.
+      // We still parse for metadata, but execution differs.
+      bin = req.command;
+      args = [];
+    } else {
+      const parsed = parseCommand(req.command);
+      if (!parsed.bin) {
+        throw new ToolError(`Could not parse command: ${req.command}`);
+      }
+      bin = parsed.bin;
+      args = parsed.args;
+    }
+
+    // Env policy enforcement
+    const env = getSafeEnv(policy, process.env, req.env);
 
     const stdoutStream = fs.createWriteStream(stdoutPath);
     const stderrStream = fs.createWriteStream(stderrPath);
@@ -135,11 +217,11 @@ export class SafeCommandRunner {
     let timeoutTimer: NodeJS.Timeout;
 
     return new Promise<ToolRunResult>((resolve, reject) => {
-      const child = spawn(parsed.bin, parsed.args, {
+      const child = spawn(bin, args, {
         cwd: req.cwd,
-        env: { ...process.env, ...req.env },
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false,
+        shell: useShell,
         detached: true,
       });
 

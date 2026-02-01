@@ -116,8 +116,8 @@ export interface ToolRunApproved extends BaseEvent {
   };
 }
 
-export interface ToolRunDenied extends BaseEvent {
-  type: 'ToolRunDenied';
+export interface ToolRunBlocked extends BaseEvent {
+  type: 'ToolRunBlocked';
   payload: {
     toolRunId: string;
     command: string;
@@ -420,7 +420,7 @@ export type OrchestratorEvent =
   | ToolRun
   | ToolRunRequested
   | ToolRunApproved
-  | ToolRunDenied
+  | ToolRunBlocked
   | ToolRunStarted
   | ToolRunFinished
   | VerifyResult
