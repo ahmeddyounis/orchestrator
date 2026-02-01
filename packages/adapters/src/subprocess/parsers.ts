@@ -1,3 +1,5 @@
+import { ParsingStrategy } from './compatibility';
+
 export interface DiffParsed {
   diffText: string;
   confidence: number;
@@ -17,16 +19,7 @@ export function sanitizeOutput(text: string): string {
   return text.replace(ansiRegex, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
-/**
- * parses unified diff from text using multiple strategies:
- * 1. Explicit markers <BEGIN_DIFF>...</END_DIFF>
- * 2. Markdown code fences ```diff ... ```
- * 3. Heuristic scanning for unified diff headers
- */
-export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
-  const sanitized = sanitizeOutput(text);
-
-  // Strategy 1: Explicit markers
+function parseWithMarker(sanitized: string): DiffParsed | null {
   const markerRegex = /<BEGIN_DIFF>([\s\S]*?)<END_DIFF>/;
   const markerMatch = sanitized.match(markerRegex);
   if (markerMatch) {
@@ -35,8 +28,10 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
       return { diffText: content, confidence: 1.0 };
     }
   }
+  return null;
+}
 
-  // Strategy 2: Markdown code fences
+function parseWithFence(sanitized: string): DiffParsed | null {
   const fenceRegex = /```diff([\s\S]*?)```/;
   const fenceMatch = sanitized.match(fenceRegex);
   if (fenceMatch) {
@@ -45,10 +40,10 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
       return { diffText: content, confidence: 0.9 };
     }
   }
+  return null;
+}
 
-  // Strategy 3: Heuristic scan
-  // Look for `diff --git` OR (`--- a/` AND `+++ b/`)
-  // We want to capture from the first valid header to the end of the last hunk
+function parseWithHeuristic(sanitized: string): DiffParsed | null {
   const lines = sanitized.split('\n');
   let startLine = -1;
   let hasDiffHeader = false;
@@ -56,47 +51,32 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-
-    // Check for start of diff
     if (startLine === -1) {
       if (line.startsWith('diff --git')) {
         startLine = i;
         hasDiffHeader = true;
       } else if (line.startsWith('--- a/')) {
-        // Check next line for +++ b/
         if (i + 1 < lines.length && lines[i + 1].startsWith('+++ b/')) {
           startLine = i;
           hasDiffHeader = true;
-          i++; // Skip next line as we checked it
+          i++;
         }
       }
       continue;
     }
-
-    // Inside candidate block
     if (line.startsWith('@@ ') && line.includes(' @@')) {
       hasHunk = true;
     }
   }
 
   if (startLine !== -1 && hasDiffHeader && hasHunk) {
-    // Collect from startLine to as far as we can justify
-    // Simple approach: if we found headers and hunks, try to extract that block.
-    // Issues: interleaving text.
-    // For "dirty" output, we might want to extract *only* the diff lines.
-
-    // Refined Strategy 3: Extract block from startLine.
-    // We iterate from startLine and keep lines that look like diff lines.
     const extractedLines: string[] = [];
     let validDiffSoFar = false;
-
-    // Reset state to re-scan from startLine
     let inHeader = true;
     let inHunk = false;
 
     for (let i = startLine; i < lines.length; i++) {
       const line = lines[i];
-
       if (line.startsWith('diff --git')) {
         inHeader = true;
         inHunk = false;
@@ -112,23 +92,11 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
         validDiffSoFar = true;
         extractedLines.push(line);
       } else if (inHunk) {
-        if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) {
+        if (['+', '-', ' '].some((prefix) => line.startsWith(prefix))) {
           extractedLines.push(line);
         } else if (line === '' || line.startsWith('\\ No newline')) {
           extractedLines.push(line);
         } else {
-          // Encountered non-diff line.
-          // If it looks like start of new file, good.
-          if (line.startsWith('diff --git') || line.startsWith('--- a/')) {
-            // Back up one iteration to let the outer loop handle it?
-            // No, we are in the extraction loop.
-            // But wait, the check above `if (line.startsWith('diff --git'))` handles it.
-            // So this branch is for *garbage* inside/after hunk.
-
-            // If we encounter garbage, we stop? Or skip?
-            // Safer to stop if we assume continuous diff block.
-            break;
-          }
           break;
         }
       }
@@ -141,8 +109,44 @@ export function parseUnifiedDiffFromText(text: string): DiffParsed | null {
       };
     }
   }
-
   return null;
+}
+
+/**
+ * parses unified diff from text using multiple strategies:
+ * 1. Explicit markers <BEGIN_DIFF>...</END_DIFF>
+ * 2. Markdown code fences ```diff ... ```
+ * 3. Heuristic scanning for unified diff headers
+ */
+export function parseUnifiedDiffFromText(
+  text: string,
+  strategy?: ParsingStrategy,
+): DiffParsed | null {
+  const sanitized = sanitizeOutput(text);
+
+  if (strategy) {
+    switch (strategy) {
+      case 'marker':
+        return parseWithMarker(sanitized);
+      case 'fence':
+        return parseWithFence(sanitized);
+      case 'heuristic':
+        return parseWithHeuristic(sanitized);
+    }
+  }
+
+  // Try all strategies in order of confidence
+  const markerResult = parseWithMarker(sanitized);
+  if (markerResult) {
+    return markerResult;
+  }
+
+  const fenceResult = parseWithFence(sanitized);
+  if (fenceResult) {
+    return fenceResult;
+  }
+
+  return parseWithHeuristic(sanitized);
 }
 
 function isValidDiffStructure(text: string): boolean {

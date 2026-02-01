@@ -1,0 +1,144 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 1`] = `
+{
+  "confidence": 0.7,
+  "diff": "--- a/file.txt
++++ b/file.txt
+@@ -1,3 +1,3 @@
+ line 1
+-line 2
++line two
+ line 3",
+  "file": "01_marker_basic.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 2`] = `
+{
+  "confidence": 0.9,
+  "diff": "--- a/file.txt
++++ b/file.txt
+@@ -1,3 +1,3 @@
+ line 1
+-line 2
++line two
+ line 3",
+  "file": "02_fence_basic.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 3`] = `
+{
+  "confidence": 0.7,
+  "diff": "diff --git a/file.txt b/file.txt
+index e965047..d40590d 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1,3 +1,3 @@
+ line 1
+-line 2
++line two
+ line 3",
+  "file": "03_heuristic_basic.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 4`] = `
+{
+  "confidence": 0.7,
+  "diff": "--- a/src/main.js
++++ b/src/main.js
+@@ -1,5 +1,5 @@
+ function main() {
+-  console.log("Hello");
++  console.log("Hello, world!");
+ }
+ 
+ main();",
+  "file": "04_marker_with_noise.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 5`] = `
+{
+  "confidence": 0.9,
+  "diff": "--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "version": "1.0.0",
+   "description": "",
+   "main": "index.js",
+-  "dependencies": {}
++  "dependencies": { "express": "4.17.1" }
+ }",
+  "file": "05_fence_with_noise.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 6`] = `
+{
+  "confidence": 0.7,
+  "diff": "diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1,2 @@
+ # My Project
++",
+  "file": "06_heuristic_with_noise.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 7`] = `
+{
+  "confidence": 0.7,
+  "diff": "diff --git a/file1.js b/file1.js
+--- a/file1.js
++++ b/file1.js
+@@ -1 +1 @@
+-console.log("one");
++console.log("1");
+
+diff --git a/file2.js b/file2.js
+--- a/file2.js
++++ b/file2.js
+@@ -1 +1 @@
+-console.log("two");
++console.log("2");
+",
+  "file": "07_multiple_diffs_heuristic.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 8`] = `
+{
+  "confidence": null,
+  "diff": null,
+  "file": "08_no_diff.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 9`] = `
+{
+  "confidence": 0.9,
+  "diff": "--- a/src/index.js
++++ b/src/index.js
+@@ -4,6 +4,7 @@
+ 
+ app.get('/', (req, res) => {
+   res.send('Hello World!');
++  console.log('Request received');
+ });
+ 
+ app.listen(port, () => {",
+  "file": "09_claude_code_output.txt",
+}
+`;
+
+exports[`parseUnifiedDiffFromText golden transcripts > should parse diffs from golden transcripts correctly 10`] = `
+{
+  "confidence": null,
+  "diff": null,
+  "file": "10_empty.txt",
+}
+`;

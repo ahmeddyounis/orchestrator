@@ -10,16 +10,29 @@ import {
 import { AdapterContext } from '../types';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import {
+  CompatibilityProfile,
+  DefaultCompatibilityProfile,
+  SubprocessCompatibilityProfiles,
+} from './compatibility';
 
 export interface SubprocessConfig {
   command: string[];
   cwdMode?: 'repoRoot' | 'runDir';
   envAllowlist?: string[]; // Allowlist of env vars to pass through
   maxTranscriptSize?: number;
+  compatibilityProfile?: keyof typeof SubprocessCompatibilityProfiles;
 }
 
 export class SubprocessProviderAdapter implements ProviderAdapter {
-  constructor(private config: SubprocessConfig) {}
+  private compatibilityProfile: CompatibilityProfile;
+
+  constructor(private config: SubprocessConfig) {
+    this.compatibilityProfile =
+      (config.compatibilityProfile &&
+        SubprocessCompatibilityProfiles[config.compatibilityProfile]) ||
+      DefaultCompatibilityProfile;
+  }
 
   id(): string {
     return 'subprocess';
@@ -37,19 +50,11 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
 
   /**
    * Detects if a chunk of text from a subprocess indicates it is idle and waiting for a prompt.
-   * Subclasses can override this to provide more specific detection logic.
    * @param text The text to inspect.
    * @returns True if the text is a prompt marker.
    */
   protected isPrompt(text: string): boolean {
-    const trimmed = text.trim();
-    // Check for common prompt markers
-    return (
-      trimmed.endsWith('>') ||
-      trimmed.endsWith('$') ||
-      trimmed.endsWith('#') ||
-      trimmed.endsWith('%')
-    );
+    return this.compatibilityProfile.promptDetectionPattern.test(text);
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
@@ -113,7 +118,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       await pm.spawn(this.config.command, cwd, env, false);
 
       // Consume initial prompt
-      await pm.readUntilHeuristic(800, isPrompt);
+      await pm.readUntilHeuristic(this.compatibilityProfile.initialPromptTimeoutMs, isPrompt);
 
       // Only clear outputText if pm.isRunning after initial read
       // Non-interactive processes exit and their output is the response
@@ -137,21 +142,22 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       pm.write(input);
 
       // Wait for termination
-      // Heuristic: 800ms silence AND prompt marker appears
       if (pm.isRunning) {
-        await pm.readUntilHeuristic(800, isPrompt);
+        await pm.readUntilHeuristic(this.compatibilityProfile.promptInactivityTimeoutMs, isPrompt);
       }
 
       if (timedOut) {
         throw new TimeoutError('Process timed out');
       }
 
-      // Strip trailing prompt marker
+      // Strip trailing prompt marker. Let's do this more robustly.
+      // The `isPrompt` check can be stateful (e.g. on newline boundaries).
+      // A simple trim might be insufficient. The pattern should handle this.
+      // For now, we assume the prompt is at the end.
       outputText = outputText.trim();
-      if (outputText.endsWith('>')) {
-        outputText = outputText.slice(0, -1).trim();
-      } else if (outputText.endsWith('$') || outputText.endsWith('#') || outputText.endsWith('%')) {
-        outputText = outputText.slice(0, -1).trim();
+      const match = outputText.match(this.compatibilityProfile.promptDetectionPattern);
+      if (match && outputText.endsWith(match[0])) {
+        outputText = outputText.slice(0, outputText.length - match[0].length).trim();
       }
     } catch (e) {
       const err = e as Error;

@@ -1,0 +1,10 @@
+I'm not sure what you mean, but here is a diff:
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1 +1,2 @@
+ # My Project
++
+This is my project.
+And here is some other text that is not part of the diff.
+This line should not be included.

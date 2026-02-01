@@ -1,0 +1,15 @@
+Okay, I will make the changes to the two files.
+
+diff --git a/file1.js b/file1.js
+--- a/file1.js
++++ b/file1.js
+@@ -1 +1 @@
+-console.log("one");
++console.log("1");
+
+diff --git a/file2.js b/file2.js
+--- a/file2.js
++++ b/file2.js
+@@ -1 +1 @@
+-console.log("two");
++console.log("2");

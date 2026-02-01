@@ -1,0 +1,19 @@
+Here is the diff you requested:
+
+```diff
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,7 @@
+   "version": "1.0.0",
+   "description": "",
+   "main": "index.js",
+-  "dependencies": {}
++  "dependencies": { "express": "4.17.1" }
+ }
+```
+
+I've added the express dependency.
+Is there anything else?
+```
+This is not a diff.
+```

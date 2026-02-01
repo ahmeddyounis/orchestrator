@@ -1,0 +1,18 @@
+Okay, I can do that. Here is the diff:
+I have added the requested feature.
+
+```diff
+--- a/src/index.js
++++ b/src/index.js
+@@ -4,6 +4,7 @@
+ 
+ app.get('/', (req, res) => {
+   res.send('Hello World!');
++  console.log('Request received');
+ });
+ 
+ app.listen(port, () => {
+```
+
+I have added a log statement to the main route. Let me know if you have any other questions.
+(y, n, a, d, ...)> 

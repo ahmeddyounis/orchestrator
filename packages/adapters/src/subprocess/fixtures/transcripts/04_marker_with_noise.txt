@@ -1,0 +1,17 @@
+This is some conversational text.
+Okay, I will generate the diff for you now.
+
+<BEGIN_DIFF>
+--- a/src/main.js
++++ b/src/main.js
+@@ -1,5 +1,5 @@
+ function main() {
+-  console.log("Hello");
++  console.log("Hello, world!");
+ }
+ 
+ main();
+</END_DIFF>
+
+Let me know if you need anything else.
+P.S. The BEGIN_DIFF is not a mistake.
