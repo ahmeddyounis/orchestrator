@@ -9,6 +9,7 @@ import { ProviderAdapter } from '@orchestrator/adapters';
 import { CostTracker } from './cost/tracker';
 import { CostTrackingAdapter } from './cost/proxy';
 
+export { EventBus };
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
 
 export class ProviderRegistry {

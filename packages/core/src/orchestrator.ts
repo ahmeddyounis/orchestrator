@@ -58,6 +58,11 @@ import {
   Candidate,
   CandidateGenerationResult,
 } from './orchestrator/l3/candidate_generator';
+import {
+  CandidateEvaluator,
+  EvaluationResult,
+  selectBestCandidate,
+} from './orchestrator/l3/candidate_evaluator';
 import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge';
 import { Diagnoser } from './orchestrator/l3/diagnoser';
 
@@ -392,6 +397,18 @@ export class Orchestrator {
       patchesDir: string;
       manifest: string;
     },
+    l3Metadata?: {
+      bestOfN: number;
+      candidatesGenerated: number;
+      candidatesEvaluated: number;
+      selectedCandidateId?: string;
+      passingCandidateSelected: boolean;
+      reviewerInvoked: boolean;
+      judgeInvoked: boolean;
+      judgeInvocationReason?: string;
+      evaluationReportPaths?: string[];
+      selectionRankingPath?: string;
+    },
   ): Promise<RunSummary> {
     const finishedAt = new Date();
     const patchStats = runResult.filesChanged
@@ -421,7 +438,6 @@ export class Orchestrator {
       status,
       stopReason: runResult.stopReason,
       thinkLevel: parseInt(options.thinkLevel.slice(1), 10),
-      l3: options.thinkLevel === 'L3' ? this.config.l3 : undefined,
       escalated: this.escalationCount > 0,
       selectedProviders: {
         planner: this.config.defaults?.planner || 'default',
@@ -475,6 +491,7 @@ export class Orchestrator {
         enabled: this.config.telemetry?.enabled ?? false,
         mode: this.config.telemetry?.mode ?? 'local',
       },
+      l3: l3Metadata,
     };
   }
 
@@ -2140,6 +2157,66 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     const budget = { ...DEFAULT_BUDGET, ...this.config.budget };
 
+    // L3 metadata tracking
+    const l3Metadata = {
+      bestOfN: this.config.l3?.bestOfN ?? 3,
+      candidatesGenerated: 0,
+      candidatesEvaluated: 0,
+      selectedCandidateId: undefined as string | undefined,
+      passingCandidateSelected: false,
+      reviewerInvoked: false,
+      judgeInvoked: false,
+      judgeInvocationReason: undefined as string | undefined,
+      evaluationReportPaths: [] as string[],
+      selectionRankingPath: undefined as string | undefined,
+    };
+
+    // Set up verification runner for candidate evaluation
+    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
+    const toolPolicy = this.toolPolicy ?? {
+      enabled: true,
+      requireConfirmation: false,
+      allowlistPrefixes: [],
+      denylistPatterns: [],
+      allowNetwork: false,
+      maxOutputBytes: 1024 * 1024,
+      timeoutMs: 60000,
+      autoApprove: true,
+    };
+    const ui = this.ui ?? {
+      confirm: async () => true,
+    };
+    const verificationRunner = new VerificationRunner(
+      proceduralMemory,
+      toolPolicy,
+      ui,
+      eventBus,
+      this.repoRoot,
+    );
+
+    const verificationProfile: VerificationProfile = {
+      enabled: this.config.verification?.enabled ?? true,
+      mode: this.config.verification?.mode || 'auto',
+      steps: [],
+      auto: {
+        enableLint: this.config.verification?.auto?.enableLint ?? true,
+        enableTypecheck: this.config.verification?.auto?.enableTypecheck ?? true,
+        enableTests: this.config.verification?.auto?.enableTests ?? true,
+        testScope: this.config.verification?.auto?.testScope || 'targeted',
+        maxCommandsPerIteration: this.config.verification?.auto?.maxCommandsPerIteration ?? 5,
+      },
+    };
+
+    // Create candidate evaluator for L3 flow
+    const candidateEvaluator = new CandidateEvaluator(
+      this.git,
+      new PatchApplier(),
+      verificationRunner,
+      this.repoRoot,
+      artifacts.root,
+      logger,
+    );
+
     let stepsCompleted = 0;
     const patchPaths: string[] = [];
     const contextPaths: string[] = [];
@@ -2210,6 +2287,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         { thinkLevel: 'L3' },
         runResult,
         artifacts,
+        l3Metadata,
       );
       await SummaryWriter.write(summary, artifacts.root);
 
@@ -2295,7 +2373,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
 
         const packer = new SimpleContextPacker();
-        contextPack = packer._pack(step, [], candidates, {
+        contextPack = packer.pack(step, [], candidates, {
           tokenBudget: this.config.context?.tokenBudget || 8000,
         });
       } catch {
@@ -2344,6 +2422,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       const candidateGenerator = new CandidateGenerator();
       const bestOfN = this.config.l3?.bestOfN ?? 3;
       const enableJudge = this.config.l3?.enableJudge ?? true;
+      const enableReviewer = this.config.l3?.enableReviewer ?? true;
       const stepContext: StepContext = {
         runId,
         goal,
@@ -2365,36 +2444,94 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         bestOfN,
       );
 
+      l3Metadata.candidatesGenerated += generationResult.candidates.length;
+      if (enableReviewer && generationResult.reviews.length > 0) {
+        l3Metadata.reviewerInvoked = true;
+      }
+
       let bestCandidate: Candidate | null = null;
       let judgeInvoked = false;
       let judgeReason: string | undefined;
 
       if (generationResult.candidates.length === 0) {
-        // No valid candidates
-        bestCandidate = null;
-      } else if (generationResult.candidates.length === 1) {
-        // Single candidate, use it
-        bestCandidate = generationResult.candidates[0];
-      } else {
-        // Multiple candidates - decide whether to use judge
+        // No valid candidates - stop condition
+        return finish(
+          'failure',
+          'invalid_output',
+          'No valid candidates generated for step: ' + step,
+        );
+      }
+
+      // --- L3 Candidate Evaluation with Verification ---
+      // Evaluate each candidate against verification profile
+      const evaluationResults: EvaluationResult[] = [];
+
+      for (const candidate of generationResult.candidates) {
+        if (!candidate.patch) continue;
+
+        const evalResult = await candidateEvaluator.evaluate(
+          { patch: candidate.patch, index: candidate.index },
+          verificationProfile,
+          { touchedFiles: Array.from(touchedFiles) },
+          ui,
+          { runId },
+          stepsCompleted,
+        );
+
+        evaluationResults.push(evalResult);
+        l3Metadata.candidatesEvaluated++;
+
+        // Track evaluation report paths
+        const evalReportPath = path.join(
+          artifacts.root,
+          'verification',
+          `iter_${stepsCompleted}_candidate_${candidate.index}_report.json`,
+        );
+        if (fsSync.existsSync(evalReportPath)) {
+          l3Metadata.evaluationReportPaths.push(evalReportPath);
+        }
+      }
+
+      // --- L3 Selection Logic ---
+      // 1. If passing candidates exist, select the minimal (smallest diff)
+      // 2. Else use reviewer/judge tie-break
+      const passingResults = evaluationResults.filter((r) => r.report.passed);
+
+      if (passingResults.length > 0) {
+        // Select minimal passing candidate
+        const selected = await selectBestCandidate(
+          passingResults,
+          artifacts.root,
+          stepsCompleted,
+        );
+        if (selected) {
+          bestCandidate = generationResult.candidates.find(
+            (c) => c.index === selected.candidate.index,
+          ) || null;
+          l3Metadata.passingCandidateSelected = true;
+          l3Metadata.selectedCandidateId = String(selected.candidate.index);
+        }
+      } else if (evaluationResults.length > 0) {
+        // No passing candidates - use reviewer/judge tie-break
         const reviews = generationResult.reviews;
 
-        // Check for near-tie in reviews (score difference <= 1 on 0-10 scale)
-        const isNearTie =
-          reviews.length >= 2 &&
-          Math.abs(
-            Math.max(...reviews.map((r) => r.score)) -
-              reviews.sort((a, b) => b.score - a.score)[1]?.score,
-          ) <= 1;
+        // Check for near-tie or need for judge
+        const { invoke: shouldInvokeJudge, reason: invokeReason } = Judge.shouldInvoke(
+          verificationProfile.enabled,
+          evaluationResults.map((r) => ({
+            candidateId: String(r.candidate.index),
+            passed: r.report.passed,
+            score: r.score,
+          })),
+          reviews.map((r) => ({
+            candidateId: r.candidateId,
+            score: r.score,
+          })),
+        );
 
-        // Usage policy: invoke judge when objective signals insufficient
-        // For now, we invoke judge when there's a near-tie in review scores
-        // (verification results would be checked here when available)
-        const shouldUseJudge = enableJudge && isNearTie;
-
-        if (shouldUseJudge) {
+        if (enableJudge && shouldInvokeJudge && invokeReason) {
           // Invoke Judge for tie-breaking
-          const judge = new Judge(providers.reviewer); // Use reviewer model for judge
+          const judge = new Judge(providers.reviewer);
 
           const judgeContext: JudgeContext = {
             runId,
@@ -2404,19 +2541,23 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             eventBus,
           };
 
-          // Build judge input
-          const judgeCandidates: JudgeCandidate[] = generationResult.candidates.map((c) => ({
-            id: String(c.index),
-            patch: c.patch!,
-            patchStats: c.patchStats,
-          }));
+          // Build judge input from actual evaluation results
+          const judgeCandidates: JudgeCandidate[] = evaluationResults.map((r) => {
+            const candidate = generationResult.candidates.find(
+              (c) => c.index === r.candidate.index,
+            );
+            return {
+              id: String(r.candidate.index),
+              patch: r.candidate.patch,
+              patchStats: candidate?.patchStats,
+            };
+          });
 
-          // Build verification info from reviews (no actual verification in L3 basic flow)
-          const judgeVerifications: JudgeVerification[] = reviews.map((r) => ({
-            candidateId: r.candidateId,
-            status: 'not_run' as const,
-            score: r.score / 10, // Normalize to 0-1
-            summary: r.reasons.join('; '),
+          const judgeVerifications: JudgeVerification[] = evaluationResults.map((r) => ({
+            candidateId: String(r.candidate.index),
+            status: r.report.passed ? 'passed' : 'failed',
+            score: r.score / 1000, // Normalize from evaluation score
+            summary: r.report.summary,
           }));
 
           const judgeOutput = await judge.decide(
@@ -2424,31 +2565,46 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
               goal,
               candidates: judgeCandidates,
               verifications: judgeVerifications,
-              invocationReason: 'objective_near_tie',
+              invocationReason: invokeReason,
             },
             judgeContext,
           );
 
           judgeInvoked = true;
-          judgeReason = `Near-tie detected (score diff <= 1). Judge selected candidate ${judgeOutput.winnerCandidateId} with confidence ${judgeOutput.confidence}.`;
+          judgeReason = `${invokeReason}: Judge selected candidate ${judgeOutput.winnerCandidateId} with confidence ${judgeOutput.confidence}.`;
+          l3Metadata.judgeInvoked = true;
+          l3Metadata.judgeInvocationReason = judgeReason;
 
           // Select the winner
           const winnerId = parseInt(judgeOutput.winnerCandidateId, 10);
           bestCandidate =
             generationResult.candidates.find((c) => c.index === winnerId) ||
             generationResult.candidates[0];
+          l3Metadata.selectedCandidateId = judgeOutput.winnerCandidateId;
         } else {
-          // Use review-based selection
-          if (reviews.length === 0) {
-            bestCandidate = generationResult.candidates[0];
-          } else {
-            const sortedRankings = reviews.sort((a, b) => b.score - a.score);
-            const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
-            bestCandidate =
-              generationResult.candidates.find((c) => c.index === bestCandidateId) ||
-              generationResult.candidates[0];
+          // Use evaluation-based selection (least bad)
+          const selected = await selectBestCandidate(
+            evaluationResults,
+            artifacts.root,
+            stepsCompleted,
+          );
+          if (selected) {
+            bestCandidate = generationResult.candidates.find(
+              (c) => c.index === selected.candidate.index,
+            ) || null;
+            l3Metadata.selectedCandidateId = String(selected.candidate.index);
           }
         }
+      }
+
+      // Update selection ranking path
+      const selectionRankingPath = path.join(
+        artifacts.root,
+        'selection',
+        `iter_${stepsCompleted}_ranking.json`,
+      );
+      if (fsSync.existsSync(selectionRankingPath)) {
+        l3Metadata.selectionRankingPath = selectionRankingPath;
       }
 
       let success = false;
@@ -2460,6 +2616,11 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
         const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
+        patchPaths.push(patchPath);
+
+        // Apply the selected patch
+        const result = await executionService.applyPatch(diffContent, step);
+
         if (result.success) {
           success = true;
           if (result.filesChanged) {
@@ -2467,6 +2628,35 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           }
           consecutiveApplyFailures = 0;
           lastApplyErrorHash = '';
+
+          // Run final verification on applied patch
+          const finalVerification = await verificationRunner.run(
+            verificationProfile,
+            verificationProfile.mode,
+            { touchedFiles: result.filesChanged },
+            { runId },
+          );
+
+          const verificationReportPath = path.join(
+            artifacts.root,
+            `verification_iter_${stepsCompleted}_final.json`,
+          );
+          await fs.writeFile(verificationReportPath, JSON.stringify(finalVerification, null, 2));
+          l3Metadata.evaluationReportPaths.push(verificationReportPath);
+
+          if (!finalVerification.passed) {
+            // Final verification failed - log but continue (patch was applied)
+            await eventBus.emit({
+              type: 'VerificationFinished',
+              schemaVersion: 1,
+              timestamp: new Date().toISOString(),
+              runId,
+              payload: {
+                passed: false,
+                failedChecks: finalVerification.checks.filter((c) => !c.passed).map((c) => c.name),
+              },
+            });
+          }
         } else {
           lastError = result.error || 'Unknown apply error';
           const errorHash = createHash('sha256').update(lastError).digest('hex');

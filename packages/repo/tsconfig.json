@@ -9,7 +9,6 @@
   "references": [
     { "path": "../shared" },
     { "path": "../adapters" },
-    { "path": "../core" },
     { "path": "../exec" },
     { "path": "../memory" }
   ]

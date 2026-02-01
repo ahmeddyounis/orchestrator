@@ -23,6 +23,7 @@ export interface RunSummary {
   status: 'success' | 'failure';
   stopReason?: string;
   thinkLevel: number;
+  escalated?: boolean;
   selectedProviders: {
     planner: string;
     executor: string;
@@ -96,6 +97,18 @@ export interface RunSummary {
   telemetry?: {
     enabled: boolean;
     mode: 'local' | 'remote';
+  };
+  l3?: {
+    bestOfN: number;
+    candidatesGenerated: number;
+    candidatesEvaluated: number;
+    selectedCandidateId?: string;
+    passingCandidateSelected: boolean;
+    reviewerInvoked: boolean;
+    judgeInvoked: boolean;
+    judgeInvocationReason?: string;
+    evaluationReportPaths?: string[];
+    selectionRankingPath?: string;
   };
 }
 
