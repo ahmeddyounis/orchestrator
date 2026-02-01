@@ -323,8 +323,13 @@ export const ConfigSchema = z.object({
       bestOfN: z.number().int().min(1).max(5).default(3),
       enableReviewer: z.boolean().default(true),
       enableJudge: z.boolean().default(true),
-      enableTargetedToT: z.boolean().default(true),
-      maxToTBranches: z.number().int().min(1).default(3),
+      diagnosis: z
+        .object({
+          enabled: z.boolean().default(true),
+          triggerOnRepeatedFailures: z.number().int().min(1).default(2),
+          maxToTBranches: z.number().int().min(1).default(3),
+        })
+        .optional(),
     })
     .optional(),
   escalation: z

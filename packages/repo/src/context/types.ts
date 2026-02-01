@@ -16,7 +16,7 @@ export interface ContextPack {
 }
 
 export interface ContextSignal {
-  type: 'error' | 'file_change' | 'package_focus';
+  type: 'error' | 'file_change' | 'package_focus' | 'diagnosis';
   data: unknown; // e.g., stack trace or file path
   weight?: number; // Optional multiplier for scoring
 }

@@ -459,7 +459,26 @@ export type OrchestratorEvent =
   | JudgeDecided
   | JudgeFailed
   | SemanticSearchFinishedEvent
-  | SemanticSearchFailedEvent;
+  | SemanticSearchFailedEvent
+  | DiagnosisStarted
+  | DiagnosisCompleted;
+
+// M17-06: Diagnosis events
+export interface DiagnosisStarted extends BaseEvent {
+  type: 'DiagnosisStarted';
+  payload: {
+    iteration: number;
+    reason: string;
+  };
+}
+
+export interface DiagnosisCompleted extends BaseEvent {
+  type: 'DiagnosisCompleted';
+  payload: {
+    iteration: number;
+    selectedHypothesis: unknown;
+  };
+}
 
 // M17-05: Judge events
 export interface JudgeInvoked extends BaseEvent {

@@ -59,7 +59,7 @@ import {
   CandidateGenerationResult,
 } from './orchestrator/l3/candidate_generator';
 import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge';
-
+import { Diagnoser } from './orchestrator/l3/diagnoser';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -2145,6 +2145,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     const contextPaths: string[] = [];
     const touchedFiles = new Set<string>();
 
+    const signals: ContextSignal[] = [];
     let consecutiveInvalidDiffs = 0;
     let consecutiveApplyFailures = 0;
     let lastApplyErrorHash = '';
@@ -2294,7 +2295,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
 
         const packer = new SimpleContextPacker();
-        contextPack = packer.pack(step, [], candidates, {
+        contextPack = packer._pack(step, [], candidates, {
           tokenBudget: this.config.context?.tokenBudget || 8000,
         });
       } catch {
@@ -2313,11 +2314,11 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       );
 
       const fuser = new SimpleContextFuser();
-      const fusedContext = fuser.fuse({
+      let fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nCurrent Step: ${step}`,
         repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
-        signals: [],
+        signals,
         budgets: {
           maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
           maxMemoryChars: this.config.memory?.maxChars ?? 2000,
@@ -2377,12 +2378,13 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       } else {
         // Multiple candidates - decide whether to use judge
         const reviews = generationResult.reviews;
-        
+
         // Check for near-tie in reviews (score difference <= 1 on 0-10 scale)
-        const isNearTie = reviews.length >= 2 && 
+        const isNearTie =
+          reviews.length >= 2 &&
           Math.abs(
-            Math.max(...reviews.map(r => r.score)) - 
-            reviews.sort((a, b) => b.score - a.score)[1]?.score
+            Math.max(...reviews.map((r) => r.score)) -
+              reviews.sort((a, b) => b.score - a.score)[1]?.score,
           ) <= 1;
 
         // Usage policy: invoke judge when objective signals insufficient
@@ -2393,7 +2395,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         if (shouldUseJudge) {
           // Invoke Judge for tie-breaking
           const judge = new Judge(providers.reviewer); // Use reviewer model for judge
-          
+
           const judgeContext: JudgeContext = {
             runId,
             iteration: stepsCompleted,
@@ -2432,7 +2434,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
           // Select the winner
           const winnerId = parseInt(judgeOutput.winnerCandidateId, 10);
-          bestCandidate = generationResult.candidates.find((c) => c.index === winnerId) || 
+          bestCandidate =
+            generationResult.candidates.find((c) => c.index === winnerId) ||
             generationResult.candidates[0];
         } else {
           // Use review-based selection
@@ -2441,7 +2444,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           } else {
             const sortedRankings = reviews.sort((a, b) => b.score - a.score);
             const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
-            bestCandidate = generationResult.candidates.find((c) => c.index === bestCandidateId) || 
+            bestCandidate =
+              generationResult.candidates.find((c) => c.index === bestCandidateId) ||
               generationResult.candidates[0];
           }
         }
@@ -2456,10 +2460,6 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
         const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
-        patchPaths.push(patchPath);
-
-        const result = await executionService.applyPatch(diffContent, step);
-
         if (result.success) {
           success = true;
           if (result.filesChanged) {
@@ -2477,7 +2477,61 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             lastApplyErrorHash = errorHash;
           }
 
-          if (consecutiveApplyFailures >= 2) {
+          const diagnosisConfig = this.config.l3?.diagnosis;
+          const triggerThreshold = diagnosisConfig?.triggerOnRepeatedFailures ?? 2;
+
+          if (diagnosisConfig?.enabled && consecutiveApplyFailures >= triggerThreshold) {
+            await eventBus.emit({
+              type: 'DiagnosisStarted',
+              schemaVersion: 1,
+              runId,
+              timestamp: new Date().toISOString(),
+              payload: {
+                iteration: stepsCompleted,
+                reason: `Repeated patch apply failure: ${lastError}`,
+              },
+            });
+
+            const diagnoser = new Diagnoser();
+            const diagnosisResult = await diagnoser.diagnose({
+              runId,
+              goal,
+              fusedContext,
+              eventBus,
+              costTracker: this.costTracker!,
+              reasoner: providers.planner,
+              artifactsRoot: artifacts.root,
+              logger,
+              config: this.config,
+              iteration: stepsCompleted,
+              lastError,
+            });
+
+            if (diagnosisResult?.selectedHypothesis) {
+              signals.push({
+                type: 'diagnosis',
+                data: `Diagnosis hypothesis: ${diagnosisResult.selectedHypothesis.hypothesis}`,
+              });
+
+              // Re-fuse context with new signal
+              fusedContext = fuser.fuse({
+                goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+                repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+                memoryHits,
+                signals,
+                budgets: {
+                  maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
+                  maxMemoryChars: this.config.memory?.maxChars ?? 2000,
+                  maxSignalsChars: 1000,
+                },
+              });
+              stepContext.fusedContext = fusedContext;
+            }
+            // Reset failure counter
+            consecutiveApplyFailures = 0;
+          }
+
+          if (consecutiveApplyFailures >= triggerThreshold) {
             return finish(
               'failure',
               'repeated_failure',
@@ -2504,8 +2558,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           schemaVersion: 1,
           timestamp: new Date().toISOString(),
           runId,
-          payload: { 
-            step, 
+          payload: {
+            step,
             success: true,
             ...(judgeInvoked ? { judgeInvoked: true, judgeReason } : {}),
           },
@@ -2519,16 +2573,10 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           payload: { step, success: false, error: lastError },
         });
 
-        return finish(
-          'failure',
-          'repeated_failure',
-          `Step failed: ${step}. Error: ${lastError}`,
-        );
+        return finish('failure', 'repeated_failure', `Step failed: ${step}. Error: ${lastError}`);
       }
     }
 
     return finish('success', undefined, `L3 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
-}
-
 }

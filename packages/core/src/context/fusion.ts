@@ -128,7 +128,9 @@ export class SimpleContextFuser implements ContextFuser {
 
     for (const signal of signals) {
       let content = `Type: ${signal.type}`;
-      if (signal.data) {
+      if (signal.type === 'diagnosis' && typeof signal.data === 'string') {
+        content += `\n${signal.data}`;
+      } else if (signal.data) {
         content += `\nData: ${JSON.stringify(signal.data, null, 2)}`;
       }
 
