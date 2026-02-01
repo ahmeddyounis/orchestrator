@@ -7,10 +7,10 @@ import { GlobalOptions } from '../../types';
 import { statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-export function registerIndexBuildCommand(parent: Command) {
+export function registerIndexUpdateCommand(parent: Command) {
   parent
-    .command('build')
-    .description('Build a new repository index from scratch')
+    .command('update')
+    .description('Update an existing repository index')
     .option('--semantic', 'Enable semantic indexing', false)
     .option(
       '--semantic-embedder <provider>',
@@ -55,6 +55,7 @@ export function registerIndexBuildCommand(parent: Command) {
         flags,
       });
 
+      // TODO: Implement a proper update that doesn't rebuild from scratch
       const builder = new IndexBuilder({
         maxFileSizeBytes: config.indexing?.maxFileSizeBytes ?? 2 * 1024 * 1024,
       });
@@ -106,7 +107,7 @@ export function registerIndexBuildCommand(parent: Command) {
         }
         console.log(JSON.stringify(output, null, 2));
       } else {
-        console.log(`Successfully built index at: ${repoRoot}/.orchestrator/index`);
+        console.log(`Successfully updated index at: ${repoRoot}/.orchestrator/index`);
         console.log(`- Took ${durationMs}ms`);
         console.log(`- Indexed ${index.stats.fileCount} files`);
         console.log(`- Hashed ${index.stats.hashedCount} files`);

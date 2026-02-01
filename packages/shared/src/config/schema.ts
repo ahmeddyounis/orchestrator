@@ -1,5 +1,70 @@
 import { z } from 'zod';
 
+export const SemanticIndexingConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    chunking: z
+      .object({
+        strategy: z.literal('tree-sitter').default('tree-sitter'),
+        maxChunkChars: z.number().default(12000),
+        minChunkChars: z.number().default(200),
+        includeKinds: z
+          .array(z.string())
+          .default([
+            'function',
+            'class',
+            'method',
+            'interface',
+            'type',
+            'export',
+            'const',
+          ]),
+      })
+      .default({}),
+    embeddings: z
+      .object({
+        provider: z
+          .enum(['openai', 'anthropic', 'google', 'local-hash'])
+          .default('local-hash'),
+        model: z.string().optional(),
+        dims: z.number().default(384),
+        batchSize: z.number().default(32),
+      })
+      .default({}),
+    storage: z
+      .object({
+        backend: z.literal('sqlite').default('sqlite'),
+        path: z.string().default('.orchestrator/index/semantic.sqlite'),
+      })
+      .default({}),
+    languages: z
+      .object({
+        enabled: z
+          .array(z.string())
+          .default([
+            'typescript',
+            'tsx',
+            'javascript',
+            'python',
+            'go',
+            'rust',
+          ]),
+      })
+      .default({}),
+  })
+  .refine(
+    (data) => {
+      if (data.enabled && data.embeddings.provider !== 'local-hash' && !data.embeddings.model) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "embeddings.model is required when semantic indexing is enabled and provider is not 'local-hash'",
+      path: ['embeddings', 'model'],
+    },
+  );
+
 export const IndexingConfigSchema = z.object({
   enabled: z.boolean().default(false),
   path: z.string().default('.orchestrator/index/index.json'),
@@ -9,6 +74,7 @@ export const IndexingConfigSchema = z.object({
   ignore: z.array(z.string()).optional(),
   autoUpdateOnRun: z.boolean().default(true),
   maxAutoUpdateFiles: z.number().default(5000),
+  semantic: SemanticIndexingConfigSchema.optional(),
 });
 
 export const ProviderConfigSchema = z

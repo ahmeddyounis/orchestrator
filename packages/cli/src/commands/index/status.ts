@@ -8,18 +8,29 @@ export function registerIndexStatusCommand(parent: Command) {
   parent
     .command('status')
     .description('Show repository index status and drift')
-    .action(async (_options, command: Command) => {
+    .option('--semantic', 'Show semantic index status', false)
+    .action(async (options, command: Command) => {
       let program = command.parent;
       while (program?.parent) {
         program = program.parent;
       }
       const globalOpts = program!.opts() as GlobalOptions;
-      const config = await getOrchestratorConfig(globalOpts.config);
+
+      const flags: any = {};
+      if (options.semantic) {
+        flags.indexing = { semantic: { enabled: true } };
+      }
+
+      const config = await getOrchestratorConfig(globalOpts.config, flags);
 
       const status = await getIndexStatus(config);
 
       if (globalOpts.json) {
-        console.log(JSON.stringify(status, null, 2));
+        const output: any = { ...status };
+        if (options.semantic) {
+          output.config = config.indexing?.semantic;
+        }
+        console.log(JSON.stringify(output, null, 2));
         return;
       }
 
