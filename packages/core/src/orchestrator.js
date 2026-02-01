@@ -354,8 +354,8 @@ class Orchestrator {
                 manifestPath: artifacts.manifest,
                 tracePath: artifacts.trace,
                 patchPaths: runResult.patchPaths,
-                contextPaths: undefined, // Not yet implemented
-                toolLogPaths: undefined, // Not yet implemented
+                contextPaths: [], // Not yet implemented
+                toolLogPaths: [], // Not yet implemented
             },
             telemetry: {
                 enabled: this.config.telemetry?.enabled ?? false,

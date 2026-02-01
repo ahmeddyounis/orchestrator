@@ -1,5 +1,5 @@
 import path from 'path';
-import Parser, { Language } from 'tree-sitter';
+import Parser from 'tree-sitter';
 
 export type SupportedLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'rust';
 
@@ -26,7 +26,7 @@ export function getLanguageForFile(filePath: string): SupportedLanguage | null {
     return extToLang[ext] ?? null;
 }
 
-export function getParser(lang: SupportedLanguage): { parser: Parser, language: Language } | null {
+export function getParser(lang: SupportedLanguage): { parser: Parser, language: any } | null {
     try {
         const parser = new Parser();
         const languageModule = langLoaders[lang]();

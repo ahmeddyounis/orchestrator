@@ -20,7 +20,20 @@ export const SemanticIndexingConfigSchema = z
             'const',
           ]),
       })
-      .default({}),
+      .default({
+        strategy: 'tree-sitter',
+        maxChunkChars: 12000,
+        minChunkChars: 200,
+        includeKinds: [
+          'function',
+          'class',
+          'method',
+          'interface',
+          'type',
+          'export',
+          'const',
+        ],
+      }),
     embeddings: z
       .object({
         provider: z
@@ -30,13 +43,20 @@ export const SemanticIndexingConfigSchema = z
         dims: z.number().default(384),
         batchSize: z.number().default(32),
       })
-      .default({}),
+      .default({
+        provider: 'local-hash',
+        dims: 384,
+        batchSize: 32,
+      }),
     storage: z
       .object({
         backend: z.literal('sqlite').default('sqlite'),
         path: z.string().default('.orchestrator/index/semantic.sqlite'),
       })
-      .default({}),
+      .default({
+        backend: 'sqlite',
+        path: '.orchestrator/index/semantic.sqlite',
+      }),
     languages: z
       .object({
         enabled: z
@@ -50,7 +70,16 @@ export const SemanticIndexingConfigSchema = z
             'rust',
           ]),
       })
-      .default({}),
+      .default({
+        enabled: [
+          'typescript',
+          'tsx',
+          'javascript',
+          'python',
+          'go',
+          'rust',
+        ],
+      }),
   })
   .refine(
     (data) => {

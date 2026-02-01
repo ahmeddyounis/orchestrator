@@ -1,4 +1,31 @@
 import { z } from 'zod';
+export declare const SemanticIndexingConfigSchema: z.ZodObject<{
+    enabled: z.ZodDefault<z.ZodBoolean>;
+    chunking: z.ZodDefault<z.ZodObject<{
+        strategy: z.ZodDefault<z.ZodLiteral<"tree-sitter">>;
+        maxChunkChars: z.ZodDefault<z.ZodNumber>;
+        minChunkChars: z.ZodDefault<z.ZodNumber>;
+        includeKinds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>;
+    embeddings: z.ZodDefault<z.ZodObject<{
+        provider: z.ZodDefault<z.ZodEnum<{
+            openai: "openai";
+            anthropic: "anthropic";
+            google: "google";
+            "local-hash": "local-hash";
+        }>>;
+        model: z.ZodOptional<z.ZodString>;
+        dims: z.ZodDefault<z.ZodNumber>;
+        batchSize: z.ZodDefault<z.ZodNumber>;
+    }, z.core.$strip>>;
+    storage: z.ZodDefault<z.ZodObject<{
+        backend: z.ZodDefault<z.ZodLiteral<"sqlite">>;
+        path: z.ZodDefault<z.ZodString>;
+    }, z.core.$strip>>;
+    languages: z.ZodDefault<z.ZodObject<{
+        enabled: z.ZodDefault<z.ZodArray<z.ZodString>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
 export declare const IndexingConfigSchema: z.ZodObject<{
     enabled: z.ZodDefault<z.ZodBoolean>;
     path: z.ZodDefault<z.ZodString>;
@@ -14,6 +41,33 @@ export declare const IndexingConfigSchema: z.ZodObject<{
     ignore: z.ZodOptional<z.ZodArray<z.ZodString>>;
     autoUpdateOnRun: z.ZodDefault<z.ZodBoolean>;
     maxAutoUpdateFiles: z.ZodDefault<z.ZodNumber>;
+    semantic: z.ZodOptional<z.ZodObject<{
+        enabled: z.ZodDefault<z.ZodBoolean>;
+        chunking: z.ZodDefault<z.ZodObject<{
+            strategy: z.ZodDefault<z.ZodLiteral<"tree-sitter">>;
+            maxChunkChars: z.ZodDefault<z.ZodNumber>;
+            minChunkChars: z.ZodDefault<z.ZodNumber>;
+            includeKinds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        }, z.core.$strip>>;
+        embeddings: z.ZodDefault<z.ZodObject<{
+            provider: z.ZodDefault<z.ZodEnum<{
+                openai: "openai";
+                anthropic: "anthropic";
+                google: "google";
+                "local-hash": "local-hash";
+            }>>;
+            model: z.ZodOptional<z.ZodString>;
+            dims: z.ZodDefault<z.ZodNumber>;
+            batchSize: z.ZodDefault<z.ZodNumber>;
+        }, z.core.$strip>>;
+        storage: z.ZodDefault<z.ZodObject<{
+            backend: z.ZodDefault<z.ZodLiteral<"sqlite">>;
+            path: z.ZodDefault<z.ZodString>;
+        }, z.core.$strip>>;
+        languages: z.ZodDefault<z.ZodObject<{
+            enabled: z.ZodDefault<z.ZodArray<z.ZodString>>;
+        }, z.core.$strip>>;
+    }, z.core.$strip>>;
 }, z.core.$strip>;
 export declare const ProviderConfigSchema: z.ZodObject<{
     type: z.ZodString;
@@ -311,6 +365,33 @@ export declare const ConfigSchema: z.ZodObject<{
         ignore: z.ZodOptional<z.ZodArray<z.ZodString>>;
         autoUpdateOnRun: z.ZodDefault<z.ZodBoolean>;
         maxAutoUpdateFiles: z.ZodDefault<z.ZodNumber>;
+        semantic: z.ZodOptional<z.ZodObject<{
+            enabled: z.ZodDefault<z.ZodBoolean>;
+            chunking: z.ZodDefault<z.ZodObject<{
+                strategy: z.ZodDefault<z.ZodLiteral<"tree-sitter">>;
+                maxChunkChars: z.ZodDefault<z.ZodNumber>;
+                minChunkChars: z.ZodDefault<z.ZodNumber>;
+                includeKinds: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            }, z.core.$strip>>;
+            embeddings: z.ZodDefault<z.ZodObject<{
+                provider: z.ZodDefault<z.ZodEnum<{
+                    openai: "openai";
+                    anthropic: "anthropic";
+                    google: "google";
+                    "local-hash": "local-hash";
+                }>>;
+                model: z.ZodOptional<z.ZodString>;
+                dims: z.ZodDefault<z.ZodNumber>;
+                batchSize: z.ZodDefault<z.ZodNumber>;
+            }, z.core.$strip>>;
+            storage: z.ZodDefault<z.ZodObject<{
+                backend: z.ZodDefault<z.ZodLiteral<"sqlite">>;
+                path: z.ZodDefault<z.ZodString>;
+            }, z.core.$strip>>;
+            languages: z.ZodDefault<z.ZodObject<{
+                enabled: z.ZodDefault<z.ZodArray<z.ZodString>>;
+            }, z.core.$strip>>;
+        }, z.core.$strip>>;
     }, z.core.$strip>>;
     telemetry: z.ZodOptional<z.ZodObject<{
         enabled: z.ZodDefault<z.ZodBoolean>;

@@ -448,14 +448,14 @@ export class Orchestrator {
         manifestPath: artifacts.manifest,
         tracePath: artifacts.trace,
         patchPaths: runResult.patchPaths,
-    contextPaths?: string[]; // Not yet implemented
-    toolLogPaths?: string[]; // Not yet implemented
-  };
-  telemetry: {
-    enabled: this.config.telemetry?.enabled ?? false;
-    mode: this.config.telemetry?.mode ?? 'local';
-  };
-};
+        contextPaths: [], // Not yet implemented
+        toolLogPaths: [], // Not yet implemented
+      },
+      telemetry: {
+        enabled: this.config.telemetry?.enabled ?? false,
+        mode: this.config.telemetry?.mode ?? 'local',
+      },
+    };
   }
 
   async runL0(goal: string, runId: string): Promise<RunResult> {

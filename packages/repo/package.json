@@ -14,12 +14,14 @@
   },
   "devDependencies": {
     "@orchestrator/memory": "workspace:*",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^25.1.0",
     "memfs": "^4.56.10",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "@orchestrator/shared": "workspace:*",
+    "better-sqlite3": "^11.1.2",
     "ignore": "^7.0.5",
     "is-binary-path": "^3.0.0",
     "tree-sitter": "^0.21.1",

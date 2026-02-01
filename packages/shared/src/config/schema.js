@@ -1,7 +1,97 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ConfigSchema = exports.TelemetryConfigSchema = exports.MemoryConfigSchema = exports.BudgetSchema = exports.ToolPolicySchema = exports.ProviderConfigSchema = exports.IndexingConfigSchema = void 0;
+exports.ConfigSchema = exports.TelemetryConfigSchema = exports.MemoryConfigSchema = exports.BudgetSchema = exports.ToolPolicySchema = exports.ProviderConfigSchema = exports.IndexingConfigSchema = exports.SemanticIndexingConfigSchema = void 0;
 const zod_1 = require("zod");
+exports.SemanticIndexingConfigSchema = zod_1.z
+    .object({
+    enabled: zod_1.z.boolean().default(false),
+    chunking: zod_1.z
+        .object({
+        strategy: zod_1.z.literal('tree-sitter').default('tree-sitter'),
+        maxChunkChars: zod_1.z.number().default(12000),
+        minChunkChars: zod_1.z.number().default(200),
+        includeKinds: zod_1.z
+            .array(zod_1.z.string())
+            .default([
+            'function',
+            'class',
+            'method',
+            'interface',
+            'type',
+            'export',
+            'const',
+        ]),
+    })
+        .default({
+        strategy: 'tree-sitter',
+        maxChunkChars: 12000,
+        minChunkChars: 200,
+        includeKinds: [
+            'function',
+            'class',
+            'method',
+            'interface',
+            'type',
+            'export',
+            'const',
+        ],
+    }),
+    embeddings: zod_1.z
+        .object({
+        provider: zod_1.z
+            .enum(['openai', 'anthropic', 'google', 'local-hash'])
+            .default('local-hash'),
+        model: zod_1.z.string().optional(),
+        dims: zod_1.z.number().default(384),
+        batchSize: zod_1.z.number().default(32),
+    })
+        .default({
+        provider: 'local-hash',
+        dims: 384,
+        batchSize: 32,
+    }),
+    storage: zod_1.z
+        .object({
+        backend: zod_1.z.literal('sqlite').default('sqlite'),
+        path: zod_1.z.string().default('.orchestrator/index/semantic.sqlite'),
+    })
+        .default({
+        backend: 'sqlite',
+        path: '.orchestrator/index/semantic.sqlite',
+    }),
+    languages: zod_1.z
+        .object({
+        enabled: zod_1.z
+            .array(zod_1.z.string())
+            .default([
+            'typescript',
+            'tsx',
+            'javascript',
+            'python',
+            'go',
+            'rust',
+        ]),
+    })
+        .default({
+        enabled: [
+            'typescript',
+            'tsx',
+            'javascript',
+            'python',
+            'go',
+            'rust',
+        ],
+    }),
+})
+    .refine((data) => {
+    if (data.enabled && data.embeddings.provider !== 'local-hash' && !data.embeddings.model) {
+        return false;
+    }
+    return true;
+}, {
+    message: "embeddings.model is required when semantic indexing is enabled and provider is not 'local-hash'",
+    path: ['embeddings', 'model'],
+});
 exports.IndexingConfigSchema = zod_1.z.object({
     enabled: zod_1.z.boolean().default(false),
     path: zod_1.z.string().default('.orchestrator/index/index.json'),
@@ -11,6 +101,7 @@ exports.IndexingConfigSchema = zod_1.z.object({
     ignore: zod_1.z.array(zod_1.z.string()).optional(),
     autoUpdateOnRun: zod_1.z.boolean().default(true),
     maxAutoUpdateFiles: zod_1.z.number().default(5000),
+    semantic: exports.SemanticIndexingConfigSchema.optional(),
 });
 exports.ProviderConfigSchema = zod_1.z
     .object({
