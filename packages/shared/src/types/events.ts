@@ -392,6 +392,23 @@ export interface IndexAutoUpdateFinished extends BaseEvent {
   };
 }
 
+// M17-02: Candidate generation event
+export interface CandidateGenerated extends BaseEvent {
+  type: 'CandidateGenerated';
+  payload: {
+    iteration: number;
+    candidateIndex: number;
+    valid: boolean;
+    providerId: string;
+    durationMs: number;
+    patchStats?: {
+      filesChanged: number;
+      linesAdded: number;
+      linesDeleted: number;
+    };
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -437,6 +454,7 @@ export type OrchestratorEvent =
   | IterationStarted
   | IterationFinished
   | RepairAttempted
+  | CandidateGenerated
   | SemanticSearchFinishedEvent
   | SemanticSearchFailedEvent;
 

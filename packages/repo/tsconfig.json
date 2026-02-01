@@ -5,7 +5,7 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/__fixtures__"],
+  "exclude": ["node_modules", "dist", "src/__fixtures__", "**/*.test.ts"],
   "references": [
     { "path": "../shared" },
     { "path": "../adapters" },

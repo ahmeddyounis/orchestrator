@@ -52,6 +52,8 @@ import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
 import { ConfigLoader } from './config/loader';
 import { SimpleContextFuser } from './context';
+import { CandidateGenerator, StepContext } from './orchestrator/l3/candidate_generator';
+
 
 export interface OrchestratorOptions {
   config: Config;
@@ -2019,12 +2021,10 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
   async runL3(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
-    const l3Config = this.config.l3 ?? { bestOfN: 3 };
-    const bestOfN = l3Config.bestOfN ?? 3;
-
     const artifacts = await createRunDir(this.repoRoot, runId);
     ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
     const logger = new JsonlLogger(artifacts.trace);
+
     const eventBus: EventBus = {
       emit: async (e) => await logger.log(e),
     };
@@ -2034,86 +2034,405 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       schemaVersion: 1,
       timestamp: new Date().toISOString(),
       runId,
-      payload: { taskId: runId, goal, thinkLevel: 'L3' },
+      payload: { taskId: runId, goal },
     });
 
-    const promises: Promise<RunResult>[] = [];
-    for (let i = 0; i < bestOfN; i++) {
-      const branchRunId = `${runId}-l3-${i}`;
-      promises.push(this.runL1(goal, branchRunId));
+    // Initialize manifest
+    await writeManifest(artifacts.manifest, {
+      runId,
+      startedAt: new Date().toISOString(),
+      command: `run ${goal}`,
+      repoRoot: this.repoRoot,
+      artifactsDir: artifacts.root,
+      tracePath: artifacts.trace,
+      summaryPath: artifacts.summary,
+      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+      patchPaths: [],
+      contextPaths: [],
+      toolLogPaths: [],
+    });
+
+    const plannerId = this.config.defaults?.planner || 'openai';
+    const executorId = this.config.defaults?.executor || 'openai';
+    const reviewerId = this.config.defaults?.reviewer || 'openai';
+
+    const providers = await this.registry.resolveRoleProviders(
+      { plannerId, executorId, reviewerId },
+      { eventBus, runId },
+    );
+
+    const planService = new PlanService(eventBus);
+
+    const context = {
+      runId,
+      config: this.config,
+      logger,
+    };
+
+    const steps = await planService.generatePlan(
+      goal,
+      { planner: providers.planner },
+      context,
+      artifacts.root,
+      this.repoRoot,
+      this.config,
+    );
+
+    if (steps.length === 0) {
+      const msg = 'Planning failed to produce any steps.';
+      await eventBus.emit({
+        type: 'RunFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { status: 'failure', summary: msg },
+      });
+
+      const runResult: RunResult = {
+        status: 'failure',
+        runId,
+        summary: msg,
+        memory: this.config.memory,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
+      };
+
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'failure',
+        { thinkLevel: 'L3' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
+
+      await this.writeEpisodicMemory(
+        summary,
+        {
+          artifactsRoot: artifacts.root,
+        },
+        eventBus,
+      );
+
+      return runResult;
     }
 
-    const results = await Promise.allSettled(promises);
-    const successfulResults = results
-      .filter((r) => r.status === 'fulfilled' && r.value.status === 'success')
-      .map((r) => (r as PromiseFulfilledResult<RunResult>).value);
+    const executionService = new ExecutionService(
+      eventBus,
+      this.git,
+      new PatchApplier(),
+      runId,
+      this.repoRoot,
+      this.config,
+    );
 
-    if (successfulResults.length > 0) {
-      // For now, just pick the first success. Later, a judge can be used.
-      const bestResult = successfulResults[0];
+    const budget = { ...DEFAULT_BUDGET, ...this.config.budget };
 
-      // TODO: Merge the changes from the successful branch back to the main run branch.
-      // For now, we'll just return the result.
+    let stepsCompleted = 0;
+    const patchPaths: string[] = [];
+    const contextPaths: string[] = [];
+    const touchedFiles = new Set<string>();
+
+    let consecutiveInvalidDiffs = 0;
+    let consecutiveApplyFailures = 0;
+    let lastApplyErrorHash = '';
+
+    const finish = async (
+      status: 'success' | 'failure',
+      stopReason: RunResult['stopReason'] | undefined,
+      summaryMsg: string,
+    ): Promise<RunResult> => {
+      if (stopReason) {
+        await eventBus.emit({
+          type: 'RunStopped',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { reason: stopReason, details: summaryMsg },
+        });
+      }
 
       await eventBus.emit({
         type: 'RunFinished',
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
-        payload: { status: 'success', summary: `L3 success (best of ${bestOfN})` },
+        payload: { status, summary: summaryMsg },
       });
+
+      await writeManifest(artifacts.manifest, {
+        runId,
+        startedAt: new Date().toISOString(),
+        command: `run ${goal}`,
+        repoRoot: this.repoRoot,
+        artifactsDir: artifacts.root,
+        tracePath: artifacts.trace,
+        summaryPath: artifacts.summary,
+        effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
+        patchPaths,
+        contextPaths,
+        toolLogPaths: [],
+      });
+
+      const runResult: RunResult = {
+        status,
+        runId,
+        summary: summaryMsg,
+        filesChanged: Array.from(touchedFiles),
+        patchPaths,
+        stopReason,
+        memory: this.config.memory,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
+      };
 
       const summary = await this._buildRunSummary(
         runId,
         goal,
         startTime,
-        'success',
+        status,
         { thinkLevel: 'L3' },
-        bestResult,
+        runResult,
         artifacts,
       );
       await SummaryWriter.write(summary, artifacts.root);
-      await this.writeEpisodicMemory(summary, { artifactsRoot: artifacts.root }, eventBus);
 
-      return {
-        ...bestResult,
-        runId, // Return the main runId
-        summary: `L3 success from branch ${bestResult.runId}`,
-      };
-    }
+      await this.writeEpisodicMemory(
+        summary,
+        {
+          artifactsRoot: artifacts.root,
+          patchPaths,
+          extraArtifactPaths: contextPaths,
+        },
+        eventBus,
+      );
 
-    const failureSummary = `L3 failed: No successful outcomes from ${bestOfN} attempts.`;
-    await eventBus.emit({
-      type: 'RunFinished',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { status: 'failure', summary: failureSummary },
-    });
-
-    const firstFailure = results.find((r) => r.status === 'fulfilled') as
-      | PromiseFulfilledResult<RunResult>
-      | undefined;
-
-    const runResult: RunResult = {
-      status: 'failure',
-      runId,
-      summary: failureSummary,
-      stopReason: firstFailure?.value.stopReason ?? 'error',
+      return runResult;
     };
 
-    const summary = await this._buildRunSummary(
-      runId,
-      goal,
-      startTime,
-      'failure',
-      { thinkLevel: 'L3' },
-      runResult,
-      artifacts,
-    );
-    await SummaryWriter.write(summary, artifacts.root);
-    await this.writeEpisodicMemory(summary, { artifactsRoot: artifacts.root }, eventBus);
+    for (const step of steps) {
+      const elapsed = Date.now() - startTime;
+      if (budget.time !== undefined && elapsed > budget.time) {
+        return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`);
+      }
+      if (budget.iter !== undefined && stepsCompleted >= budget.iter) {
+        return finish('failure', 'budget_exceeded', `Iteration budget exceeded (${budget.iter})`);
+      }
+      if (budget.cost !== undefined && this.costTracker) {
+        const summary = this.costTracker.getSummary();
+        if (summary.total.estimatedCostUsd && summary.total.estimatedCostUsd > budget.cost) {
+          return finish('failure', 'budget_exceeded', `Cost budget exceeded ($${budget.cost})`);
+        }
+      }
 
-    return runResult;
+      await eventBus.emit({
+        type: 'StepStarted',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { step, index: stepsCompleted, total: steps.length },
+      });
+
+      let contextPack;
+      try {
+        const scanner = new RepoScanner();
+        const snapshot = await scanner.scan(this.repoRoot, {
+          excludes: this.config.context?.exclude,
+        });
+
+        const searchService = new SearchService(this.config.context?.rgPath);
+        const searchResults = await searchService.search({
+          query: step,
+          cwd: this.repoRoot,
+          maxMatchesPerFile: 5,
+        });
+
+        const lexicalMatches = searchResults.matches;
+        let semanticHits: { path: string; startLine: number; content: string }[] = [];
+
+        // ... (semantic search logic from L1)
+
+        const allMatches = [
+          ...lexicalMatches,
+          ...semanticHits.map((h) => ({
+            path: h.path,
+            line: h.startLine,
+            column: 0,
+            matchText: 'SEMANTIC_MATCH',
+            lineText: '',
+            score: (h as any).score || 0.5,
+          })),
+        ];
+
+        for (const touched of touchedFiles) {
+          allMatches.push({
+            path: touched,
+            line: 1,
+            column: 1,
+            matchText: 'PREVIOUSLY_TOUCHED',
+            lineText: '',
+            score: 1000,
+          });
+        }
+
+        const extractor = new SnippetExtractor();
+        const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
+
+        const packer = new SimpleContextPacker();
+        contextPack = packer.pack(step, [], candidates, {
+          tokenBudget: this.config.context?.tokenBudget || 8000,
+        });
+      } catch {
+        // Ignore context errors
+      }
+
+      const memoryHits = await this.searchMemoryHits(
+        {
+          query: `${goal} ${step}`,
+          runId,
+          stepId: stepsCompleted,
+          artifactsRoot: artifacts.root,
+          intent: 'implementation',
+        },
+        eventBus,
+      );
+
+      const fuser = new SimpleContextFuser();
+      const fusedContext = fuser.fuse({
+        goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+        repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+        memoryHits,
+        signals: [],
+        budgets: {
+          maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
+          maxMemoryChars: this.config.memory?.maxChars ?? 2000,
+          maxSignalsChars: 1000,
+        },
+      });
+
+      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
+      const fusedJsonPath = path.join(
+        artifacts.root,
+        `fused_context_step_${stepsCompleted}_${stepSlug}.json`,
+      );
+      const fusedTxtPath = path.join(
+        artifacts.root,
+        `fused_context_step_${stepsCompleted}_${stepSlug}.txt`,
+      );
+
+      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
+      await fs.writeFile(fusedTxtPath, fusedContext.prompt);
+      contextPaths.push(fusedJsonPath, fusedTxtPath);
+
+      // --- L3 Candidate Generation ---
+      const candidateGenerator = new CandidateGenerator();
+      const bestOfN = this.config.l3?.bestOfN ?? 3;
+      const stepContext: StepContext = {
+        runId,
+        goal,
+        step,
+        stepIndex: stepsCompleted,
+        fusedContext,
+        eventBus,
+        costTracker: this.costTracker!,
+        executor: providers.executor,
+        artifactsRoot: artifacts.root,
+        budget: budget,
+        logger,
+      };
+
+      const candidates = await candidateGenerator.generateCandidates(stepContext, bestOfN);
+      const validCandidates = candidates.filter((c) => c.valid && c.patch);
+
+      // TODO: Implement a more sophisticated candidate selection strategy (e.g., reviewer/judge)
+      const bestCandidate = validCandidates[0];
+
+      let success = false;
+      let lastError = '';
+
+      if (bestCandidate && bestCandidate.patch) {
+        consecutiveInvalidDiffs = 0;
+        const diffContent = bestCandidate.patch;
+
+        const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+        const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
+        patchPaths.push(patchPath);
+
+        const result = await executionService.applyPatch(diffContent, step);
+
+        if (result.success) {
+          success = true;
+          if (result.filesChanged) {
+            result.filesChanged.forEach((f) => touchedFiles.add(f));
+          }
+          consecutiveApplyFailures = 0;
+          lastApplyErrorHash = '';
+        } else {
+          lastError = result.error || 'Unknown apply error';
+          const errorHash = createHash('sha256').update(lastError).digest('hex');
+          if (lastApplyErrorHash === errorHash) {
+            consecutiveApplyFailures++;
+          } else {
+            consecutiveApplyFailures = 1;
+            lastApplyErrorHash = errorHash;
+          }
+
+          if (consecutiveApplyFailures >= 2) {
+            return finish(
+              'failure',
+              'repeated_failure',
+              `Repeated patch apply failure: ${lastError}`,
+            );
+          }
+        }
+      } else {
+        lastError = 'No valid patch generated from candidates';
+        consecutiveInvalidDiffs++;
+        if (consecutiveInvalidDiffs >= 2) {
+          return finish(
+            'failure',
+            'invalid_output',
+            'Executor produced no valid patches twice consecutively',
+          );
+        }
+      }
+
+      if (success) {
+        stepsCompleted++;
+        await eventBus.emit({
+          type: 'StepFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { step, success: true },
+        });
+      } else {
+        await eventBus.emit({
+          type: 'StepFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { step, success: false, error: lastError },
+        });
+
+        return finish(
+          'failure',
+          'repeated_failure',
+          `Step failed: ${step}. Error: ${lastError}`,
+        );
+      }
+    }
+
+    return finish('success', undefined, `L3 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
+}
+
 }
