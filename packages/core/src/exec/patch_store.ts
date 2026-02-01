@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Manifest, writeManifest } from '@orchestrator/shared';
+import { Manifest, writeManifest, PatchOpError } from '@orchestrator/shared';
 
 export class PatchStore {
   constructor(
@@ -42,7 +42,7 @@ export class PatchStore {
     } catch (err) {
       // If manifest doesn't exist or is invalid, we should probably fail
       // as it violates the integrity of the run artifacts.
-      throw new Error(
+      throw new PatchOpError(
         `Failed to update manifest at ${this.manifestPath}: ${(err as Error).message}`,
       );
     }

@@ -3,6 +3,7 @@ export * from './types/events';
 export * from './logger/jsonlLogger';
 export * from './logger';
 export * from './redaction';
+export * from './errors';
 export * from './fs/artifacts';
 export { ManifestManager, MANIFEST_FILENAME, MANIFEST_VERSION } from './artifacts';
 export * from './config/schema';

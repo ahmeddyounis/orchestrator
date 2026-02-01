@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { ToolError, UsageError } from '@orchestrator/shared';
 
 export interface GitServiceOptions {
   repoRoot: string;
@@ -30,14 +31,15 @@ export class GitService {
           resolve(stdout.trim());
         } else {
           reject(
-            new Error(`Git command failed: git ${args.join(' ')}
-${stderr}`),
+            new ToolError(`Git command failed: git ${args.join(' ')}`, {
+              details: stderr,
+            }),
           );
         }
       });
 
       process.on('error', (err) => {
-        reject(new Error(`Failed to start git process: ${err.message}`));
+        reject(new ToolError(`Failed to start git process: ${err.message}`));
       });
     });
   }
@@ -49,8 +51,9 @@ ${stderr}`),
   async ensureCleanWorkingTree(options: { allowDirty?: boolean } = {}): Promise<void> {
     const status = await this.getStatusPorcelain();
     if (status && !options.allowDirty) {
-      throw new Error(
-        `Working tree is dirty. Please commit or stash your changes.\n\n${status}\n\nSet 'execution.allowDirtyWorkingTree: true' to bypass this check.`,
+      throw new UsageError(
+        `Working tree is dirty. Please commit or stash your changes. Set 'execution.allowDirtyWorkingTree: true' to bypass this check.`,
+        { details: status },
       );
     }
   }

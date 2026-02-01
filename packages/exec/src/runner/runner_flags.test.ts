@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { SafeCommandRunner, UserInterface, RunnerContext } from './runner';
-import { ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
+import { ToolRunRequest, ToolPolicy, UsageError } from '@orchestrator/shared';
 import { ConfirmationDeniedError } from './errors';
 
 describe('SafeCommandRunner Flags', () => {
@@ -53,11 +53,11 @@ describe('SafeCommandRunner Flags', () => {
     expect(mockUi.confirm).not.toHaveBeenCalled();
   });
 
-  test('should throw ConfirmationDeniedError in non-interactive mode when confirmation is needed', async () => {
+  test('should throw UsageError in non-interactive mode when confirmation is needed', async () => {
     const policy = { ...defaultPolicy, requireConfirmation: true, interactive: false };
     const req: ToolRunRequest = { command: 'echo hello', reason: 'test', cwd: '/tmp' }; // Not allowlisted
 
-    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(ConfirmationDeniedError);
+    await expect(runner.run(req, policy, mockUi, ctx)).rejects.toThrow(UsageError);
     expect(mockUi.confirm).not.toHaveBeenCalled();
   });
 

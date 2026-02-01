@@ -1,4 +1,4 @@
-import { ModelRequest, Config } from '@orchestrator/shared';
+import { ModelRequest, Config, ProviderError } from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
   RepoScanner,
@@ -193,7 +193,7 @@ Each step should be a concise instruction.`;
     const response = await providers.planner.generate(request, ctx);
 
     if (!response.text) {
-      throw new Error('Planner provider returned empty response');
+      throw new ProviderError('Planner provider returned empty response');
     }
 
     const rawText = response.text;

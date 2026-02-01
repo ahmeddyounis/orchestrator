@@ -4,6 +4,7 @@ export * from './types/events';
 export * from './logger/jsonlLogger';
 export * from './logger';
 export * from './redaction';
+export * from './errors';
 export * from './fs/artifacts';
 // NOTE: ./artifacts exports a different Manifest type; avoid re-export conflict.
 export { ManifestManager, MANIFEST_FILENAME, MANIFEST_VERSION } from './artifacts';

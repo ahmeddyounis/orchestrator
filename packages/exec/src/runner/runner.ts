@@ -2,8 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { ToolRunRequest, ToolPolicy, ToolRunResult } from '@orchestrator/shared';
-import { PolicyDeniedError, ConfirmationDeniedError, TimeoutError, ProcessError } from './errors';
+import { ToolRunRequest, ToolPolicy, ToolRunResult, ToolError, UsageError } from '@orchestrator/shared';
 import { parseCommand } from '../classify/parser';
 
 export interface RunnerContext {
@@ -72,14 +71,14 @@ export class SafeCommandRunner {
   ): Promise<ToolRunResult> {
     const policyResult = this.checkPolicy(req, policy);
     if (!policyResult.isAllowed) {
-      throw new PolicyDeniedError(policyResult.reason || 'Command denied by policy');
+      throw new UsageError(policyResult.reason || 'Command denied by policy');
     }
 
     if (policyResult.needsConfirmation) {
       // Check for non-interactive mode
       // Corresponds to --non-interactive flag
       if (policy.interactive === false) {
-        throw new ConfirmationDeniedError(
+        throw new UsageError(
           `Command execution denied in non-interactive mode: ${req.command}`,
         );
       }
@@ -89,7 +88,7 @@ export class SafeCommandRunner {
         `Reason: ${req.reason}\nCWD: ${req.cwd || ctx.cwd || process.cwd()}`,
       );
       if (!confirmed) {
-        throw new ConfirmationDeniedError(`User denied execution of: ${req.command}`);
+        throw new UsageError(`User denied execution of: ${req.command}`);
       }
     }
 
@@ -117,7 +116,7 @@ export class SafeCommandRunner {
   ): Promise<ToolRunResult> {
     const parsed = parseCommand(req.command);
     if (!parsed.bin) {
-      throw new Error(`Could not parse command: ${req.command}`);
+      throw new ToolError(`Could not parse command: ${req.command}`);
     }
 
     const stdoutStream = fs.createWriteStream(stdoutPath);
@@ -154,10 +153,9 @@ export class SafeCommandRunner {
         const partialStderr = fs.readFileSync(stderrPath, 'utf8').slice(0, 1000);
 
         reject(
-          new TimeoutError(
+          new ToolError(
             `Command timed out after ${policy.timeoutMs}ms`,
-            partialStdout,
-            partialStderr,
+            { details: { partialStdout, partialStderr } },
           ),
         );
       }, policy.timeoutMs);
@@ -219,7 +217,7 @@ export class SafeCommandRunner {
         clearTimeout(timeoutTimer);
         stdoutStream.end();
         stderrStream.end();
-        reject(new ProcessError(`Failed to start process: ${err.message}`, null, '', ''));
+        reject(new ToolError(`Failed to start process: ${err.message}`));
       });
 
       child.on('close', (code) => {

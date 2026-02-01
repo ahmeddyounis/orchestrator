@@ -1,3 +1,5 @@
+import { UsageError } from '@orchestrator/shared';
+
 /**
  * Defines the interface for interacting with the user,
  * for prompts and confirmations.
@@ -13,10 +15,10 @@ export interface UserInterface {
  */
 export class NoopUserInterface implements UserInterface {
   async prompt(message: string): Promise<string> {
-    throw new Error('Cannot prompt in non-interactive mode.');
+    throw new UsageError('Cannot prompt in non-interactive mode.');
   }
 
   async confirm(): Promise<boolean> {
-    throw new Error('Cannot confirm in non-interactive mode.');
+    throw new UsageError('Cannot confirm in non-interactive mode.');
   }
 }

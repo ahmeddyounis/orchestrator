@@ -1,4 +1,4 @@
-import { Config, ProviderConfig, OrchestratorEvent } from '@orchestrator/shared';
+import { Config, ProviderConfig, OrchestratorEvent, ConfigError } from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
 import { CostTracker } from './cost/tracker';
 import { CostTrackingAdapter } from './cost/proxy';
@@ -7,16 +7,6 @@ export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
 
 export interface EventBus {
   emit(event: OrchestratorEvent): Promise<void> | void;
-}
-
-export class RegistryError extends Error {
-  constructor(
-    message: string,
-    public exitCode?: number,
-  ) {
-    super(message);
-    this.name = 'RegistryError';
-  }
 }
 
 export class ProviderRegistry {
@@ -41,23 +31,21 @@ export class ProviderRegistry {
     // Look up provider config
     const providerConfig = this.config.providers?.[providerId];
     if (!providerConfig) {
-      throw new Error(`Provider '${providerId}' not found in configuration.`);
+      throw new ConfigError(`Provider '${providerId}' not found in configuration.`);
     }
 
     // Look up factory
     const factory = this.factories.get(providerConfig.type);
     if (!factory) {
-      throw new RegistryError(
+      throw new ConfigError(
         `Unknown provider type '${providerConfig.type}' for provider '${providerId}'`,
-        2,
       );
     }
 
     // Validate env vars
     if (providerConfig.api_key_env && !providerConfig.api_key) {
-      throw new RegistryError(
+      throw new ConfigError(
         `Missing environment variable '${providerConfig.api_key_env}' for provider '${providerId}'`,
-        2,
       );
     }
 

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import yaml from 'js-yaml';
-import { Config, ConfigSchema, OrchestratorConfig } from '@orchestrator/shared';
+import { Config, ConfigSchema, OrchestratorConfig, ConfigError } from '@orchestrator/shared';
 import os from 'os';
 import { DEFAULT_BUDGET } from './budget';
 import { findRepoRoot } from '@orchestrator/repo';
@@ -55,7 +55,7 @@ export class ConfigLoader {
       return parsed as Partial<Config>;
     } catch (error: unknown) {
       if (error instanceof yaml.YAMLException) {
-        throw new Error(`Error parsing YAML file: ${filePath}\n${error.message}`);
+        throw new ConfigError(`Error parsing YAML file: ${filePath}\n${error.message}`);
       }
       throw error;
     }
@@ -150,7 +150,7 @@ export class ConfigLoader {
     let explicitConfig: Partial<Config> = {};
     if (options.configPath) {
       if (!fs.existsSync(options.configPath)) {
-        throw new Error(`Config file not found: ${options.configPath}`);
+        throw new ConfigError(`Config file not found: ${options.configPath}`);
       }
       explicitConfig = this.loadYaml(options.configPath);
     }
@@ -187,7 +187,7 @@ export class ConfigLoader {
       const issues = result.error.issues
         .map((i) => `- ${i.path.join('.')}: ${i.message}`)
         .join('\n');
-      throw new Error(`Configuration validation failed:\n${issues}`);
+      throw new ConfigError(`Configuration validation failed:\n${issues}`);
     }
 
     const finalConfig = result.data;

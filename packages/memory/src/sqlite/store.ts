@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
 import { rerank, RerankOptions } from '../ranking';
+import { MemoryError } from '@orchestrator/shared';
 import type { MemoryEntry, MemoryEntryType, MemoryStatus } from '../types';
 
 export interface MemoryStore {
@@ -51,7 +52,7 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const upsert = (entry: MemoryEntry): void => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
 
     const now = Date.now();
     const stmt = db.prepare(
@@ -100,7 +101,7 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const get = (id: string): MemoryEntry | null => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
 
     const stmt = db.prepare('SELECT * FROM memory_entries WHERE id = ?');
     const row = stmt.get(id) as MemoryEntryDbRow | undefined;
@@ -109,7 +110,7 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const list = (repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[] => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
     let query = 'SELECT * FROM memory_entries WHERE repoId = ?';
     const params: (string | number)[] = [repoId];
 
@@ -131,7 +132,7 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const listEntriesForRepo = (repoId: string): MemoryEntry[] => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
     const query = 'SELECT * FROM memory_entries WHERE repoId = ?';
     const stmt = db.prepare(query);
     const rows = stmt.all(repoId) as unknown as MemoryEntryDbRow[];
@@ -139,14 +140,14 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const updateStaleFlag = (id: string, stale: boolean): void => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
     const now = Date.now();
     const stmt = db.prepare('UPDATE memory_entries SET stale = ?, updatedAt = ? WHERE id = ?');
     stmt.run(stale ? 1 : 0, now, id);
   };
 
   const status = (repoId: string): MemoryStatus => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
 
     const countsStmt = db.prepare(
       'SELECT type, COUNT(*) as count FROM memory_entries WHERE repoId = ? GROUP BY type',
@@ -192,7 +193,7 @@ export function createMemoryStore(): MemoryStore {
     query: string,
     options: RerankOptions & { topK?: number },
   ): MemoryEntry[] => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
 
     const topK = options.topK ?? 10;
     const stmt = db.prepare(
@@ -216,7 +217,7 @@ export function createMemoryStore(): MemoryStore {
   };
 
   const wipe = (repoId: string): void => {
-    if (!db) throw new Error('Database not initialized');
+    if (!db) throw new MemoryError('Database not initialized');
     const stmt = db.prepare('DELETE FROM memory_entries WHERE repoId = ?');
     stmt.run(repoId);
   };

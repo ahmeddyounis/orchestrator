@@ -11,6 +11,9 @@ import {
   type EvalComparison,
   type CriterionResult,
   type Config,
+  ConfigError,
+  UsageError,
+  VerificationError,
 } from '@orchestrator/shared';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
 import {
@@ -71,7 +74,7 @@ export class EvalRunner {
     if (options.baseline) {
       const baselineConfig = this.baselines[options.baseline];
       if (!baselineConfig) {
-        throw new Error(`Baseline '${options.baseline}' not found.`);
+        throw new UsageError(`Baseline '${options.baseline}' not found.`);
       }
 
       const baselineTaskResults: EvalTaskResult[] = [];
@@ -176,7 +179,7 @@ export class EvalRunner {
     const suiteContent = await fs.readJson(suitePath);
     const validationResult = validateEvalSuite(suiteContent);
     if (!validationResult.success) {
-      throw new Error(`Invalid eval suite: ${validationResult.error.message}`);
+      throw new ConfigError(`Invalid eval suite: ${validationResult.error.message}`);
     }
     return validationResult.data as EvalSuite;
   }
@@ -349,7 +352,7 @@ export class EvalRunner {
     const thinkLevel = task.thinkLevel === 'auto' ? 'L1' : task.thinkLevel || 'L1';
 
     if (task.command !== 'run') {
-      throw new Error(`Eval task command '${task.command}' not yet supported.`);
+      throw new UsageError(`Eval task command '${task.command}' not yet supported.`);
     }
 
     const result = await orchestrator.run(task.goal, { thinkLevel });
@@ -363,7 +366,7 @@ export class EvalRunner {
   private async loadRunSummary(runDir: string): Promise<RunSummary> {
     const summaryPath = path.join(runDir, 'summary.json');
     if (!(await fs.pathExists(summaryPath))) {
-      throw new Error(`summary.json not found in ${runDir}`);
+      throw new VerificationError(`summary.json not found in ${runDir}`);
     }
     return fs.readJson(summaryPath);
   }

@@ -20,6 +20,7 @@ __exportStar(require("./types/events"), exports);
 __exportStar(require("./logger/jsonlLogger"), exports);
 __exportStar(require("./logger"), exports);
 __exportStar(require("./redaction"), exports);
+__exportStar(require("./errors"), exports);
 __exportStar(require("./fs/artifacts"), exports);
 // NOTE: ./artifacts exports a different Manifest type; avoid re-export conflict.
 var artifacts_1 = require("./artifacts");

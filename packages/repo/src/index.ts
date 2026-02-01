@@ -1,5 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { ConfigError } from '@orchestrator/shared';
 
 export * from './scanner/index';
 export * from './scanner/types';
@@ -39,7 +40,7 @@ export async function findRepoRoot(cwd: string = process.cwd()): Promise<string>
     currentDir = path.dirname(currentDir);
   }
 
-  throw new Error(
+  throw new ConfigError(
     `Could not detect repository root from ${cwd}. Ensure you are inside a git repository or a monorepo root.`,
   );
 }
@@ -82,7 +83,7 @@ async function validateRepoRoot(dir: string): Promise<void> {
     await fs.mkdir(orchestratorDir, { recursive: true });
     await fs.access(orchestratorDir, fs.constants.W_OK);
   } catch (error) {
-    throw new Error(
+    throw new ConfigError(
       `Repository root detected at ${dir}, but cannot write to .orchestrator directory: ${(error as Error).message}`,
     );
   }

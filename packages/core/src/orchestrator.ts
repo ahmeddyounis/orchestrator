@@ -8,6 +8,7 @@ import {
   RetrievalIntent,
   RunSummary,
   SummaryWriter,
+  ConfigError,
 } from '@orchestrator/shared';
 import {
   ContextSignal,
@@ -543,7 +544,7 @@ ${searchResults || '(No matches)'}
     const executor = this.registry.getAdapter(this.config.defaults?.executor || 'openai');
 
     if (!executor) {
-      throw new Error('No executor provider configured');
+      throw new ConfigError('No executor provider configured');
     }
 
     const systemPrompt = `

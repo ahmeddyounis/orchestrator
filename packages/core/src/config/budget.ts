@@ -1,4 +1,4 @@
-import { Config } from '@orchestrator/shared';
+import { Config, ConfigError } from '@orchestrator/shared';
 
 type Budget = NonNullable<Config['budget']>;
 
@@ -9,7 +9,7 @@ export function parseBudget(input: string): Budget {
   for (const part of parts) {
     const [key, valStr] = part.split('=');
     if (!key || !valStr) {
-      throw new Error(`Invalid budget format: ${part}. Expected key=value.`);
+      throw new ConfigError(`Invalid budget format: ${part}. Expected key=value.`);
     }
 
     const cleanKey = key.trim();
@@ -19,18 +19,18 @@ export function parseBudget(input: string): Budget {
       budget.time = parseDuration(cleanVal);
     } else if (cleanKey === 'cost') {
       const val = parseFloat(cleanVal);
-      if (isNaN(val)) throw new Error(`Invalid cost value: ${cleanVal}`);
+      if (isNaN(val)) throw new ConfigError(`Invalid cost value: ${cleanVal}`);
       budget.cost = val;
     } else if (cleanKey === 'iter') {
       const val = parseInt(cleanVal, 10);
-      if (isNaN(val)) throw new Error(`Invalid iter value: ${cleanVal}`);
+      if (isNaN(val)) throw new ConfigError(`Invalid iter value: ${cleanVal}`);
       budget.iter = val;
     } else if (cleanKey === 'tool') {
       const val = parseInt(cleanVal, 10);
-      if (isNaN(val)) throw new Error(`Invalid tool value: ${cleanVal}`);
+      if (isNaN(val)) throw new ConfigError(`Invalid tool value: ${cleanVal}`);
       budget.tool = val;
     } else {
-      throw new Error(`Unknown budget key: ${cleanKey}`);
+      throw new ConfigError(`Unknown budget key: ${cleanKey}`);
     }
   }
   return budget;
@@ -39,7 +39,7 @@ export function parseBudget(input: string): Budget {
 function parseDuration(input: string): number {
   const match = input.match(/^(\d+)(ms|s|m|h)?$/);
   if (!match) {
-    throw new Error(
+    throw new ConfigError(
       `Invalid duration format: ${input}. Expected number with optional unit (ms, s, m, h).`,
     );
   }

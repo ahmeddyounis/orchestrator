@@ -6,6 +6,7 @@ import {
   SubprocessSpawned,
   SubprocessOutputChunked,
   SubprocessExited,
+  ProviderError,
 } from '@orchestrator/shared';
 
 export interface ProcessManagerOptions {
@@ -54,7 +55,7 @@ export class ProcessManager extends EventEmitter {
     inheritEnv: boolean = true,
   ): Promise<void> {
     if (this.ptyProcess || this.childProcess) {
-      throw new Error('Process already running');
+      throw new ProviderError('Process already running');
     }
 
     this.isPty = usePty;
@@ -152,7 +153,7 @@ export class ProcessManager extends EventEmitter {
     } else if (this.childProcess && this.childProcess.stdin) {
       this.childProcess.stdin.write(input);
     } else {
-      throw new Error('Process not running');
+      throw new ProviderError('Process not running');
     }
   }
 
@@ -186,7 +187,7 @@ export class ProcessManager extends EventEmitter {
 
       const onExit = () => {
         cleanup();
-        reject(new Error('Process exited while waiting'));
+        reject(new ProviderError('Process exited while waiting'));
       };
 
       this.on('output', check);
@@ -194,7 +195,7 @@ export class ProcessManager extends EventEmitter {
 
       timer = setTimeout(() => {
         cleanup();
-        reject(new Error(`readUntil timed out after ${timeoutMs}ms`));
+        reject(new ProviderError(`readUntil timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     });
   }
@@ -248,7 +249,7 @@ export class ProcessManager extends EventEmitter {
 
       totalTimeoutTimer = setTimeout(() => {
         cleanup();
-        reject(new Error(`readUntilHeuristic timed out after ${timeoutMs}ms`));
+        reject(new ProviderError(`readUntilHeuristic timed out after ${timeoutMs}ms`));
       }, timeoutMs);
     });
   }
@@ -318,7 +319,10 @@ export class ProcessManager extends EventEmitter {
   private handleOutput(chunk: string, stream: 'stdout' | 'stderr') {
     if (this.options.maxOutputSize && this.outputSize + chunk.length > this.options.maxOutputSize) {
       this.kill('SIGKILL');
-      this.emit('error', new Error(`Max output size ${this.options.maxOutputSize} exceeded`));
+      this.emit(
+        'error',
+        new ProviderError(`Max output size ${this.options.maxOutputSize} exceeded`),
+      );
       return;
     }
 
