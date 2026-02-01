@@ -1,11 +1,16 @@
 import { Command } from 'commander';
-import { IndexBuilder, findRepoRoot } from '@orchestrator/repo';
-import { ConfigLoader, reconcileMemoryStaleness } from '@orchestrator/core';
+import { IndexBuilder, findRepoRoot, SemanticIndexBuilder } from '@orchestrator/repo';
+import { ConfigLoader, reconcileMemoryStaleness, emitter } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
-import { OrchestratorEvent } from '@orchestrator/shared';
+import {
+  OrchestratorEvent,
+  SemanticIndexBuildFinishedEvent,
+  SemanticIndexingConfig,
+} from '@orchestrator/shared';
 import { GlobalOptions } from '../../types';
 import { statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createEmbedder } from '@orchestrator/adapters';
 
 export function registerIndexBuildCommand(parent: Command) {
   parent
@@ -21,16 +26,14 @@ export function registerIndexBuildCommand(parent: Command) {
       const globalOpts = program!.opts() as GlobalOptions;
 
       const events: OrchestratorEvent[] = [];
-      const eventBus = {
-        emit: async (event: OrchestratorEvent) => {
-          events.push(event);
-        },
-      };
+      emitter.on('*', (type, event) => {
+        events.push(event as OrchestratorEvent);
+      });
 
       const repoRoot = await findRepoRoot();
       const repoId = createHash('sha256').update(repoRoot).digest('hex');
 
-      const flags: any = {};
+      const flags: Record<string, unknown> = {};
       if (options.semantic) {
         flags.indexing = { semantic: { enabled: true } };
       }
@@ -38,7 +41,7 @@ export function registerIndexBuildCommand(parent: Command) {
         flags.indexing = {
           ...flags.indexing,
           semantic: {
-            // @ts-ignore
+            // @ts-expect-error - flags is a dynamic object
             ...flags.indexing?.semantic,
             embeddings: {
               provider: options.semanticEmbedder,
@@ -74,23 +77,37 @@ export function registerIndexBuildCommand(parent: Command) {
           markedStaleCount = stalenessResult.markedStaleCount;
           clearedStaleCount = stalenessResult.clearedStaleCount;
           memoryStore.close();
-
-          await eventBus.emit({
-            type: 'MemoryStalenessReconciled',
-            schemaVersion: 1,
-            runId,
-            timestamp: new Date().toISOString(),
-            payload: {
-              details: `Marked ${markedStaleCount} entries as stale, cleared ${clearedStaleCount}.`,
-            },
-          });
         } catch {
           // DB file doesn't exist, so skip reconciliation
         }
       }
 
+      let semanticResult: SemanticIndexBuildFinishedEvent['payload'] | undefined;
+      if (options.semantic || config.indexing?.semantic?.enabled) {
+        if (!config.indexing?.semantic?.embeddings) {
+          throw new Error('Semantic indexing is enabled, but no embedder is configured.');
+        }
+
+        const finishPromise = new Promise<SemanticIndexBuildFinishedEvent['payload']>((resolve) => {
+          emitter.once('semanticIndexBuildFinished', (event) => {
+            resolve(event.payload);
+          });
+        });
+
+        const semanticConfig = config.indexing.semantic as SemanticIndexingConfig;
+        const embedder = createEmbedder(semanticConfig.embeddings);
+        const semanticBuilder = new SemanticIndexBuilder();
+        await semanticBuilder.build({
+          repoId,
+          repoRoot,
+          embedder,
+          runId,
+        });
+        semanticResult = await finishPromise;
+      }
+
       if (globalOpts.json) {
-        const output: any = {
+        const output: Record<string, unknown> = {
           index,
           reconciliation: {
             markedStale: markedStaleCount,
@@ -98,8 +115,8 @@ export function registerIndexBuildCommand(parent: Command) {
           },
           events,
         };
-        if (options.semantic) {
-          output.config = config.indexing?.semantic;
+        if (semanticResult) {
+          output.semanticResult = semanticResult;
         }
         console.log(JSON.stringify(output, null, 2));
       } else {
@@ -111,6 +128,13 @@ export function registerIndexBuildCommand(parent: Command) {
           console.log(
             `- Reconciled memory: ${markedStaleCount} marked stale, ${clearedStaleCount} cleared stale`,
           );
+        }
+        if (semanticResult) {
+          console.log(`\nSemantic index built successfully.`);
+          console.log(`  - Scanned ${semanticResult.filesScanned} files`);
+          console.log(`  - Affected ${semanticResult.filesAffected} files`);
+          console.log(`  - Created ${semanticResult.chunksCreated} chunks`);
+          console.log(`  - Computed ${semanticResult.embeddingsComputed} embeddings`);
         }
       }
     });

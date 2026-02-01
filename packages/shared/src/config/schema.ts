@@ -63,6 +63,9 @@ export const SemanticIndexingConfigSchema = z
     },
   );
 
+export const EmbeddingsConfigSchema = SemanticIndexingConfigSchema.shape.embeddings;
+export type EmbeddingsConfig = z.infer<typeof EmbeddingsConfigSchema>;
+
 export const IndexingConfigSchema = z.object({
   enabled: z.boolean().default(false),
   path: z.string().default('.orchestrator/index/index.json'),

@@ -97,4 +97,3 @@ export class SemanticSearchService {
     return hits;
   }
 }
-

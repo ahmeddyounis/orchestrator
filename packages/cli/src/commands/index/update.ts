@@ -1,11 +1,16 @@
 import { Command } from 'commander';
-import { IndexBuilder, findRepoRoot } from '@orchestrator/repo';
-import { ConfigLoader, reconcileMemoryStaleness } from '@orchestrator/core';
+import { findRepoRoot, IndexUpdater, SemanticIndexUpdater } from '@orchestrator/repo';
+import { ConfigLoader, emitter, reconcileMemoryStaleness } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
-import { OrchestratorEvent } from '@orchestrator/shared';
+import {
+  OrchestratorEvent,
+  SemanticIndexUpdateFinishedEvent,
+  SemanticIndexingConfig,
+} from '@orchestrator/shared';
 import { GlobalOptions } from '../../types';
 import { statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createEmbedder } from '@orchestrator/adapters';
 
 export function registerIndexUpdateCommand(parent: Command) {
   parent
@@ -21,16 +26,14 @@ export function registerIndexUpdateCommand(parent: Command) {
       const globalOpts = program!.opts() as GlobalOptions;
 
       const events: OrchestratorEvent[] = [];
-      const eventBus = {
-        emit: async (event: OrchestratorEvent) => {
-          events.push(event);
-        },
-      };
+      emitter.on('*', (type, event) => {
+        events.push(event as OrchestratorEvent);
+      });
 
       const repoRoot = await findRepoRoot();
       const repoId = createHash('sha256').update(repoRoot).digest('hex');
 
-      const flags: any = {};
+      const flags: Record<string, unknown> = {};
       if (options.semantic) {
         flags.indexing = { semantic: { enabled: true } };
       }
@@ -38,7 +41,7 @@ export function registerIndexUpdateCommand(parent: Command) {
         flags.indexing = {
           ...flags.indexing,
           semantic: {
-            // @ts-ignore
+            // @ts-expect-error - flags is a dynamic object
             ...flags.indexing?.semantic,
             embeddings: {
               provider: options.semanticEmbedder,
@@ -52,66 +55,91 @@ export function registerIndexUpdateCommand(parent: Command) {
         flags,
       });
 
-      // TODO: Implement a proper update that doesn't rebuild from scratch
-      const builder = new IndexBuilder({
+      const updater = new IndexUpdater({
         maxFileSizeBytes: config.indexing?.maxFileSizeBytes ?? 2 * 1024 * 1024,
       });
 
       const startTime = Date.now();
       const runId = startTime.toString();
-      const index = await builder.build(repoRoot);
+      const report = await updater.update(repoRoot);
       const durationMs = Date.now() - startTime;
 
       let markedStaleCount = 0;
       let clearedStaleCount = 0;
 
-      if (config.memory.enabled) {
+      if (config.memory.enabled && report.index) {
         const dbPath = config.memory.storage.path;
         try {
           statSync(dbPath);
           const memoryStore = createMemoryStore();
           memoryStore.init(dbPath);
-          const stalenessResult = await reconcileMemoryStaleness(repoId, index, memoryStore);
+          const stalenessResult = await reconcileMemoryStaleness(repoId, report.index, memoryStore);
           markedStaleCount = stalenessResult.markedStaleCount;
           clearedStaleCount = stalenessResult.clearedStaleCount;
           memoryStore.close();
-
-          await eventBus.emit({
-            type: 'MemoryStalenessReconciled',
-            schemaVersion: 1,
-            runId,
-            timestamp: new Date().toISOString(),
-            payload: {
-              details: `Marked ${markedStaleCount} entries as stale, cleared ${clearedStaleCount}.`,
-            },
-          });
         } catch {
           // DB file doesn't exist, so skip reconciliation
         }
       }
 
+      let semanticResult: SemanticIndexUpdateFinishedEvent['payload'] | undefined;
+      if (options.semantic || config.indexing?.semantic?.enabled) {
+        if (!config.indexing?.semantic?.embeddings) {
+          throw new Error('Semantic indexing is enabled, but no embedder is configured.');
+        }
+
+        const finishPromise = new Promise<SemanticIndexUpdateFinishedEvent['payload']>(
+          (resolve) => {
+            emitter.once('semanticIndexUpdateFinished', (event) => {
+              resolve(event.payload);
+            });
+          },
+        );
+
+        const semanticConfig = config.indexing.semantic as SemanticIndexingConfig;
+        const embedder = createEmbedder(semanticConfig.embeddings);
+        const semanticUpdater = new SemanticIndexUpdater();
+        await semanticUpdater.update({
+          repoId,
+          repoRoot,
+          embedder,
+          runId,
+        });
+        semanticResult = await finishPromise;
+      }
+
       if (globalOpts.json) {
-        const output: any = {
-          index,
+        const output: Record<string, unknown> = {
+          report,
           reconciliation: {
             markedStale: markedStaleCount,
             clearedStale: clearedStaleCount,
           },
           events,
         };
-        if (options.semantic) {
-          output.config = config.indexing?.semantic;
+        if (semanticResult) {
+          output.semanticResult = semanticResult;
         }
         console.log(JSON.stringify(output, null, 2));
       } else {
         console.log(`Successfully updated index at: ${repoRoot}/.orchestrator/index`);
         console.log(`- Took ${durationMs}ms`);
-        console.log(`- Indexed ${index.stats.fileCount} files`);
-        console.log(`- Hashed ${index.stats.hashedCount} files`);
+        console.log(
+          `- ${report.added} added, ${report.updated} updated, ${report.removed} removed`,
+        );
+
         if (config.memory.enabled) {
           console.log(
             `- Reconciled memory: ${markedStaleCount} marked stale, ${clearedStaleCount} cleared stale`,
           );
+        }
+
+        if (semanticResult) {
+          console.log(`\nSemantic index updated successfully.`);
+          console.log(`  - Scanned ${semanticResult.filesScanned} files`);
+          console.log(`  - Affected ${semanticResult.filesAffected} files`);
+          console.log(`  - Created ${semanticResult.chunksCreated} chunks`);
+          console.log(`  - Computed ${semanticResult.embeddingsComputed} embeddings`);
         }
       }
     });

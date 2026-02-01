@@ -9,6 +9,7 @@ import { registerMemoryCommand } from './commands/memory';
 import { registerIndexCommand } from './commands/index';
 import { registerDoctorCommand } from './commands/doctor';
 import { registerInitCommand } from './commands/init';
+import { registerSearchCommand } from './commands/search';
 
 import { AppError, ConfigError, UsageError } from '@orchestrator/shared';
 
@@ -32,6 +33,7 @@ registerMemoryCommand(program);
 registerIndexCommand(program);
 registerDoctorCommand(program);
 registerInitCommand(program);
+registerSearchCommand(program);
 
 async function main() {
   try {
