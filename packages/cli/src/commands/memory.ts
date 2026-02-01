@@ -26,14 +26,37 @@ async function status(options: { json?: boolean }) {
   const repoId = await findRepoRoot();
   const status = store.status(repoId);
   const config = ConfigLoader.load({});
+  const memoryConfig = config.memory;
+
+  const retrievalMode = memoryConfig?.retrieval?.mode || 'lexical';
+
+  let vectorStatus: any = { enabled: false };
+  if (memoryConfig?.vector?.enabled) {
+    const vectorBackend: VectorMemoryBackend = createVectorMemoryBackend(
+      memoryConfig.vector.storage,
+    );
+    const backendInfo = await vectorBackend.info();
+    const vectorCount = await vectorBackend.count(repoId);
+
+    vectorStatus = {
+      enabled: true,
+      backend: memoryConfig.vector.storage.type,
+      dims: backendInfo.dims,
+      embedderId: memoryConfig.vector.embedder,
+      location: memoryConfig.vector.storage.path,
+      entryCount: vectorCount,
+    };
+  }
 
   if (options.json) {
     console.log(
       JSON.stringify(
         {
           enabled: true,
-          dbPath: config.memory?.storage.path,
+          dbPath: memoryConfig?.storage.path,
+          retrievalMode,
           ...status,
+          vector: vectorStatus,
         },
         null,
         2,
@@ -44,8 +67,9 @@ async function status(options: { json?: boolean }) {
 
   console.log('Memory Status');
   console.log(`  Enabled: true`);
-  console.log(`  Database Path: ${config.memory?.storage.path}`);
-  console.log('  Entry Counts:');
+  console.log(`  Retrieval Mode: ${retrievalMode}`);
+  console.log(`  Database Path: ${memoryConfig?.storage.path}`);
+  console.log('  Entry Counts (SQL):');
   console.log(`    Procedural: ${status.entryCounts.procedural}`);
   console.log(`    Episodic: ${status.entryCounts.episodic}`);
   console.log(`    Semantic: ${status.entryCounts.semantic}`);
@@ -56,6 +80,18 @@ async function status(options: { json?: boolean }) {
       status.lastUpdatedAt ? new Date(status.lastUpdatedAt).toISOString() : 'Never'
     }`,
   );
+
+  console.log('  Vector Memory:');
+  if (vectorStatus.enabled) {
+    console.log(`    Enabled: true`);
+    console.log(`    Backend: ${vectorStatus.backend}`);
+    console.log(`    Dimensions: ${vectorStatus.dims}`);
+    console.log(`    Embedder ID: ${vectorStatus.embedderId}`);
+    console.log(`    Location: ${vectorStatus.location}`);
+    console.log(`    Entry Count: ${vectorStatus.entryCount}`);
+  } else {
+    console.log(`    Enabled: false`);
+  }
 }
 
 async function list(options: {
@@ -127,6 +163,7 @@ async function show(id: string, options: { json?: boolean }) {
 async function wipe(options: { yes?: boolean }) {
   const store = getMemoryStore();
   const repoId = await findRepoRoot();
+  const config = ConfigLoader.load({});
 
   if (!options.yes) {
     const inquirer = await import('inquirer');
@@ -144,14 +181,32 @@ async function wipe(options: { yes?: boolean }) {
     }
   }
 
+  const status = store.status(repoId);
+  const lexicalCount = status.entryCounts.total;
   store.wipe(repoId);
-  console.log('Memory wiped for the current repository.');
+  console.log(`Wiped ${lexicalCount} lexical entries.`);
+
+  if (config.memory?.vector?.enabled) {
+    const vectorBackend: VectorMemoryBackend = createVectorMemoryBackend(
+      config.memory.vector.storage,
+    );
+    const vectorCount = await vectorBackend.count(repoId);
+    if (vectorCount > 0) {
+      await vectorBackend.wipe(repoId);
+      console.log(`Wiped ${vectorCount} vector entries.`);
+    } else {
+      console.log('No vector entries to wipe.');
+    }
+  }
+
+  console.log('Memory wipe complete for the current repository.');
 }
 
 async function reembed(options: {
   limit?: number;
   type?: 'procedural' | 'episodic' | 'all';
   forceAll?: boolean;
+  dryRun?: boolean;
 }) {
   const config = ConfigLoader.load({});
   const repoId = await findRepoRoot();
@@ -159,6 +214,23 @@ async function reembed(options: {
   if (!config.memory?.enabled || !config.memory.vector?.enabled) {
     console.error('Vector memory is not enabled in the configuration.');
     process.exit(1);
+  }
+
+  const store = getMemoryStore();
+  const type = options.type === 'all' ? undefined : options.type;
+
+  const memoryEntries = options.forceAll
+    ? store.list(repoId, type)
+    : store.listEntriesWithoutVectors(repoId, type);
+
+  const limit = options.limit || memoryEntries.length;
+  const entriesToProcess = memoryEntries.slice(0, limit);
+
+  if (options.dryRun) {
+    console.log(
+      `[Dry Run] Found ${entriesToProcess.length} entries that would be re-embedded.`,
+    );
+    return;
   }
 
   const vectorConfig = config.memory.vector;
@@ -186,28 +258,13 @@ async function reembed(options: {
     config.memory.vector.storage,
   );
 
-  // 3. Get Memory Store
-  const store = getMemoryStore();
-  const type = options.type === 'all' ? undefined : options.type;
-
-  const memoryEntries = options.forceAll
-    ? store.list(repoId, type)
-    : store.listEntriesWithoutVectors(repoId, type);
-
-  // 4. Re-embed
-  console.log(`Found ${memoryEntries.length} entries to re-embed.`);
+  // 3. Re-embed
+  console.log(`Found ${entriesToProcess.length} entries to re-embed.`);
   let processed = 0;
-  const limit = options.limit || memoryEntries.length;
 
   const MAX_EMBED_CONTENT_LENGTH = 4 * 1024; // 4KB
 
-  for (const entry of memoryEntries) {
-    if (processed >= limit) {
-      break;
-    }
-
-    process.stdout.write(`Embedding entry ${processed + 1}/${limit}: ${entry.id}\r`);
-
+  for (const entry of entriesToProcess) {
     const textToEmbed = entry.title + '\n' + entry.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
     const vectors = await embedder.embedTexts([textToEmbed]);
 
@@ -218,10 +275,114 @@ async function reembed(options: {
       store.markVectorUpdated(entry.id);
     }
     processed++;
+
+    if (processed % 10 === 0 || processed === entriesToProcess.length) {
+      process.stdout.write(`Embedded ${processed}/${entriesToProcess.length} entries...\n`);
+    }
+  }
+}
+
+async function search(
+  query: string,
+  options: {
+    mode?: 'lexical' | 'vector' | 'hybrid';
+    topk?: number;
+    json?: boolean;
+  },
+) {
+  const config = ConfigLoader.load({});
+  const repoId = await findRepoRoot();
+  const store = getMemoryStore();
+
+  const mode = options.mode || config.memory?.retrieval?.mode || 'lexical';
+  const topk = options.topk || 5;
+
+  let results: (MemoryEntry & { score?: number; vectorScore?: number; lexicalScore?: number })[] =
+    [];
+
+  if (mode === 'lexical') {
+    // Dummy implementation for lexical search, as `store` doesn't have a search method.
+    // In a real scenario, this would use a proper lexical search.
+    results = store
+      .list(repoId)
+      .filter(
+        (e) =>
+          e.title.toLowerCase().includes(query.toLowerCase()) ||
+          e.content.toLowerCase().includes(query.toLowerCase()),
+      )
+      .slice(0, topk)
+      .map((e) => ({ ...e, score: 1, lexicalScore: 1 }));
+  } else if (mode === 'vector' || mode === 'hybrid') {
+    if (!config.memory?.vector?.enabled) {
+      console.error('Vector memory is not enabled.');
+      process.exit(1);
+    }
+    const embedder = createEmbedder({
+      provider: config.memory.vector.embedder,
+      ...config.embeddings?.[config.memory.vector.embedder],
+    });
+    const vectorBackend = createVectorMemoryBackend(config.memory.vector.storage);
+
+    const queryVector = (await embedder.embedTexts([query]))[0];
+    const vectorResults = await vectorBackend.search(repoId, queryVector, topk);
+
+    const entryIds = vectorResults.map((r) => r.id);
+    const entries = store.getByIds(entryIds);
+
+    const entryMap = new Map(entries.map((e) => [e.id, e]));
+
+    results = vectorResults
+      .map((vr) => {
+        const entry = entryMap.get(vr.id);
+        if (!entry) return null;
+        return {
+          ...entry,
+          score: vr.score,
+          vectorScore: vr.score,
+        };
+      })
+      .filter((r): r is Exclude<typeof r, null> => r !== null);
+
+    if (mode === 'hybrid') {
+      // In a real hybrid search, scores would be combined more intelligently.
+      // Here we just add lexical results.
+      const lexicalResults = store
+        .list(repoId)
+        .filter(
+          (e) =>
+            e.title.toLowerCase().includes(query.toLowerCase()) ||
+            e.content.toLowerCase().includes(query.toLowerCase()),
+        )
+        .map((e) => ({ ...e, score: 1, lexicalScore: 1 }));
+
+      for (const lr of lexicalResults) {
+        if (!results.some((r) => r.id === lr.id)) {
+          results.push(lr);
+        }
+      }
+      results = results.slice(0, topk);
+    }
   }
 
-  console.log(`\nSuccessfully re-embedded ${processed} memory entries.`);
+  if (options.json) {
+    console.log(JSON.stringify(results, null, 2));
+    return;
+  }
+
+  console.log(`Found ${results.length} results for "${query}" (mode: ${mode}):`);
+  results.forEach((r) => {
+    let scoreInfo = `Score: ${r.score?.toFixed(4)}`;
+    if (r.vectorScore) scoreInfo += ` (V: ${r.vectorScore.toFixed(4)})`;
+    if (r.lexicalScore) scoreInfo += ` (L: ${r.lexicalScore.toFixed(4)})`;
+
+    console.log(
+      `  - [${r.id}] ${r.title} (${scoreInfo})\n    ${r.content
+        .substring(0, 200)
+        .replace(/\n/g, ' ')}...`,
+    );
+  });
 }
+
 
 export function registerMemoryCommand(program: Command) {
   const memoryCommand = program.command('memory').description('Manage orchestrator memory.');
@@ -259,5 +420,14 @@ export function registerMemoryCommand(program: Command) {
     .option('--limit <n>', 'Limit number of entries to re-embed.', parseInt)
     .option('--type <type>', 'Filter by type (procedural, episodic, all). Default to all.', 'all')
     .option('--force-all', 'Re-embed all entries, even those with existing vectors.')
+    .option('--dry-run', 'Show how many entries would be re-embedded without actually doing it.')
     .action(reembed);
+
+  memoryCommand
+    .command('search <query>')
+    .description('Search memory entries.')
+    .option('--mode <mode>', 'Search mode (lexical, vector, hybrid).')
+    .option('--topk <n>', 'Limit number of results.', parseInt)
+    .option('--json', 'Output as JSON.')
+    .action(search);
 }
