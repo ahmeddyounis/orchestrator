@@ -3,3 +3,4 @@
 export * from './backend';
 export * from './noop';
 export * from './factory';
+export * from './sqlite';

@@ -208,8 +208,7 @@ async function reembed(options: {
 
     process.stdout.write(`Embedding entry ${processed + 1}/${limit}: ${entry.id}\r`);
 
-    const textToEmbed =
-      entry.title + '\n' + entry.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
+    const textToEmbed = entry.title + '\n' + entry.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
     const vectors = await embedder.embedTexts([textToEmbed]);
 
     if (vectors.length > 0) {

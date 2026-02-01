@@ -10,6 +10,7 @@ import { registerIndexCommand } from './commands/index';
 import { registerDoctorCommand } from './commands/doctor';
 import { registerInitCommand } from './commands/init';
 import { registerSearchCommand } from './commands/search';
+import { registerTestCommand } from './commands/test';
 
 import { AppError, ConfigError, UsageError } from '@orchestrator/shared';
 
@@ -34,6 +35,7 @@ registerIndexCommand(program);
 registerDoctorCommand(program);
 registerInitCommand(program);
 registerSearchCommand(program);
+registerTestCommand(program);
 
 async function main() {
   try {

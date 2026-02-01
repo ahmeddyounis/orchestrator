@@ -1,5 +1,5 @@
 // packages/memory/src/config.ts
 
-import { Config } from "@orchestrator/shared";
+import { Config } from '@orchestrator/shared';
 
-export type MemoryConfig = Config["memory"];
+export type MemoryConfig = Config['memory'];

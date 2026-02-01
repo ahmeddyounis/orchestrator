@@ -79,8 +79,7 @@ export class MemoryWriter {
       return;
     }
 
-    const textToEmbed =
-      memory.title + '\n' + memory.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
+    const textToEmbed = memory.title + '\n' + memory.content.substring(0, MAX_EMBED_CONTENT_LENGTH);
     const vectors = await this.embedder.embedTexts([textToEmbed]);
 
     if (vectors.length > 0) {
