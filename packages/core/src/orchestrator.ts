@@ -109,18 +109,36 @@ export interface RunOptions {
 
 class ProceduralMemoryImpl implements ProceduralMemory {
   constructor(
-    private dbPath: string | undefined,
-    private repoId: string,
+    private config: Config,
+    private repoRoot: string,
   ) {}
 
+  private resolveMemoryDbPath(): string | undefined {
+    const p = this.config.memory?.storage?.path;
+    if (!p) return undefined;
+    return path.isAbsolute(p) ? p : path.join(this.repoRoot, p);
+  }
+
   async find(queries: ProceduralMemoryQuery[], limit: number): Promise<ProceduralMemoryEntry[][]> {
-    if (!this.dbPath) {
+    const dbPath = this.resolveMemoryDbPath();
+    if (!dbPath) {
       return queries.map(() => []);
     }
     const store = createMemoryStore();
     try {
-      store.init(this.dbPath);
-      const allProcedural = store.list(this.repoId, 'procedural');
+      const keyEnvVar = this.config.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
+      const key = process.env[keyEnvVar];
+
+      store.init({
+        dbPath,
+        encryption: {
+          encryptAtRest: this.config.memory?.storage?.encryptAtRest ?? false,
+          key: key || '',
+        },
+      });
+
+      const repoId = this.repoRoot; // Assuming repoRoot is the repoId
+      const allProcedural = store.list(repoId, 'procedural');
 
       const results: ProceduralMemoryEntry[][] = [];
       for (const query of queries) {
@@ -364,6 +382,7 @@ export class Orchestrator {
       gitSha,
       repoId: this.repoRoot,
       memoryDbPath: this.resolveMemoryDbPath(),
+      config: this.config,
       artifactPaths: this.collectArtifactPaths(
         summary.runId,
         args.artifactsRoot,
@@ -1419,7 +1438,16 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
 
     const store = createMemoryStore();
     try {
-      store.init(dbPath);
+      const keyEnvVar = this.config.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
+      const key = process.env[keyEnvVar];
+
+      store.init({
+        dbPath,
+        encryption: {
+          encryptAtRest: memConfig.storage?.encryptAtRest ?? false,
+          key: key || '',
+        },
+      });
 
       const { query } = args;
       const topK = memConfig.retrieval.topK ?? 5;
@@ -1574,7 +1602,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         await logger.log(redactedEvent);
       },
     };
-    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
+    const proceduralMemory = new ProceduralMemoryImpl(this.config, this.repoRoot);
     const verificationRunner = new VerificationRunner(
       proceduralMemory,
       this.toolPolicy,
@@ -2201,7 +2229,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     };
 
     // Set up verification runner for candidate evaluation
-    const proceduralMemory = new ProceduralMemoryImpl(this.resolveMemoryDbPath(), this.repoRoot);
+    const proceduralMemory = new ProceduralMemoryImpl(this.config, this.repoRoot);
     const toolPolicy = this.toolPolicy ?? {
       enabled: true,
       requireConfirmation: false,

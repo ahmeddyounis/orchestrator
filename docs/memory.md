@@ -45,6 +45,39 @@ Your memory database, including both lexical and vector data (if using the defau
 
 If you configure a [remote vector backend](./memory-vector.md#backends), only numerical embeddings and file identifiers are sent, not your source code. Please read the privacy details carefully before enabling remote backends.
 
+### Encryption at Rest
+
+For sensitive projects, you can enable encryption-at-rest for the memory database content:
+
+```jsonc
+{
+  "memory": {
+    "enabled": true,
+    "storage": {
+      "encryptAtRest": true
+    }
+  },
+  "security": {
+    "encryption": {
+      "keyEnv": "ORCHESTRATOR_ENC_KEY" // defaults to ORCHESTRATOR_ENC_KEY
+    }
+  }
+}
+```
+
+Then set the encryption key as an environment variable:
+
+```sh
+export ORCHESTRATOR_ENC_KEY="your-secure-key-here"
+```
+
+When enabled:
+- Memory content and evidence fields are encrypted with AES-256-GCM before being stored.
+- Metadata (titles, IDs, timestamps) and vector embeddings remain unencrypted for search functionality.
+- If the key is missing when `encryptAtRest` is enabled, the CLI will exit with an error.
+
+See [Security](./security.md#4-encryption-at-rest-for-memory) for more details.
+
 ## Wiping Memory
 
 To clear the memory for a project, use the `memory wipe` command.

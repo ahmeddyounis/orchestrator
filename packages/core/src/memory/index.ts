@@ -30,11 +30,22 @@ const MAX_EMBED_CONTENT_LENGTH = 4 * 1024; // 4KB
 let sqliteStore: ReturnType<typeof createMemoryStore> | null = null;
 let sqliteInitPath: string | null = null;
 
-function ensureSqliteStore(dbPath: string) {
+function ensureSqliteStore(dbPath: string, repoState: RepoState) {
   if (sqliteStore && sqliteInitPath === dbPath) return sqliteStore;
   sqliteStore?.close();
+
+  const config = repoState.config;
+  const keyEnvVar = config?.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
+  const key = process.env[keyEnvVar];
+
   sqliteStore = createMemoryStore();
-  sqliteStore.init(dbPath);
+  sqliteStore.init({
+    dbPath,
+    encryption: {
+      encryptAtRest: config?.memory?.storage?.encryptAtRest ?? false,
+      key: key || '',
+    },
+  });
   sqliteInitPath = dbPath;
   return sqliteStore;
 }
@@ -97,7 +108,7 @@ export class MemoryWriter {
         { id: memory.id, vector: vectors[0], metadata: { type: memory.type } },
       ]);
       if (repoState.memoryDbPath) {
-        const store = ensureSqliteStore(repoState.memoryDbPath);
+        const store = ensureSqliteStore(repoState.memoryDbPath, repoState);
         store.markVectorUpdated(memory.id);
       }
     }
@@ -175,7 +186,7 @@ export class MemoryWriter {
     memoryStore.set(newMemory.id, newMemory);
 
     if (repoState.memoryDbPath && repoState.repoId) {
-      const store = ensureSqliteStore(repoState.memoryDbPath);
+      const store = ensureSqliteStore(repoState.memoryDbPath, repoState);
       const entryToUpsert: MemoryEntry = {
         id: newMemory.id,
         repoId: repoState.repoId,
@@ -250,7 +261,7 @@ export class MemoryWriter {
       memoryStore.set(existingMemory.id, existingMemory);
 
       if (repoState.memoryDbPath && repoState.repoId) {
-        const store = ensureSqliteStore(repoState.memoryDbPath);
+        const store = ensureSqliteStore(repoState.memoryDbPath, repoState);
         const entryToUpsert: MemoryEntry = {
           id: existingMemory.id,
           repoId: repoState.repoId,
@@ -293,7 +304,7 @@ export class MemoryWriter {
     memoryStore.set(newMemory.id, newMemory);
 
     if (repoState.memoryDbPath && repoState.repoId) {
-      const store = ensureSqliteStore(repoState.memoryDbPath);
+      const store = ensureSqliteStore(repoState.memoryDbPath, repoState);
       const entryToUpsert: MemoryEntry = {
         id: newMemory.id,
         repoId: repoState.repoId,
@@ -338,8 +349,8 @@ export class MemoryWriter {
     }
   }
 
-  async wipe(repoId: string, dbPath: string) {
-    const store = ensureSqliteStore(dbPath);
+  async wipe(repoId: string, dbPath: string, repoState: RepoState) {
+    const store = ensureSqliteStore(dbPath, repoState);
     store.wipe(repoId);
     memoryStore.clear();
     await this.vectorBackend?.wipeRepo(repoId);

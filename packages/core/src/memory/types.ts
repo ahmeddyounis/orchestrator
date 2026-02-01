@@ -1,10 +1,11 @@
-import { ToolClassification, ToolRunRequest } from '@orchestrator/shared';
+import { ToolClassification, ToolRunRequest, Config } from '@orchestrator/shared';
 
 export interface RepoState {
   gitSha: string;
   repoId?: string;
   memoryDbPath?: string;
   artifactPaths?: string[];
+  config?: Config;
 }
 
 export interface ToolRunMeta {

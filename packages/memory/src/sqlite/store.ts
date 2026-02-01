@@ -4,12 +4,22 @@ import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
 import { MemoryError } from '@orchestrator/shared';
 import type { MemoryEntry, MemoryEntryType, MemoryStatus, LexicalHit, IntegrityStatus } from '../types';
+import { createCrypto, type Crypto } from './crypto';
 
 export interface LexicalSearchOptions {
   topK?: number;
 }
+
+export interface MemoryStoreOptions {
+  dbPath: string;
+  encryption?: {
+    encryptAtRest: boolean;
+    key: string;
+  };
+}
+
 export interface MemoryStore {
-  init(dbPath: string): void;
+  init(options: MemoryStoreOptions): void;
   upsert(entry: MemoryEntry): void;
   search(repoId: string, query: string, options: LexicalSearchOptions): LexicalHit[];
   get(id: string): MemoryEntry | null;
@@ -42,10 +52,23 @@ interface MemoryEntryDbRow {
 
 export function createMemoryStore(): MemoryStore {
   let db: DatabaseSync | null = null;
+  let crypto: Crypto | null = null;
+  let isEncrypted = false;
 
-  const init = (dbPath: string): void => {
-    mkdirSync(dirname(dbPath), { recursive: true });
-    db = new DatabaseSync(dbPath);
+  const init = (options: MemoryStoreOptions): void => {
+    if (options.encryption?.encryptAtRest) {
+      if (!options.encryption.key) {
+        throw new MemoryError(
+          'Encryption is enabled, but no encryption key was provided. Set the ORCHESTRATOR_ENC_KEY environment variable or configure security.encryption.keyEnv.',
+          { details: { code: 'ENC_KEY_MISSING' } },
+        );
+      }
+      crypto = createCrypto(options.encryption.key);
+      isEncrypted = true;
+    }
+
+    mkdirSync(dirname(options.dbPath), { recursive: true });
+    db = new DatabaseSync(options.dbPath);
     db.exec('PRAGMA journal_mode = WAL;');
     db.exec('PRAGMA foreign_keys = ON;');
     runMigrations(db);
@@ -62,6 +85,15 @@ export function createMemoryStore(): MemoryStore {
     if (!db) throw new MemoryError('Database not initialized');
 
     const now = Date.now();
+
+    const entryToStore = { ...entry };
+    if (isEncrypted && crypto) {
+      entryToStore.content = crypto.encrypt(entry.content);
+      if (entry.evidenceJson) {
+        entryToStore.evidenceJson = crypto.encrypt(entry.evidenceJson);
+      }
+    }
+
     const stmt = db.prepare(
       `
       INSERT INTO memory_entries (
@@ -89,21 +121,21 @@ export function createMemoryStore(): MemoryStore {
     );
 
     stmt.run({
-      ...entry,
-      stale: entry.stale ? 1 : 0,
-      createdAt: entry.createdAt ?? now,
+      ...entryToStore,
+      stale: entryToStore.stale ? 1 : 0,
+      createdAt: entryToStore.createdAt ?? now,
       updatedAt: now,
-      evidenceJson: entry.evidenceJson ?? null,
-      gitSha: entry.gitSha ?? null,
-      fileRefsJson: entry.fileRefsJson ?? null,
-      fileHashesJson: entry.fileHashesJson ?? null,
-      integrityStatus: entry.integrityStatus ?? 'ok',
-      integrityReasonsJson: entry.integrityReasonsJson ?? null,
+      evidenceJson: entryToStore.evidenceJson ?? null,
+      gitSha: entryToStore.gitSha ?? null,
+      fileRefsJson: entryToStore.fileRefsJson ?? null,
+      fileHashesJson: entryToStore.fileHashesJson ?? null,
+      integrityStatus: entryToStore.integrityStatus ?? 'ok',
+      integrityReasonsJson: entryToStore.integrityReasonsJson ?? null,
     });
   };
 
   const rowToEntry = (row: MemoryEntryDbRow): MemoryEntry => {
-    return {
+    const entry = {
       ...row,
       evidenceJson: row.evidenceJson ?? undefined,
       gitSha: row.gitSha ?? undefined,
@@ -113,10 +145,19 @@ export function createMemoryStore(): MemoryStore {
       integrityStatus: row.integrityStatus,
       integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
+
+    if (isEncrypted && crypto) {
+      entry.content = crypto.decrypt(row.content);
+      if (row.evidenceJson) {
+        entry.evidenceJson = crypto.decrypt(row.evidenceJson);
+      }
+    }
+
+    return entry;
   };
 
   const rowToLexicalHit = (row: MemoryEntryDbRow & { score: number }): LexicalHit => {
-    return {
+    const hit = {
       id: row.id,
       type: row.type,
       title: row.title,
@@ -128,6 +169,12 @@ export function createMemoryStore(): MemoryStore {
       integrityStatus: row.integrityStatus,
       integrityReasonsJson: row.integrityReasonsJson ?? undefined,
     };
+
+    if (isEncrypted && crypto) {
+      hit.content = crypto.decrypt(row.content);
+    }
+
+    return hit;
   };
 
   const get = (id: string): MemoryEntry | null => {

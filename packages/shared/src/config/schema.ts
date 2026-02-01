@@ -326,9 +326,15 @@ export const SecurityConfigSchema = z
         maxRedactionsPerFile: z.number().default(200),
       })
       .default({ enabled: true, maxRedactionsPerFile: 200 }),
+    encryption: z
+      .object({
+        keyEnv: z.string().default('ORCHESTRATOR_ENC_KEY'),
+      })
+      .default({ keyEnv: 'ORCHESTRATOR_ENC_KEY' }),
   })
   .default({
     redaction: { enabled: true, maxRedactionsPerFile: 200 },
+    encryption: { keyEnv: 'ORCHESTRATOR_ENC_KEY' },
   });
 
 export const ConfigSchema = z.object({

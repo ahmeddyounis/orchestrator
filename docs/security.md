@@ -60,12 +60,33 @@ These controls are enforced in the initial version of the Orchestrator.
 - **Opt-In Memory:** Long-term memory features are off by default.
 - **Local Execution:** The CLI runs locally; code is only sent to the configured LLM provider and nowhere else.
 
+### 4. Encryption-at-Rest for Memory
+
+- **Opt-In:** Field-level encryption for memory database content is available via configuration.
+- **Algorithm:** AES-256-GCM with scrypt key derivation.
+- **What's Encrypted:** When enabled, `content` and `evidenceJson` fields in the memory SQLite database are encrypted before storage. Metadata (titles, timestamps, IDs) and vectors remain unencrypted.
+- **Key Management:** The encryption key is read from an environment variable (default: `ORCHESTRATOR_ENC_KEY`, configurable via `security.encryption.keyEnv`).
+- **Configuration:**
+  ```yaml
+  memory:
+    storage:
+      encryptAtRest: true
+  security:
+    encryption:
+      keyEnv: ORCHESTRATOR_ENC_KEY  # default
+  ```
+- **Limitations:**
+  - Run artifacts under `.orchestrator/runs` are **not** encrypted (planned for future work).
+  - Vector embeddings are stored unencrypted (vectors alone don't reveal original content).
+  - The encryption key must be available at runtime; if `encryptAtRest` is enabled but the key is missing, the CLI exits with an error.
+
 ## Future Controls
 
 - **Sandboxing:** Running the agent or its tool execution environment within a Docker container or Firecracker microVM.
-- **Encryption-at-Rest:** Encrypting the vector database and local logs.
+- **Run Artifacts Encryption:** Encrypting the local run artifacts under `.orchestrator/runs`.
 - **Stricter Policy Engine:** A configurable policy engine allowing users to define fine-grained allow/deny lists for tools and paths.
 - **PII/Secret Scanning:** Advanced pre-flight scanning of context sent to the LLM.
+- **OS Keychain Integration:** Storing encryption keys in the system keychain rather than environment variables.
 
 ## Artifact Logs & Sensitive Data
 

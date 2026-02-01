@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createMemoryStore, MemoryStore } from './store';
@@ -14,7 +14,7 @@ describe('SQLite MemoryStore', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-test-'));
     dbPath = join(tempDir, 'memory.db');
     store = createMemoryStore();
-    store.init(dbPath);
+    store.init({ dbPath });
   });
 
   afterEach(() => {
@@ -272,5 +272,122 @@ describe('SQLite MemoryStore', () => {
     });
     expect(results2.length).toBe(1);
     expect(results2[0].id).toBe('test-1');
+  });
+});
+
+describe('SQLite MemoryStore with encryption', () => {
+  const TEST_KEY = 'test-encryption-key-for-unit-tests';
+
+  it('should encrypt content and decrypt on read (round-trip)', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-enc-test-'));
+    const dbPath = join(tempDir, 'memory-enc.db');
+    const store = createMemoryStore();
+    store.init({
+      dbPath,
+      encryption: { encryptAtRest: true, key: TEST_KEY },
+    });
+
+    const entry: MemoryEntry = {
+      id: 'enc-test-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'Encrypted Title',
+      content: 'This is secret content that should be encrypted at rest.',
+      evidenceJson: '{"secret": "evidence data"}',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stale: false,
+    };
+    store.upsert(entry);
+
+    // Read back and verify decryption works
+    const retrieved = store.get('enc-test-1');
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.content).toBe(entry.content);
+    expect(retrieved?.evidenceJson).toBe(entry.evidenceJson);
+
+    store.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('should store ciphertext in database, not plaintext', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-enc-test-'));
+    const dbPath = join(tempDir, 'memory-enc.db');
+    const store = createMemoryStore();
+    store.init({
+      dbPath,
+      encryption: { encryptAtRest: true, key: TEST_KEY },
+    });
+
+    const secretContent = 'PLAINTEXT_MARKER_SHOULD_NOT_APPEAR_IN_DB';
+    const entry: MemoryEntry = {
+      id: 'enc-test-2',
+      repoId: 'repo-1',
+      type: 'episodic',
+      title: 'Test',
+      content: secretContent,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stale: false,
+    };
+    store.upsert(entry);
+    store.close();
+
+    // Read the raw database file and check that plaintext is NOT present
+    const rawDbContent = readFileSync(dbPath);
+    const dbString = rawDbContent.toString('utf8');
+    expect(dbString).not.toContain(secretContent);
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('should throw error when encryption enabled but key missing', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-enc-test-'));
+    const dbPath = join(tempDir, 'memory-enc.db');
+    const store = createMemoryStore();
+
+    expect(() => {
+      store.init({
+        dbPath,
+        encryption: { encryptAtRest: true, key: '' },
+      });
+    }).toThrow(/encryption key was provided/i);
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('should fail to decrypt with wrong key', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-enc-test-'));
+    const dbPath = join(tempDir, 'memory-enc.db');
+
+    // Write with one key
+    const store1 = createMemoryStore();
+    store1.init({
+      dbPath,
+      encryption: { encryptAtRest: true, key: 'key-one' },
+    });
+    store1.upsert({
+      id: 'wrong-key-test',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'Test',
+      content: 'Secret content',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stale: false,
+    });
+    store1.close();
+
+    // Try to read with different key
+    const store2 = createMemoryStore();
+    store2.init({
+      dbPath,
+      encryption: { encryptAtRest: true, key: 'key-two' },
+    });
+
+    expect(() => store2.get('wrong-key-test')).toThrow(/decrypt/i);
+
+    store2.close();
+    rmSync(tempDir, { recursive: true, force: true });
   });
 });
