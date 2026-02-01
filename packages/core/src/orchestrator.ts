@@ -2420,7 +2420,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         eventBus,
       );
 
-      const fuser = new SimpleContextFuser();
+      const fuser = new SimpleContextFuser(this.config.security);
       let fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nCurrent Step: ${step}`,
         repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },

@@ -2,6 +2,10 @@ import { ContextFuser, FusedContext, FusionBudgets } from './types';
 import { ContextPack, ContextSignal } from '@orchestrator/repo';
 import { MemoryEntry } from '@orchestrator/memory';
 import { Config, SecretScanner, redact } from '@orchestrator/shared';
+import {
+  filterInjectionPhrases,
+  wrapUntrustedContent,
+} from '../security/guards';
 
 const HEADER_SEPARATOR = `
 ${'-'.repeat(20)}
@@ -82,6 +86,9 @@ export class SimpleContextFuser implements ContextFuser {
     for (const item of repoPack.items) {
       const header = `// ${item.path}:${item.startLine}`;
       let content = item.content;
+
+      // M18-03: Apply prompt injection defenses.
+      content = wrapUntrustedContent(filterInjectionPhrases(content));
 
       if (this.redactionEnabled && this.scanner) {
         const findings = this.scanner.scan(content);
