@@ -455,8 +455,40 @@ export type OrchestratorEvent =
   | IterationFinished
   | RepairAttempted
   | CandidateGenerated
+  | JudgeInvoked
+  | JudgeDecided
+  | JudgeFailed
   | SemanticSearchFinishedEvent
   | SemanticSearchFailedEvent;
+
+// M17-05: Judge events
+export interface JudgeInvoked extends BaseEvent {
+  type: 'JudgeInvoked';
+  payload: {
+    iteration: number;
+    reason: 'no_passing_candidates' | 'objective_near_tie' | 'verification_unavailable';
+    candidateCount: number;
+  };
+}
+
+export interface JudgeDecided extends BaseEvent {
+  type: 'JudgeDecided';
+  payload: {
+    iteration: number;
+    winnerCandidateId: string;
+    confidence: number;
+    durationMs: number;
+  };
+}
+
+export interface JudgeFailed extends BaseEvent {
+  type: 'JudgeFailed';
+  payload: {
+    iteration: number;
+    error: string;
+    fallbackCandidateId: string;
+  };
+}
 
 export interface SemanticSearchFailedEvent extends BaseEvent {
   type: 'SemanticSearchFailed';

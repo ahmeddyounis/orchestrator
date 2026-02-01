@@ -52,7 +52,13 @@ import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
 import { ConfigLoader } from './config/loader';
 import { SimpleContextFuser } from './context';
-import { CandidateGenerator, StepContext } from './orchestrator/l3/candidate_generator';
+import {
+  CandidateGenerator,
+  StepContext,
+  Candidate,
+  CandidateGenerationResult,
+} from './orchestrator/l3/candidate_generator';
+import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge';
 
 
 export interface OrchestratorOptions {
@@ -2336,6 +2342,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       // --- L3 Candidate Generation ---
       const candidateGenerator = new CandidateGenerator();
       const bestOfN = this.config.l3?.bestOfN ?? 3;
+      const enableJudge = this.config.l3?.enableJudge ?? true;
       const stepContext: StepContext = {
         runId,
         goal,
@@ -2351,7 +2358,94 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         logger,
       };
 
-      const bestCandidate = await candidateGenerator.generateAndSelectCandidate(stepContext, bestOfN);
+      // Generate candidates and get reviews
+      const generationResult = await candidateGenerator.generateAndReviewCandidates(
+        stepContext,
+        bestOfN,
+      );
+
+      let bestCandidate: Candidate | null = null;
+      let judgeInvoked = false;
+      let judgeReason: string | undefined;
+
+      if (generationResult.candidates.length === 0) {
+        // No valid candidates
+        bestCandidate = null;
+      } else if (generationResult.candidates.length === 1) {
+        // Single candidate, use it
+        bestCandidate = generationResult.candidates[0];
+      } else {
+        // Multiple candidates - decide whether to use judge
+        const reviews = generationResult.reviews;
+        
+        // Check for near-tie in reviews (score difference <= 1 on 0-10 scale)
+        const isNearTie = reviews.length >= 2 && 
+          Math.abs(
+            Math.max(...reviews.map(r => r.score)) - 
+            reviews.sort((a, b) => b.score - a.score)[1]?.score
+          ) <= 1;
+
+        // Usage policy: invoke judge when objective signals insufficient
+        // For now, we invoke judge when there's a near-tie in review scores
+        // (verification results would be checked here when available)
+        const shouldUseJudge = enableJudge && isNearTie;
+
+        if (shouldUseJudge) {
+          // Invoke Judge for tie-breaking
+          const judge = new Judge(providers.reviewer); // Use reviewer model for judge
+          
+          const judgeContext: JudgeContext = {
+            runId,
+            iteration: stepsCompleted,
+            artifactsRoot: artifacts.root,
+            logger,
+            eventBus,
+          };
+
+          // Build judge input
+          const judgeCandidates: JudgeCandidate[] = generationResult.candidates.map((c) => ({
+            id: String(c.index),
+            patch: c.patch!,
+            patchStats: c.patchStats,
+          }));
+
+          // Build verification info from reviews (no actual verification in L3 basic flow)
+          const judgeVerifications: JudgeVerification[] = reviews.map((r) => ({
+            candidateId: r.candidateId,
+            status: 'not_run' as const,
+            score: r.score / 10, // Normalize to 0-1
+            summary: r.reasons.join('; '),
+          }));
+
+          const judgeOutput = await judge.decide(
+            {
+              goal,
+              candidates: judgeCandidates,
+              verifications: judgeVerifications,
+              invocationReason: 'objective_near_tie',
+            },
+            judgeContext,
+          );
+
+          judgeInvoked = true;
+          judgeReason = `Near-tie detected (score diff <= 1). Judge selected candidate ${judgeOutput.winnerCandidateId} with confidence ${judgeOutput.confidence}.`;
+
+          // Select the winner
+          const winnerId = parseInt(judgeOutput.winnerCandidateId, 10);
+          bestCandidate = generationResult.candidates.find((c) => c.index === winnerId) || 
+            generationResult.candidates[0];
+        } else {
+          // Use review-based selection
+          if (reviews.length === 0) {
+            bestCandidate = generationResult.candidates[0];
+          } else {
+            const sortedRankings = reviews.sort((a, b) => b.score - a.score);
+            const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
+            bestCandidate = generationResult.candidates.find((c) => c.index === bestCandidateId) || 
+              generationResult.candidates[0];
+          }
+        }
+      }
 
       let success = false;
       let lastError = '';
@@ -2410,7 +2504,11 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           schemaVersion: 1,
           timestamp: new Date().toISOString(),
           runId,
-          payload: { step, success: true },
+          payload: { 
+            step, 
+            success: true,
+            ...(judgeInvoked ? { judgeInvoked: true, judgeReason } : {}),
+          },
         });
       } else {
         await eventBus.emit({

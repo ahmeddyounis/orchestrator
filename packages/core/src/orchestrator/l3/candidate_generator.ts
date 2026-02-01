@@ -38,6 +38,18 @@ export interface Candidate {
   durationMs: number;
 }
 
+export interface ReviewRanking {
+  candidateId: string;
+  score: number;
+  reasons: string[];
+  riskFlags: string[];
+}
+
+export interface CandidateGenerationResult {
+  candidates: Candidate[];
+  reviews: ReviewRanking[];
+}
+
 export class CandidateGenerator {
   private reviewer: Reviewer;
 
@@ -195,15 +207,44 @@ INSTRUCTIONS:
   }
 
   async generateAndSelectCandidate(stepContext: StepContext, n: number): Promise<Candidate | null> {
+    const result = await this.generateAndReviewCandidates(stepContext, n);
+    
+    if (result.candidates.length === 0) {
+      return null;
+    }
+
+    if (result.candidates.length === 1) {
+      return result.candidates[0];
+    }
+
+    // Select best candidate from reviews
+    if (result.reviews.length === 0) {
+      return result.candidates[0];
+    }
+
+    const sortedRankings = result.reviews.sort((a, b) => b.score - a.score);
+    const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
+    
+    return result.candidates.find(c => c.index === bestCandidateId) || result.candidates[0];
+  }
+
+  /**
+   * Generates candidates and reviews them, returning both for external selection.
+   * This allows the orchestrator to integrate judge/verification-based selection.
+   */
+  async generateAndReviewCandidates(
+    stepContext: StepContext,
+    n: number,
+  ): Promise<CandidateGenerationResult> {
     const candidates = await this.generateCandidates(stepContext, n);
     const validCandidates = candidates.filter((c) => c.valid && c.patch);
 
     if (validCandidates.length === 0) {
-      return null;
+      return { candidates: [], reviews: [] };
     }
 
     if (validCandidates.length === 1) {
-      return validCandidates[0];
+      return { candidates: validCandidates, reviews: [] };
     }
 
     const reviewerContext: ReviewerContext = {
@@ -225,14 +266,6 @@ INSTRUCTIONS:
       reviewerContext,
     );
 
-    if (review.rankings.length === 0) {
-      // Fallback to the first valid candidate if the reviewer fails
-      return validCandidates[0];
-    }
-
-    const sortedRankings = review.rankings.sort((a, b) => b.score - a.score);
-    const bestCandidateId = parseInt(sortedRankings[0].candidateId, 10);
-    
-    return validCandidates.find(c => c.index === bestCandidateId) || validCandidates[0];
+    return { candidates: validCandidates, reviews: review.rankings };
   }
 }
