@@ -73,4 +73,3 @@ index 1234567..89abcdef 100644
         (0, vitest_1.expect)(response.text).not.toContain('<BEGIN_DIFF>');
     });
 });
-//# sourceMappingURL=adapter.test.js.map

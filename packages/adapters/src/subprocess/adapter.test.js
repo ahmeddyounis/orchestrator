@@ -116,4 +116,3 @@ const FIXTURE_PATH = (0, shared_1.resolve)(__dirname, 'fixtures/echo-cli.js');
         (0, vitest_1.expect)(response.text?.endsWith('A'.repeat(10))).toBe(false); // prompt is stripped
     });
 });
-//# sourceMappingURL=adapter.test.js.map

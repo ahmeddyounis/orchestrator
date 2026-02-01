@@ -86,4 +86,3 @@ index 1234567..89abcdef 100644
     }
 }
 exports.ClaudeCodeAdapter = ClaudeCodeAdapter;
-//# sourceMappingURL=adapter.js.map

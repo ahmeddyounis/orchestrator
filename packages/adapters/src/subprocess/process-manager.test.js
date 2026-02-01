@@ -124,4 +124,3 @@ const FIXTURE_PATH = path.resolve(__dirname, 'fixtures/echo-cli.js');
         delete process.env['ANOTHER_VAR'];
     });
 });
-//# sourceMappingURL=process-manager.test.js.map

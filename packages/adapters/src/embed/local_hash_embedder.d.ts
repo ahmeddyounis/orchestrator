@@ -7,4 +7,3 @@ export declare class LocalHashEmbedder implements Embedder {
     id(): string;
     private embedText;
 }
-//# sourceMappingURL=local_hash_embedder.d.ts.map

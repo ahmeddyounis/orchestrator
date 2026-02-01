@@ -57,4 +57,3 @@ const transcriptsDir = path.join(__dirname, 'fixtures', 'transcripts');
         }
     });
 });
-//# sourceMappingURL=parsers.golden.test.js.map

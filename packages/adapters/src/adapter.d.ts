@@ -6,4 +6,3 @@ export interface ProviderAdapter {
     generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse>;
     stream?(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent>;
 }
-//# sourceMappingURL=adapter.d.ts.map

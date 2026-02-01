@@ -12,4 +12,3 @@ export declare class OpenAIAdapter implements ProviderAdapter {
     private mapTools;
     private mapError;
 }
-//# sourceMappingURL=adapter.d.ts.map

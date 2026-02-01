@@ -17,4 +17,3 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./process-manager"), exports);
 __exportStar(require("./adapter"), exports);
 __exportStar(require("./parsers"), exports);
-//# sourceMappingURL=index.js.map

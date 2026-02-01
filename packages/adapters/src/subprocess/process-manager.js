@@ -365,4 +365,3 @@ class ProcessManager extends events_1.EventEmitter {
     }
 }
 exports.ProcessManager = ProcessManager;
-//# sourceMappingURL=process-manager.js.map

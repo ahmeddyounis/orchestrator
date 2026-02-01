@@ -61,4 +61,3 @@ class FakeAdapter {
     }
 }
 exports.FakeAdapter = FakeAdapter;
-//# sourceMappingURL=adapter.js.map

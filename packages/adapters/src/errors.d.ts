@@ -11,4 +11,3 @@ export declare class TimeoutError extends Error {
 export declare class ProcessError extends Error {
     constructor(message: string);
 }
-//# sourceMappingURL=errors.d.ts.map

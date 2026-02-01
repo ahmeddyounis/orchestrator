@@ -25,4 +25,3 @@ __exportStar(require("./anthropic"), exports);
 __exportStar(require("./subprocess"), exports);
 __exportStar(require("./claude_code"), exports);
 __exportStar(require("./fake/adapter"), exports);
-//# sourceMappingURL=index.js.map

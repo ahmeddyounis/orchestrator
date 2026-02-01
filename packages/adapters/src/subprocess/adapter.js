@@ -179,4 +179,3 @@ class SubprocessProviderAdapter {
     }
 }
 exports.SubprocessProviderAdapter = SubprocessProviderAdapter;
-//# sourceMappingURL=adapter.js.map

@@ -58,4 +58,3 @@ const nock_1 = __importDefault(require("nock"));
         await (0, vitest_1.expect)(adapter.generate({ messages: [{ role: 'user', content: 'Hi' }] }, mockContext)).rejects.toThrow(errors_1.RateLimitError);
     });
 });
-//# sourceMappingURL=contract.test.js.map

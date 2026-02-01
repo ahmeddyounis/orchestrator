@@ -56,4 +56,3 @@ class MockAdapter {
         (0, vitest_1.expect)(events[0]).toEqual({ type: 'text-delta', content: 'Mock' });
     });
 });
-//# sourceMappingURL=index.test.js.map

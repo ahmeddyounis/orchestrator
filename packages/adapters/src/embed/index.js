@@ -19,4 +19,3 @@ __exportStar(require("./embedder"), exports);
 __exportStar(require("./local_hash_embedder"), exports);
 __exportStar(require("./openai_embedder"), exports);
 __exportStar(require("./factory"), exports);
-//# sourceMappingURL=index.js.map

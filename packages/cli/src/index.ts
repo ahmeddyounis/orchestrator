@@ -11,6 +11,7 @@ import { registerDoctorCommand } from './commands/doctor';
 import { registerInitCommand } from './commands/init';
 import { registerSearchCommand } from './commands/search';
 import { registerTestCommand } from './commands/test';
+import { registerExportBundleCommand } from './commands/export-bundle';
 
 import { AppError, ConfigError, UsageError } from '@orchestrator/shared';
 
@@ -36,6 +37,7 @@ registerDoctorCommand(program);
 registerInitCommand(program);
 registerSearchCommand(program);
 registerTestCommand(program);
+registerExportBundleCommand(program);
 
 async function main() {
   try {

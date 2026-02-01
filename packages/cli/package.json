@@ -23,6 +23,7 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.2",
     "@types/node": "^25.1.0",
     "@types/which": "^3.0.4",
     "esbuild": "^0.23.0",
@@ -37,6 +38,7 @@
     "@orchestrator/repo": "workspace:*",
     "@orchestrator/shared": "workspace:*",
     "@types/inquirer": "^8.2.12",
+    "archiver": "^7.0.1",
     "chalk": "^4.1.2",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.2",

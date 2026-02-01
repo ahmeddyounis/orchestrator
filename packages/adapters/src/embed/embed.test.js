@@ -28,4 +28,3 @@ describe('LocalHashEmbedder', () => {
         expect(norm).toBeCloseTo(1);
     });
 });
-//# sourceMappingURL=embed.test.js.map

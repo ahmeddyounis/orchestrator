@@ -124,4 +124,3 @@ vitest_1.vi.mock('openai', () => {
         await (0, vitest_1.expect)(adapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, mockContext)).rejects.toThrow(errors_1.TimeoutError);
     });
 });
-//# sourceMappingURL=adapter.test.js.map

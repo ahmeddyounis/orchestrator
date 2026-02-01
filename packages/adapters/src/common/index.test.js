@@ -87,4 +87,3 @@ const errors_1 = require("../errors");
         (0, vitest_1.expect)(fn).toHaveBeenCalledTimes(1);
     });
 });
-//# sourceMappingURL=index.test.js.map

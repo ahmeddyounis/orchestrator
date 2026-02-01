@@ -15,4 +15,3 @@ export declare class OpenAIEmbedder implements Embedder {
     id(): string;
     private mapError;
 }
-//# sourceMappingURL=openai_embedder.d.ts.map

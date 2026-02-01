@@ -103,4 +103,3 @@ const FAKE_CLI_PATH = path.resolve(__dirname, 'fixtures/fake-agent-cli.js');
         pm.kill();
     });
 });
-//# sourceMappingURL=integration.test.js.map

@@ -12,4 +12,3 @@ export interface AdapterContext {
     timeoutMs?: number;
     retryOptions?: RetryOptions;
 }
-//# sourceMappingURL=types.d.ts.map

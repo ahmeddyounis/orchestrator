@@ -31,4 +31,3 @@ class ProcessError extends Error {
     }
 }
 exports.ProcessError = ProcessError;
-//# sourceMappingURL=errors.js.map

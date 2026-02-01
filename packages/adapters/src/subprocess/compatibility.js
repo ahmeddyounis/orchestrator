@@ -16,4 +16,3 @@ exports.SubprocessCompatibilityProfiles = {
     default: exports.DefaultCompatibilityProfile,
     'claude-code': exports.ClaudeCodeCompatibilityProfile,
 };
-//# sourceMappingURL=compatibility.js.map

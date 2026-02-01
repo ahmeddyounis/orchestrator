@@ -3,4 +3,3 @@ export interface Embedder {
     dims(): number;
     id(): string;
 }
-//# sourceMappingURL=embedder.d.ts.map

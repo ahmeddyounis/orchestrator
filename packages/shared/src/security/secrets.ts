@@ -108,7 +108,7 @@ export function redact(text: string, findings: SecretFinding[]): string {
   return redactedText;
 }
 
-const SENSITIVE_KEY_NAMES = new Set(['token', 'secret', 'apikey', 'auth', 'password']);
+const SENSITIVE_KEY_NAMES = new Set(['token', 'secret', 'apikey', 'api_key', 'auth', 'password']);
 
 export function redactObject(obj: any): any {
   if (obj === null || typeof obj !== 'object') {
