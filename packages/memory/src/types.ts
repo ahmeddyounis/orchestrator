@@ -1,3 +1,5 @@
+import type { RetrievalIntent } from '@orchestrator/shared';
+
 export type MemoryEntryType = 'procedural' | 'episodic' | 'semantic';
 
 export interface MemoryEntry {
@@ -48,6 +50,7 @@ export interface MemorySearchRequest {
   fallbackToLexicalOnVectorError?: boolean;
   proceduralBoost?: boolean;
   episodicBoostFailureSignature?: string;
+  intent?: RetrievalIntent;
 }
 
 export interface BaseHit {

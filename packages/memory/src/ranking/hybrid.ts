@@ -1,6 +1,91 @@
-import { LexicalHit, VectorHit, HybridHit, MemorySearchRequest } from '../types';
+import { LexicalHit, VectorHit, HybridHit, MemorySearchRequest, MemoryEntry } from '../types';
+import { rerank, RerankOptions } from './reranker';
+
+type ScoredMemoryEntry = MemoryEntry & { score: number };
 
 export function rerankHybrid(
+  lexicalHits: LexicalHit[],
+  vectorHits: VectorHit[],
+  options: MemorySearchRequest,
+): HybridHit[] {
+  // If no intent is provided, use the old ranking logic for backward compatibility.
+  if (!options.intent) {
+    return oldRerankHybrid(lexicalHits, vectorHits, options);
+  }
+
+  const allHits = new Map<string, Partial<HybridHit>>();
+
+  lexicalHits.forEach((hit) => {
+    allHits.set(hit.id, { ...hit });
+  });
+
+  vectorHits.forEach((hit) => {
+    const existing = allHits.get(hit.id);
+    if (existing) {
+      existing.vectorScore = hit.vectorScore;
+    } else {
+      allHits.set(hit.id, { ...hit });
+    }
+  });
+
+  const entriesToRerank: MemoryEntry[] = Array.from(allHits.values()).map(
+    (h) =>
+      ({
+        id: h.id!,
+        repoId: '', // repoId is not available here, but not used by rerank
+        type: h.type!,
+        title: h.title!,
+        content: h.content!,
+        stale: h.stale!,
+        createdAt: h.createdAt!,
+        updatedAt: h.updatedAt!,
+      }) as MemoryEntry,
+  );
+
+  const rerankOptions: RerankOptions = {
+    intent: options.intent,
+    staleDownrank: options.staleDownrank ?? true,
+    failureSignature: options.episodicBoostFailureSignature,
+  };
+
+  const rerankedEntries = rerank(entriesToRerank, rerankOptions) as ScoredMemoryEntry[];
+
+  const rerankedMap = new Map<string, number>();
+  rerankedEntries.forEach((e) => {
+    rerankedMap.set(e.id, e.score);
+  });
+
+  const finalHits: HybridHit[] = [];
+  for (const entry of rerankedEntries) {
+    const hit = allHits.get(entry.id);
+    if (hit) {
+      const lexicalScore = hit.lexicalScore ?? 0;
+      const vectorScore = hit.vectorScore ?? 0;
+      const combinedScore = rerankedMap.get(entry.id) ?? 0;
+
+      finalHits.push({
+        id: hit.id!,
+        type: hit.type!,
+        stale: hit.stale!,
+        title: hit.title!,
+        content: hit.content!,
+        lexicalScore,
+        vectorScore,
+        combinedScore,
+        createdAt: hit.createdAt!,
+        updatedAt: hit.updatedAt!,
+      });
+    }
+  }
+
+  // The rerank function already sorts, but we re-sort just in case.
+  finalHits.sort((a, b) => b.combinedScore - a.combinedScore);
+
+  return finalHits;
+}
+
+// Keep the old implementation as a fallback.
+function oldRerankHybrid(
   lexicalHits: LexicalHit[],
   vectorHits: VectorHit[],
   options: MemorySearchRequest,

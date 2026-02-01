@@ -29,7 +29,11 @@ import {
   ProceduralMemory,
   ProceduralMemoryEntry,
   ProceduralMemoryQuery,
+  MemorySearchService,
+  VectorBackendFactory,
+  NoOpVectorMemoryBackend,
 } from '@orchestrator/memory';
+import { Embedder } from '@orchestrator/adapters';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -1370,12 +1374,41 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
 
       const { query } = args;
       const topK = memConfig.retrieval.topK ?? 5;
-      const hits = store.search(this.repoRoot, query, {
-        topK,
+
+      const vectorBackend = memConfig.vector?.backend
+        ? VectorBackendFactory.fromConfig(
+            {
+              ...memConfig.vector,
+              path: path.join(this.repoRoot, memConfig.vector.path || ''),
+            },
+            false,
+          )
+        : new NoOpVectorMemoryBackend();
+
+      const embedderId = memConfig.embedder;
+      if (!embedderId) {
+        throw new ConfigError('Memory search requires an embedder to be configured.');
+      }
+      const embedder = this.registry.getAdapter(embedderId) as Embedder;
+
+      const searchService = new MemorySearchService({
+        memoryStore: store,
+        vectorBackend,
+        embedder,
+        repoId: this.repoRoot,
+      });
+
+      const result = await searchService.search({
+        query,
+        mode: 'hybrid',
+        topKFinal: topK,
         intent: args.intent,
         staleDownrank: memConfig.retrieval.staleDownrank ?? true,
-        failureSignature: args.failureSignature,
+        episodicBoostFailureSignature: args.failureSignature,
+        fallbackToLexicalOnVectorError: true,
       });
+
+      const hits = result.hits;
 
       await eventBus.emit({
         type: 'MemorySearched',
