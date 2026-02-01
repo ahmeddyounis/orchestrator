@@ -5,3 +5,4 @@ export * from './types';
 export * from './ranking';
 export * from './vector';
 export * from './config';
+export * from './search';

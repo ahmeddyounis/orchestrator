@@ -28,4 +28,5 @@ var __exportStar =
   };
 Object.defineProperty(exports, '__esModule', { value: true });
 __exportStar(require('./reranker'), exports);
+__exportStar(require('./hybrid'), exports);
 //# sourceMappingURL=index.js.map

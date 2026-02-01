@@ -218,6 +218,9 @@ importers:
 
   packages/memory:
     dependencies:
+      '@orchestrator/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@orchestrator/shared':
         specifier: workspace:*
         version: link:../shared

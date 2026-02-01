@@ -2,14 +2,16 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
-import { rerank, RerankOptions } from '../ranking';
 import { MemoryError } from '@orchestrator/shared';
-import type { MemoryEntry, MemoryEntryType, MemoryStatus } from '../types';
+import type { MemoryEntry, MemoryEntryType, MemoryStatus, LexicalHit } from '../types';
 
+export interface LexicalSearchOptions {
+  topK?: number;
+}
 export interface MemoryStore {
   init(dbPath: string): void;
   upsert(entry: MemoryEntry): void;
-  search(repoId: string, query: string, options: RerankOptions & { topK?: number }): MemoryEntry[];
+  search(repoId: string, query: string, options: LexicalSearchOptions): LexicalHit[];
   get(id: string): MemoryEntry | null;
   list(repoId: string, type?: MemoryEntryType, limit?: number): MemoryEntry[];
   listEntriesForRepo(repoId: string): MemoryEntry[];
@@ -100,6 +102,19 @@ export function createMemoryStore(): MemoryStore {
       fileRefsJson: row.fileRefsJson ?? undefined,
       fileHashesJson: row.fileHashesJson ?? undefined,
       stale: Boolean(row.stale),
+    };
+  };
+
+  const rowToLexicalHit = (row: MemoryEntryDbRow & { score: number }): LexicalHit => {
+    return {
+      id: row.id,
+      type: row.type,
+      title: row.title,
+      content: row.content,
+      stale: Boolean(row.stale),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      lexicalScore: row.score,
     };
   };
 
@@ -234,29 +249,36 @@ export function createMemoryStore(): MemoryStore {
   const search = (
     repoId: string,
     query: string,
-    options: RerankOptions & { topK?: number },
-  ): MemoryEntry[] => {
+    options: LexicalSearchOptions,
+  ): LexicalHit[] => {
     if (!db) throw new MemoryError('Database not initialized');
 
     const topK = options.topK ?? 10;
     const stmt = db.prepare(
       `
-      SELECT me.*
+      SELECT me.*, bm25(memory_entries_fts) as score
       FROM memory_entries_fts fts
       JOIN memory_entries me ON fts.rowid = me.rowid
       WHERE memory_entries_fts MATCH ?
       AND me.repoId = ?
-      ORDER BY bm25(memory_entries_fts)
+      ORDER BY score
       LIMIT ?;
     `,
     );
 
-    const rows = stmt.all(query, repoId, topK * 2) as unknown as MemoryEntryDbRow[]; // Fetch more to allow for deduping
-    const entries = rows.map(rowToEntry);
+    const rows = stmt.all(query, repoId, topK) as unknown as (MemoryEntryDbRow & {
+      score: number;
+    })[];
+    const entries = rows.map(rowToLexicalHit);
 
-    const rerankedEntries = rerank(entries, options);
+    // The bm25 scores are negative, with lower values being better. We'll normalize them
+    // so that a higher score is better. We'll simply invert them.
+    const maxScore = Math.max(...entries.map((e) => Math.abs(e.lexicalScore)));
 
-    return rerankedEntries.slice(0, topK);
+    return entries.map((e) => ({
+      ...e,
+      lexicalScore: 1 - Math.abs(e.lexicalScore) / maxScore,
+    }));
   };
 
   const wipe = (repoId: string): void => {
