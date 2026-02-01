@@ -12,10 +12,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
-  "devDependencies": {
-    "@types/node": "^25.1.0",
-    "typescript": "^5.3.3"
-  },
   "dependencies": {
     "@orchestrator/shared": "workspace:*",
     "@orchestrator/plugin-sdk": "workspace:*",
@@ -26,5 +22,9 @@
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.1",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "typescript": "^5.3.3"
   }
 }
