@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@orchestrator/shared": "workspace:*",
+    "@orchestrator/plugin-sdk": "workspace:*",
     "@orchestrator/adapters": "workspace:*",
     "@orchestrator/repo": "workspace:*",
     "@orchestrator/exec": "workspace:*",

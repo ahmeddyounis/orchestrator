@@ -1,0 +1,29 @@
+{
+  "name": "@orchestrator/plugin-sdk",
+  "version": "1.0.0",
+  "description": "Plugin SDK for building orchestrator extensions",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@orchestrator/shared": "workspace:*"
+  },
+  "keywords": [
+    "orchestrator",
+    "plugin",
+    "sdk"
+  ]
+}

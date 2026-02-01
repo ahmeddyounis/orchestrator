@@ -8,6 +8,7 @@
   "exclude": ["src/__tmp_test_env_*", "src/**/__tmp_test_env_*", "**/*.test.ts", "**/*.test.tsx"],
   "references": [
     { "path": "../shared" },
+    { "path": "../plugin-sdk" },
     { "path": "../repo" },
     { "path": "../memory" },
     { "path": "../adapters" },
