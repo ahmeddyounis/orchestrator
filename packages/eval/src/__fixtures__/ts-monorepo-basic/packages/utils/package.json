@@ -1,0 +1,11 @@
+{
+  "name": "@ts-monorepo-basic/utils",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^0.31.0"
+  }
+}

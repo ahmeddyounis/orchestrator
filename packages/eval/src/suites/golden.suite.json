@@ -1,0 +1,63 @@
+{
+  "id": "golden",
+  "name": "Golden Suite",
+  "description": "A suite of golden tests for regression testing.",
+  "tasks": [
+    {
+      "id": "ts-monorepo-basic-fix-failing-test",
+      "name": "Fix Failing Test (ts-monorepo-basic)",
+      "description": "Fix the failing test in the @ts-monorepo-basic/utils package.",
+      "fixture": "ts-monorepo-basic",
+      "prompt": "The test in packages/utils/src/index.test.ts is failing. Please fix it.",
+      "verification": {
+        "type": "verification_pass",
+        "command": "pnpm test"
+      }
+    },
+    {
+      "id": "ts-monorepo-eslint-fix-lint-error",
+      "name": "Fix ESLint Error (ts-monorepo-eslint)",
+      "description": "Fix the lint error in the @ts-monorepo-eslint/app package.",
+      "fixture": "ts-monorepo-eslint",
+      "prompt": "The file packages/app/src/index.ts has a lint error. Please fix it.",
+      "verification": {
+        "type": "verification_pass",
+        "command": "pnpm lint"
+      }
+    },
+    {
+      "id": "ts-monorepo-typecheck-fix-type-error",
+      "name": "Fix Type Error (ts-monorepo-typecheck)",
+      "description": "Fix the type error in the @ts-monorepo-typecheck/app package.",
+      "fixture": "ts-monorepo-typecheck",
+      "prompt": "The file packages/app/src/index.ts has a type error. Please fix it.",
+      "verification": {
+        "type": "verification_pass",
+        "command": "pnpm typecheck"
+      }
+    },
+    {
+      "id": "ts-monorepo-refactor",
+      "name": "Refactor (ts-monorepo-refactor)",
+      "description": "Inline the 'subtract' function from the utils package into the app package.",
+      "fixture": "ts-monorepo-refactor",
+      "prompt": "The 'subtract' function in 'packages/utils/src/index.ts' should be inlined into 'packages/app/src/index.ts'.",
+      "verification": {
+        "type": "file_contains",
+        "path": "packages/app/src/index.ts",
+        "content": "const subtract = (a: number, b: number): number => {\n  return a - b;\n};"
+      }
+    },
+    {
+      "id": "ts-monorepo-missing-export",
+      "name": "Missing Export (ts-monorepo-missing-export)",
+      "description": "Export the 'multiply' function from the utils package and use it in the app package.",
+      "fixture": "ts-monorepo-missing-export",
+      "prompt": "The 'multiply' function is not exported from 'packages/utils/src/index.ts'. Please export it and use it in 'packages/app/src/index.ts'.",
+      "verification": {
+        "type": "verification_pass",
+        "command": "pnpm typecheck"
+      }
+    }
+  ]
+}

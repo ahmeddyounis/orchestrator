@@ -1,0 +1,10 @@
+{
+  "name": "ts-monorepo-refactor",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.4"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@ts-monorepo-missing-export/app",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@ts-monorepo-missing-export/utils": "workspace:*"
+  }
+}

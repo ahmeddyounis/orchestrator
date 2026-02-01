@@ -1,0 +1,11 @@
+{
+  "name": "ts-monorepo-basic",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.4",
+    "vitest": "^0.31.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "ts-monorepo-typecheck",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.4"
+  }
+}
