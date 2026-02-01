@@ -246,11 +246,7 @@ export function createMemoryStore(): MemoryStore {
     };
   };
 
-  const search = (
-    repoId: string,
-    query: string,
-    options: LexicalSearchOptions,
-  ): LexicalHit[] => {
+  const search = (repoId: string, query: string, options: LexicalSearchOptions): LexicalHit[] => {
     if (!db) throw new MemoryError('Database not initialized');
 
     const topK = options.topK ?? 10;

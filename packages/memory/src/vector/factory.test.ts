@@ -33,13 +33,10 @@ describe('VectorBackendFactory', () => {
     });
 
     it('should throw VectorBackendNotImplementedError for a remote backend when remoteOptIn is true', () => {
-      const config: VectorBackendConfig = { backend: 'qdrant' };
-      // It should throw NotImplementedError, but not the remote opt-in error.
+      const config: VectorBackendConfig = { backend: 'chroma' };
+      // It should throw NotImplementedError, but not the remote opt-in error
       expect(() => VectorBackendFactory.fromConfig(config, true)).toThrow(
         VectorBackendNotImplementedError,
-      );
-      expect(() => VectorBackendFactory.fromConfig(config, true)).toThrow(
-        'Vector backend "qdrant" is not implemented.',
       );
     });
 

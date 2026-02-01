@@ -83,13 +83,22 @@ export class MemorySearchService {
     const { embedder, repoId, vectorBackend } = this.deps;
     const events: string[] = [];
 
-    const lexicalResult = await this.lexicalSearch({ ...request, mode: 'lexical', topKFinal: topKLexical });
+    const lexicalResult = await this.lexicalSearch({
+      ...request,
+      mode: 'lexical',
+      topKFinal: topKLexical,
+    });
 
     let vectorHits: VectorHit[] = [];
     try {
       const queryVectors = await embedder.embedTexts([query]);
       const queryVector = queryVectors[0];
-      const rawVectorHits = await vectorBackend.query({}, repoId, new Float32Array(queryVector), topKVector);
+      const rawVectorHits = await vectorBackend.query(
+        {},
+        repoId,
+        new Float32Array(queryVector),
+        topKVector,
+      );
       vectorHits = await this.hydrateVectorHits(rawVectorHits);
     } catch (error: any) {
       events.push('VectorSearchFailed');

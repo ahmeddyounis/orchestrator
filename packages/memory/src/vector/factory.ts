@@ -1,5 +1,4 @@
-// packages/memory/src/vector/factory.ts
-
+import { QdrantVectorBackend, QdrantVectorBackendConfig } from './qdrant';
 import {
   VectorMemoryBackend,
   VectorItem,
@@ -157,6 +156,10 @@ export class VectorBackendFactory {
         return new SQLiteVectorBackend(config.path, config.maxCandidates);
       }
 
+      case 'qdrant': {
+        return new QdrantVectorBackend(config as QdrantVectorBackendConfig);
+      }
+
       default:
         throw new VectorBackendNotImplementedError(backend);
     }
@@ -224,11 +227,9 @@ class LegacyVectorBackendAdapter implements LegacyVectorMemoryBackend {
  * Legacy factory function for creating vector backends.
  * @deprecated Use VectorBackendFactory.fromConfig() instead
  */
-export function createVectorMemoryBackend(
-  config: VectorStorageConfig,
-): LegacyVectorMemoryBackend {
+export function createVectorMemoryBackend(config: VectorStorageConfig): LegacyVectorMemoryBackend {
   const backendName = config.backend ?? 'sqlite';
-  
+
   const newConfig: VectorBackendConfig = {
     backend: backendName,
     path: config.path,

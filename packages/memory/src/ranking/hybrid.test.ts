@@ -3,7 +3,13 @@ import { rerankHybrid } from './hybrid';
 import { LexicalHit, VectorHit, MemorySearchRequest } from '../types';
 
 describe('rerankHybrid', () => {
-  const baseLexicalHit = (id: string, score: number, type: 'procedural' | 'episodic' | 'semantic' = 'procedural', stale = false, title = `Test ${id}`): LexicalHit => ({
+  const baseLexicalHit = (
+    id: string,
+    score: number,
+    type: 'procedural' | 'episodic' | 'semantic' = 'procedural',
+    stale = false,
+    title = `Test ${id}`,
+  ): LexicalHit => ({
     id,
     type,
     title,
@@ -14,7 +20,13 @@ describe('rerankHybrid', () => {
     updatedAt: Date.now(),
   });
 
-  const baseVectorHit = (id: string, score: number, type: 'procedural' | 'episodic' | 'semantic' = 'procedural', stale = false, title = `Test ${id}`): VectorHit => ({
+  const baseVectorHit = (
+    id: string,
+    score: number,
+    type: 'procedural' | 'episodic' | 'semantic' = 'procedural',
+    stale = false,
+    title = `Test ${id}`,
+  ): VectorHit => ({
     id,
     type,
     title,
@@ -32,44 +44,35 @@ describe('rerankHybrid', () => {
   };
 
   it('merges lexical and vector hits with combined scores', () => {
-    const lexicalHits: LexicalHit[] = [
-      baseLexicalHit('a', 0.9),
-      baseLexicalHit('b', 0.7),
-    ];
-    const vectorHits: VectorHit[] = [
-      baseVectorHit('a', 0.8),
-      baseVectorHit('c', 0.95),
-    ];
+    const lexicalHits: LexicalHit[] = [baseLexicalHit('a', 0.9), baseLexicalHit('b', 0.7)];
+    const vectorHits: VectorHit[] = [baseVectorHit('a', 0.8), baseVectorHit('c', 0.95)];
 
     const result = rerankHybrid(lexicalHits, vectorHits, baseRequest);
 
     expect(result.length).toBe(3);
-    expect(result.map(h => h.id)).toContain('a');
-    expect(result.map(h => h.id)).toContain('b');
-    expect(result.map(h => h.id)).toContain('c');
+    expect(result.map((h) => h.id)).toContain('a');
+    expect(result.map((h) => h.id)).toContain('b');
+    expect(result.map((h) => h.id)).toContain('c');
 
     // 'a' has both lexical and vector scores
-    const hitA = result.find(h => h.id === 'a')!;
+    const hitA = result.find((h) => h.id === 'a')!;
     expect(hitA.lexicalScore).toBe(0.9);
     expect(hitA.vectorScore).toBe(0.8);
     expect(hitA.combinedScore).toBe(0.5 * 0.9 + 0.5 * 0.8);
 
     // 'b' has only lexical score
-    const hitB = result.find(h => h.id === 'b')!;
+    const hitB = result.find((h) => h.id === 'b')!;
     expect(hitB.lexicalScore).toBe(0.7);
     expect(hitB.vectorScore).toBe(0);
 
     // 'c' has only vector score
-    const hitC = result.find(h => h.id === 'c')!;
+    const hitC = result.find((h) => h.id === 'c')!;
     expect(hitC.lexicalScore).toBe(0);
     expect(hitC.vectorScore).toBe(0.95);
   });
 
   it('sorts results by combined score descending', () => {
-    const lexicalHits: LexicalHit[] = [
-      baseLexicalHit('low', 0.1),
-      baseLexicalHit('high', 0.9),
-    ];
+    const lexicalHits: LexicalHit[] = [baseLexicalHit('low', 0.1), baseLexicalHit('high', 0.9)];
     const vectorHits: VectorHit[] = [];
 
     const result = rerankHybrid(lexicalHits, vectorHits, baseRequest);
@@ -138,7 +141,7 @@ describe('rerankHybrid', () => {
     // episodic: (0.5 * 0.6 + 0.5 * 0) * 1.3 = 0.3 * 1.3 = 0.39
     // semantic: 0.5 * 0.8 + 0.5 * 0 = 0.4
     // So semantic should still be higher. Let me increase the episodic score.
-    const hitMatching = result.find(h => h.id === 'matching-episodic')!;
+    const hitMatching = result.find((h) => h.id === 'matching-episodic')!;
     // Just verify the boost was applied
     expect(hitMatching.combinedScore).toBeGreaterThan(0.5 * 0.6); // Should be boosted
   });
@@ -149,10 +152,7 @@ describe('rerankHybrid', () => {
   });
 
   it('handles vector-only results', () => {
-    const vectorHits: VectorHit[] = [
-      baseVectorHit('v1', 0.9),
-      baseVectorHit('v2', 0.7),
-    ];
+    const vectorHits: VectorHit[] = [baseVectorHit('v1', 0.9), baseVectorHit('v2', 0.7)];
 
     const result = rerankHybrid([], vectorHits, baseRequest);
 
@@ -163,10 +163,7 @@ describe('rerankHybrid', () => {
   });
 
   it('handles lexical-only results', () => {
-    const lexicalHits: LexicalHit[] = [
-      baseLexicalHit('l1', 0.9),
-      baseLexicalHit('l2', 0.7),
-    ];
+    const lexicalHits: LexicalHit[] = [baseLexicalHit('l1', 0.9), baseLexicalHit('l2', 0.7)];
 
     const result = rerankHybrid(lexicalHits, [], baseRequest);
 

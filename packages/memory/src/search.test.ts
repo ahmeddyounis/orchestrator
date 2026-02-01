@@ -65,8 +65,26 @@ describe('MemorySearchService', () => {
     };
 
     const lexicalHits: LexicalHit[] = [
-      { id: '1', title: 'test 1', content: 'content 1', lexicalScore: 0.9, type: 'procedural', stale: false, createdAt: 0, updatedAt: 0 },
-      { id: '2', title: 'test 2', content: 'content 2', lexicalScore: 0.8, type: 'episodic', stale: false, createdAt: 0, updatedAt: 0 },
+      {
+        id: '1',
+        title: 'test 1',
+        content: 'content 1',
+        lexicalScore: 0.9,
+        type: 'procedural',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {
+        id: '2',
+        title: 'test 2',
+        content: 'content 2',
+        lexicalScore: 0.8,
+        type: 'episodic',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+      },
     ];
 
     vi.spyOn(mockMemoryStore, 'search').mockReturnValue(lexicalHits);
@@ -95,17 +113,50 @@ describe('MemorySearchService', () => {
     ];
     vi.spyOn(mockVectorBackend, 'query').mockResolvedValue(vectorQueryResults);
 
-    const memoryEntries: Array<{ id: string; title: string; content: string; type: 'procedural' | 'episodic' | 'semantic'; stale: boolean; createdAt: number; updatedAt: number; repoId: string }> = [
-        { id: '1', title: 'test 1', content: 'content 1', type: 'procedural', stale: false, createdAt: 0, updatedAt: 0, repoId: 'test-repo' },
-        { id: '3', title: 'test 3', content: 'content 3', type: 'semantic', stale: true, createdAt: 0, updatedAt: 0, repoId: 'test-repo' },
+    const memoryEntries: Array<{
+      id: string;
+      title: string;
+      content: string;
+      type: 'procedural' | 'episodic' | 'semantic';
+      stale: boolean;
+      createdAt: number;
+      updatedAt: number;
+      repoId: string;
+    }> = [
+      {
+        id: '1',
+        title: 'test 1',
+        content: 'content 1',
+        type: 'procedural',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+        repoId: 'test-repo',
+      },
+      {
+        id: '3',
+        title: 'test 3',
+        content: 'content 3',
+        type: 'semantic',
+        stale: true,
+        createdAt: 0,
+        updatedAt: 0,
+        repoId: 'test-repo',
+      },
     ];
-    vi.spyOn(mockMemoryStore, 'get').mockImplementation((id: string) => memoryEntries.find(e => e.id === id) || null);
-
+    vi.spyOn(mockMemoryStore, 'get').mockImplementation(
+      (id: string) => memoryEntries.find((e) => e.id === id) || null,
+    );
 
     const result = await searchService.search(request);
 
     expect(mockEmbedder.embedTexts).toHaveBeenCalledWith(['test']);
-    expect(mockVectorBackend.query).toHaveBeenCalledWith({}, 'test-repo', new Float32Array([1, 2, 3, 4]), 10);
+    expect(mockVectorBackend.query).toHaveBeenCalledWith(
+      {},
+      'test-repo',
+      new Float32Array([1, 2, 3, 4]),
+      10,
+    );
     expect(result.methodUsed).toBe('vector');
     expect(result.hits.length).toBe(2);
     expect(result.hits[0].id).toBe('1');
@@ -116,16 +167,34 @@ describe('MemorySearchService', () => {
 
   it('should perform hybrid search', async () => {
     const request: MemorySearchRequest = {
-        query: 'test',
-        mode: 'hybrid',
-        topKFinal: 5,
-        staleDownrank: true,
-        proceduralBoost: true,
+      query: 'test',
+      mode: 'hybrid',
+      topKFinal: 5,
+      staleDownrank: true,
+      proceduralBoost: true,
     };
 
     const lexicalHits: LexicalHit[] = [
-        { id: '1', title: 'test 1', content: 'content 1', lexicalScore: 0.9, type: 'procedural', stale: false, createdAt: 0, updatedAt: 0 },
-        { id: '2', title: 'test 2', content: 'content 2', lexicalScore: 0.8, type: 'episodic', stale: true, createdAt: 0, updatedAt: 0 },
+      {
+        id: '1',
+        title: 'test 1',
+        content: 'content 1',
+        lexicalScore: 0.9,
+        type: 'procedural',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {
+        id: '2',
+        title: 'test 2',
+        content: 'content 2',
+        lexicalScore: 0.8,
+        type: 'episodic',
+        stale: true,
+        createdAt: 0,
+        updatedAt: 0,
+      },
     ];
     vi.spyOn(mockMemoryStore, 'search').mockReturnValue(lexicalHits);
 
@@ -133,17 +202,55 @@ describe('MemorySearchService', () => {
     vi.spyOn(mockEmbedder, 'embedTexts').mockResolvedValue(queryVector);
 
     const vectorQueryResults: VectorQueryResult[] = [
-        { id: '1', score: 0.95 },
-        { id: '3', score: 0.85 },
+      { id: '1', score: 0.95 },
+      { id: '3', score: 0.85 },
     ];
     vi.spyOn(mockVectorBackend, 'query').mockResolvedValue(vectorQueryResults);
-    
-    const memoryEntries: Array<{ id: string; title: string; content: string; type: 'procedural' | 'episodic' | 'semantic'; stale: boolean; createdAt: number; updatedAt: number; repoId: string }> = [
-        { id: '1', title: 'test 1', content: 'content 1', type: 'procedural', stale: false, createdAt: 0, updatedAt: 0, repoId: 'test-repo' },
-        { id: '2', title: 'test 2', content: 'content 2', type: 'episodic', stale: true, createdAt: 0, updatedAt: 0, repoId: 'test-repo' },
-        { id: '3', title: 'test 3', content: 'content 3', type: 'semantic', stale: false, createdAt: 0, updatedAt: 0, repoId: 'test-repo' },
+
+    const memoryEntries: Array<{
+      id: string;
+      title: string;
+      content: string;
+      type: 'procedural' | 'episodic' | 'semantic';
+      stale: boolean;
+      createdAt: number;
+      updatedAt: number;
+      repoId: string;
+    }> = [
+      {
+        id: '1',
+        title: 'test 1',
+        content: 'content 1',
+        type: 'procedural',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+        repoId: 'test-repo',
+      },
+      {
+        id: '2',
+        title: 'test 2',
+        content: 'content 2',
+        type: 'episodic',
+        stale: true,
+        createdAt: 0,
+        updatedAt: 0,
+        repoId: 'test-repo',
+      },
+      {
+        id: '3',
+        title: 'test 3',
+        content: 'content 3',
+        type: 'semantic',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+        repoId: 'test-repo',
+      },
     ];
-    vi.spyOn(mockMemoryStore, 'get').mockImplementation((id: string) => memoryEntries.find(e => e.id === id) || null);
+    vi.spyOn(mockMemoryStore, 'get').mockImplementation(
+      (id: string) => memoryEntries.find((e) => e.id === id) || null,
+    );
 
     const result = await searchService.search(request);
 
@@ -159,14 +266,23 @@ describe('MemorySearchService', () => {
 
   it('should fallback to lexical search if vector search fails in hybrid mode', async () => {
     const request: MemorySearchRequest = {
-        query: 'test',
-        mode: 'hybrid',
-        topKFinal: 5,
-        fallbackToLexicalOnVectorError: true,
+      query: 'test',
+      mode: 'hybrid',
+      topKFinal: 5,
+      fallbackToLexicalOnVectorError: true,
     };
 
     const lexicalHits: LexicalHit[] = [
-        { id: '1', title: 'test 1', content: 'content 1', lexicalScore: 0.9, type: 'procedural', stale: false, createdAt: 0, updatedAt: 0 },
+      {
+        id: '1',
+        title: 'test 1',
+        content: 'content 1',
+        lexicalScore: 0.9,
+        type: 'procedural',
+        stale: false,
+        createdAt: 0,
+        updatedAt: 0,
+      },
     ];
     vi.spyOn(mockMemoryStore, 'search').mockReturnValue(lexicalHits);
 
