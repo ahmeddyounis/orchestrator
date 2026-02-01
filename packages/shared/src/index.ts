@@ -8,6 +8,7 @@ export * from './errors';
 export * from './fs/artifacts';
 // NOTE: ./artifacts exports a different Manifest type; avoid re-export conflict.
 export { ManifestManager, MANIFEST_FILENAME, MANIFEST_VERSION } from './artifacts';
+export * from './string-utils';
 export * from './config/schema';
 export * from './types/memory';
 export * from './security/secrets';

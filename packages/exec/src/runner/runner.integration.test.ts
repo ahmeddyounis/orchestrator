@@ -85,7 +85,7 @@ describe('SafeCommandRunner Integration', () => {
 
     // Run for 3 seconds
     const req: ToolRunRequest = {
-      command: "node packages/exec/src/runner/test-timeout-script.js",
+      command: 'node packages/exec/src/runner/test-timeout-script.js',
       reason: 'Integration test timeout',
       cwd: process.cwd(),
     };

@@ -3,7 +3,13 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runMigrations } from './migrations';
 import { MemoryError } from '@orchestrator/shared';
-import type { MemoryEntry, MemoryEntryType, MemoryStatus, LexicalHit, IntegrityStatus } from '../types';
+import type {
+  MemoryEntry,
+  MemoryEntryType,
+  MemoryStatus,
+  LexicalHit,
+  IntegrityStatus,
+} from '../types';
 import { createCrypto, type Crypto } from './crypto';
 
 export interface LexicalSearchOptions {

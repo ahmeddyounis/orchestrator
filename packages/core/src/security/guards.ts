@@ -73,10 +73,7 @@ const INJECTION_PHRASES = [
 ];
 
 // Build a case-insensitive regex for all phrases.
-const INJECTION_REGEX = new RegExp(
-  INJECTION_PHRASES.map((p) => `\\b${p}\\b`).join('|'),
-  'gi',
-);
+const INJECTION_REGEX = new RegExp(INJECTION_PHRASES.map((p) => `\\b${p}\\b`).join('|'), 'gi');
 
 /**
  * Filters known prompt injection phrases from a string.

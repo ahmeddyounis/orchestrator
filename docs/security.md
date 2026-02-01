@@ -73,7 +73,7 @@ These controls are enforced in the initial version of the Orchestrator.
       encryptAtRest: true
   security:
     encryption:
-      keyEnv: ORCHESTRATOR_ENC_KEY  # default
+      keyEnv: ORCHESTRATOR_ENC_KEY # default
   ```
 - **Limitations:**
   - Run artifacts under `.orchestrator/runs` are **not** encrypted (planned for future work).

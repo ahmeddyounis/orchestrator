@@ -84,14 +84,14 @@ describe('assessMemoryIntegrity', () => {
 
   it('should be blocked and suspect if it meets both criteria', () => {
     const entry: MemoryEntry = {
-        id: '1',
-        repoId: 'repo',
-        type: 'procedural',
-        title: 'test',
-        content: 'sudo rm -rf /',
-        evidenceJson: JSON.stringify({ exitCode: 0, classification: 'test' }),
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+      id: '1',
+      repoId: 'repo',
+      type: 'procedural',
+      title: 'test',
+      content: 'sudo rm -rf /',
+      evidenceJson: JSON.stringify({ exitCode: 0, classification: 'test' }),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     const { status, reasons } = assessMemoryIntegrity(entry);
     expect(status).toBe('blocked');

@@ -69,7 +69,7 @@ describe('SubprocessProviderAdapter', () => {
         '-e',
         'console.log(process.env.TEST_VAR || "MISSING"); console.log("> ");',
       ],
-      env: ['TEST_VAR'],
+      envAllowlist: ['TEST_VAR'],
     });
 
     // Set env in process
@@ -85,5 +85,24 @@ describe('SubprocessProviderAdapter', () => {
 
     delete process.env.TEST_VAR;
     delete process.env.OTHER_VAR;
+  });
+
+  it('should truncate oversized transcripts', async () => {
+    const adapter = new SubprocessProviderAdapter({
+      command: [process.execPath, '-e', "console.log('A'.repeat(100)); console.log('> ');"],
+      maxTranscriptSize: 50,
+    });
+
+    const req: ModelRequest = {
+      messages: [{ role: 'user', content: '' }], // Empty prompt
+    };
+
+    const response = await adapter.generate(req, ctx);
+
+    // With a max size of 50, the output should be truncated
+    expect(response.text.length).toBeLessThanOrEqual(50);
+    expect(response.text).toContain('TRUNCATED');
+    // Check that we have the tail end of the 'A's
+    expect(response.text.endsWith('A'.repeat(10))).toBe(false); // prompt is stripped
   });
 });

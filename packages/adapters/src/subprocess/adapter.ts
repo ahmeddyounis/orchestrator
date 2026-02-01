@@ -14,7 +14,8 @@ import * as fs from 'fs/promises';
 export interface SubprocessConfig {
   command: string[];
   cwdMode?: 'repoRoot' | 'runDir';
-  env?: string[]; // Allowlist of env vars to pass through
+  envAllowlist?: string[]; // Allowlist of env vars to pass through
+  maxTranscriptSize?: number;
 }
 
 export class SubprocessProviderAdapter implements ProviderAdapter {
@@ -56,21 +57,13 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       logger: ctx.logger,
       runId: ctx.runId,
       timeoutMs: ctx.timeoutMs,
+      envAllowlist: this.config.envAllowlist,
     });
 
     const cwd = process.cwd(); // Default to process.cwd() for 'repoRoot' and 'runDir' for MVP
 
-    // Env construction
+    // Env construction is now handled by ProcessManager based on envAllowlist
     const env: Record<string, string> = {};
-    const shouldInherit = !this.config.env;
-
-    if (this.config.env) {
-      for (const key of this.config.env) {
-        if (process.env[key] !== undefined) {
-          env[key] = process.env[key]!;
-        }
-      }
-    }
 
     // Logging setup
     // Ensure we don't crash if artifacts dir setup fails or isn't there (though it should be)
@@ -94,8 +87,18 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
 
     // Capture output
     let outputText = '';
+    // Default to a sane limit (e.g., 16MB) to prevent memory exhaustion
+    const maxTranscriptSize = this.config.maxTranscriptSize || 16 * 1024 * 1024;
+    const truncationMarker = `\n\n...[TRUNCATED. Showing last ${maxTranscriptSize} bytes]...\n\n`;
+
     pm.on('output', async (chunk) => {
       outputText += chunk;
+      // If we've exceeded the budget, trim from the beginning
+      if (outputText.length > maxTranscriptSize) {
+        outputText =
+          truncationMarker +
+          outputText.slice(outputText.length - (maxTranscriptSize - truncationMarker.length));
+      }
       await logTranscript(chunk);
     });
 
@@ -107,7 +110,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     const isPrompt = (text: string) => this.isPrompt(text);
 
     try {
-      await pm.spawn(this.config.command, cwd, env, false, shouldInherit);
+      await pm.spawn(this.config.command, cwd, env, false);
 
       // Consume initial prompt
       await pm.readUntilHeuristic(800, isPrompt);

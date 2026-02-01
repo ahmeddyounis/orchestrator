@@ -1,8 +1,4 @@
-import {
-  wrapUntrustedContent,
-  wrapRepoPolicy,
-  filterInjectionPhrases,
-} from './guards';
+import { wrapUntrustedContent, wrapRepoPolicy, filterInjectionPhrases } from './guards';
 
 describe('Prompt Injection Guards', () => {
   describe('wrapUntrustedContent', () => {

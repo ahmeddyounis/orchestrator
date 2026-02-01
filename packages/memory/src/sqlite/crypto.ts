@@ -1,10 +1,5 @@
 // Placeholder for crypto utility
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-  scryptSync,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { MemoryError } from '@orchestrator/shared';
 
 // Using AES-256-GCM. This is a good general-purpose choice.
@@ -36,10 +31,7 @@ export function createCrypto(key: string): Crypto {
   const encrypt = (plaintext: string): string => {
     const iv = randomBytes(IV_LENGTH);
     const cipher = createCipheriv(ALGORITHM, derivedKey, iv);
-    const encrypted = Buffer.concat([
-      cipher.update(plaintext, 'utf8'),
-      cipher.final(),
-    ]);
+    const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
     // We'll store the iv, authTag, and ciphertext together in a single
@@ -56,10 +48,7 @@ export function createCrypto(key: string): Crypto {
 
       const decipher = createDecipheriv(ALGORITHM, derivedKey, iv);
       decipher.setAuthTag(authTag);
-      const decrypted = Buffer.concat([
-        decipher.update(encrypted),
-        decipher.final(),
-      ]);
+      const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
       return decrypted.toString('utf8');
     } catch (e: any) {
       throw new MemoryError(

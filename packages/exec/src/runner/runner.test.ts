@@ -87,9 +87,7 @@ describe('SafeCommandRunner', () => {
   it('should throw UsageError if command is denylisted', async () => {
     const req: ToolRunRequest = { command: 'rm -rf /', reason: 'test', cwd: '/tmp' };
 
-    await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(
-      UsageError,
-    );
+    await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(UsageError);
   });
 
   it('should bypass confirmation if command is allowlisted', async () => {
@@ -128,9 +126,7 @@ describe('SafeCommandRunner', () => {
     vi.mocked(mockUi.confirm).mockResolvedValue(false);
     const req: ToolRunRequest = { command: 'other-cmd', reason: 'test', cwd: '/tmp' };
 
-    await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(
-      UsageError,
-    );
+    await expect(runner.run(req, defaultPolicy, mockUi, mockCtx)).rejects.toThrow(UsageError);
   });
 
   it('should handle timeout', async () => {

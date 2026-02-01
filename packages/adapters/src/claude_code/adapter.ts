@@ -19,7 +19,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
     super({
       command: [...command, ...args],
       cwdMode: 'repoRoot', // Enforce repoRoot
-      env: config.env,
+      envAllowlist: config.env,
     });
   }
 

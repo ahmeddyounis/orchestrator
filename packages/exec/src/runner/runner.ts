@@ -94,8 +94,9 @@ export class SafeCommandRunner {
     // 3. Network Policy Check
     if (policy.networkPolicy === 'deny' && !isAllowlisted) {
       const parsed = parseCommand(req.command);
-              if (
-                classifier.isNetworkCommand(parsed) ||        req.classification === 'install' ||
+      if (
+        classifier.isNetworkCommand(parsed) ||
+        req.classification === 'install' ||
         req.classification === 'network'
       ) {
         return {

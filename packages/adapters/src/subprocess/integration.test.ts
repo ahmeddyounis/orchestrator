@@ -45,7 +45,7 @@ describe('Subprocess Integration', () => {
 
   it('should handle basic interaction via Adapter', async () => {
     const adapter = new SubprocessProviderAdapter({
-      command: ['node', FAKE_CLI_PATH],
+      command: [process.execPath, FAKE_CLI_PATH],
     });
 
     const req: ModelRequest = {
@@ -59,7 +59,7 @@ describe('Subprocess Integration', () => {
 
   it('should timeout when CLI is too slow', async () => {
     const adapter = new SubprocessProviderAdapter({
-      command: ['node', FAKE_CLI_PATH, '--slow'],
+      command: [process.execPath, FAKE_CLI_PATH, '--slow'],
     });
 
     const shortCtx = { ...ctx, timeoutMs: 1000 };
@@ -71,7 +71,7 @@ describe('Subprocess Integration', () => {
 
   it('should timeout if end marker is missing', async () => {
     const adapter = new SubprocessProviderAdapter({
-      command: ['node', FAKE_CLI_PATH, '--no-end-marker'],
+      command: [process.execPath, FAKE_CLI_PATH, '--no-end-marker'],
     });
 
     const shortCtx = { ...ctx, timeoutMs: 1500 };
@@ -92,7 +92,7 @@ describe('Subprocess Integration', () => {
       pm.on('error', (err) => reject(err));
     });
 
-    await pm.spawn(['node', FAKE_CLI_PATH, '--large'], process.cwd(), {}, false);
+    await pm.spawn([process.execPath, FAKE_CLI_PATH, '--large'], process.cwd(), {}, false);
     pm.write('trigger\n');
 
     await expect(resultPromise).rejects.toThrow('Max output size 51200 exceeded');

@@ -7,6 +7,8 @@ import {
   SubprocessOutputChunked,
   SubprocessExited,
   ProviderError,
+  stripAnsi,
+  redactForLogs,
 } from '@orchestrator/shared';
 
 export interface ProcessManagerOptions {
@@ -17,6 +19,7 @@ export interface ProcessManagerOptions {
   maxOutputSize?: number; // Max bytes to buffer/allow
   logger?: Logger;
   runId?: string; // For event tagging
+  envAllowlist?: string[];
 }
 
 export interface ProcessOutput {
@@ -37,7 +40,7 @@ export class ProcessManager extends EventEmitter {
   private pid?: number;
   private startTime = 0;
 
-  constructor(private options: ProcessManagerOptions = {}) {
+  constructor(private readonly options: ProcessManagerOptions = {}) {
     super();
     this.logger = options.logger;
     this.runId = options.runId || 'unknown';
@@ -52,7 +55,6 @@ export class ProcessManager extends EventEmitter {
     cwd: string,
     env: Record<string, string>,
     usePty: boolean,
-    inheritEnv: boolean = true,
   ): Promise<void> {
     if (this.ptyProcess || this.childProcess) {
       throw new ProviderError('Process already running');
@@ -63,11 +65,22 @@ export class ProcessManager extends EventEmitter {
     const cmd = command[0];
     const args = command.slice(1);
 
-    // Ensure env has basic PATH if not provided or merged
-    const rawEnv = inheritEnv ? { ...process.env, ...env } : env;
+    // Create a new environment for the subprocess, isolating it from the main process.
+    const finalEnv: Record<string, string> = { ...env };
+
+    // Explicitly add whitelisted environment variables from the current process.
+    if (this.options.envAllowlist) {
+      for (const key of this.options.envAllowlist) {
+        if (process.env[key] !== undefined) {
+          finalEnv[key] = process.env[key] as string;
+        }
+      }
+    }
+
+    // Ensure all environment variables are strings.
     const sanitizedEnv: Record<string, string> = {};
-    for (const key in rawEnv) {
-      const val = rawEnv[key];
+    for (const key in finalEnv) {
+      const val = finalEnv[key];
       if (val !== undefined) {
         sanitizedEnv[key] = String(val);
       }
@@ -317,7 +330,12 @@ export class ProcessManager extends EventEmitter {
   }
 
   private handleOutput(chunk: string, stream: 'stdout' | 'stderr') {
-    if (this.options.maxOutputSize && this.outputSize + chunk.length > this.options.maxOutputSize) {
+    const cleanChunk = stripAnsi(chunk);
+
+    if (
+      this.options.maxOutputSize &&
+      this.outputSize + cleanChunk.length > this.options.maxOutputSize
+    ) {
       this.kill('SIGKILL');
       this.emit(
         'error',
@@ -326,11 +344,11 @@ export class ProcessManager extends EventEmitter {
       return;
     }
 
-    this.outputSize += chunk.length;
-    this.buffer += chunk;
+    this.outputSize += cleanChunk.length;
+    this.buffer += cleanChunk;
 
     // Emit internal event for readStream and others
-    this.emit('output', chunk, stream);
+    this.emit('output', cleanChunk, stream);
 
     if (this.logger && this.pid) {
       const event: SubprocessOutputChunked = {
@@ -341,7 +359,7 @@ export class ProcessManager extends EventEmitter {
         payload: {
           pid: this.pid,
           stream,
-          chunk,
+          chunk: redactForLogs(cleanChunk) as string,
         },
       };
       this.logger.log(event);

@@ -277,7 +277,8 @@ export class MemoryWriter {
 
         const { status, reasons } = assessMemoryIntegrity(entryToUpsert);
         entryToUpsert.integrityStatus = status;
-        entryToUpsert.integrityReasonsJson = reasons.length > 0 ? JSON.stringify(reasons) : undefined;
+        entryToUpsert.integrityReasonsJson =
+          reasons.length > 0 ? JSON.stringify(reasons) : undefined;
 
         if (status === 'blocked' || status === 'suspect') {
           // Optionally, emit an event or log that a memory was blocked

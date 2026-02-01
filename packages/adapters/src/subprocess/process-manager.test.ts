@@ -26,7 +26,7 @@ describe('ProcessManager', () => {
     const pm = new ProcessManager({ timeoutMs: 100 });
     // Run a sleeping process
     await pm.spawn(
-      ['node', '-e', 'setTimeout(() => console.log("done"), 500)'],
+      [process.execPath, '-e', 'setTimeout(() => console.log("done"), 500)'],
       process.cwd(),
       {},
       false,
@@ -48,7 +48,7 @@ describe('ProcessManager', () => {
 
     // Produce large output
     // Note: console.log adds newline
-    await pm.spawn(['node', '-e', 'console.log("123456")'], process.cwd(), {}, false);
+    await pm.spawn([process.execPath, '-e', 'console.log("123456")'], process.cwd(), {}, false);
 
     const err = await errorPromise;
     expect(err.message).toContain('Max output size');
@@ -75,5 +75,48 @@ describe('ProcessManager', () => {
     } catch (e) {
       console.warn('PTY test skipped or failed:', e);
     }
+  });
+
+  it('should strip ANSI escape codes from output', async () => {
+    const pm = new ProcessManager();
+    // This command prints a string with ANSI color codes
+    const command = [process.execPath, '-e', "console.log('\\x1b[31mHello\\x1b[0m World')"];
+    await pm.spawn(command, process.cwd(), {}, false);
+
+    const output = await pm.readUntil((t) => t.includes('Hello'), 1000);
+    // Vitest seems to have issues with `not.toContain` on raw ANSI strings,
+    // so we check for the cleaned string directly.
+    expect(output.trim()).toBe('Hello World');
+    expect(output).not.toContain('\x1b[31m');
+
+    pm.kill();
+  });
+
+  it('should only pass allowlisted environment variables', async () => {
+    // Set a variable in the current process
+    process.env['TEST_ENV_VAR'] = 'test_value';
+    process.env['ANOTHER_VAR'] = 'another_value';
+
+    const pm = new ProcessManager({
+      envAllowlist: ['TEST_ENV_VAR'],
+    });
+
+    const command = [
+      process.execPath,
+      '-e',
+      'console.log(`TEST_ENV_VAR=${process.env.TEST_ENV_VAR},ANOTHER_VAR=${process.env.ANOTHER_VAR}`)',
+    ];
+    await pm.spawn(command, process.cwd(), {}, false);
+
+    const output = await pm.readUntil((t) => t.includes('TEST_ENV_VAR'), 1000);
+
+    // The allowlisted var should be present
+    expect(output).toContain('TEST_ENV_VAR=test_value');
+    // The non-allowlisted var should be undefined
+    expect(output).toContain('ANOTHER_VAR=undefined');
+
+    pm.kill();
+    delete process.env['TEST_ENV_VAR'];
+    delete process.env['ANOTHER_VAR'];
   });
 });

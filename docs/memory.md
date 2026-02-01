@@ -54,14 +54,14 @@ For sensitive projects, you can enable encryption-at-rest for the memory databas
   "memory": {
     "enabled": true,
     "storage": {
-      "encryptAtRest": true
-    }
+      "encryptAtRest": true,
+    },
   },
   "security": {
     "encryption": {
-      "keyEnv": "ORCHESTRATOR_ENC_KEY" // defaults to ORCHESTRATOR_ENC_KEY
-    }
-  }
+      "keyEnv": "ORCHESTRATOR_ENC_KEY", // defaults to ORCHESTRATOR_ENC_KEY
+    },
+  },
 }
 ```
 
@@ -72,6 +72,7 @@ export ORCHESTRATOR_ENC_KEY="your-secure-key-here"
 ```
 
 When enabled:
+
 - Memory content and evidence fields are encrypted with AES-256-GCM before being stored.
 - Metadata (titles, IDs, timestamps) and vector embeddings remain unencrypted for search functionality.
 - If the key is missing when `encryptAtRest` is enabled, the CLI will exit with an error.
