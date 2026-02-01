@@ -2,15 +2,7 @@ export interface SemanticChunk {
   chunkId: string;
   path: string;
   language: string;
-  kind:
-    | 'function'
-    | 'class'
-    | 'method'
-    | 'interface'
-    | 'type'
-    | 'export'
-    | 'const'
-    | 'unknown';
+  kind: 'function' | 'class' | 'method' | 'interface' | 'type' | 'export' | 'const' | 'unknown';
   name: string;
   startLine: number;
   endLine: number;

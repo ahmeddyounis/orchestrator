@@ -1,5 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
+'use strict';
+Object.defineProperty(exports, '__esModule', { value: true });
 exports.FakeAdapter = void 0;
 const FAKE_DIFF_FAIL = `
 BEGIN_DIFF
@@ -30,33 +30,33 @@ diff --git a/packages/package-a/src/index.test.ts b/packages/package-a/src/index
 END_DIFF
 `;
 class FakeAdapter {
-    config;
-    constructor(config) {
-        this.config = config;
+  config;
+  constructor(config) {
+    this.config = config;
+  }
+  id() {
+    return 'fake';
+  }
+  capabilities() {
+    return {
+      name: 'Fake',
+      streaming: false,
+      functions: false,
+    };
+  }
+  async generate(request, context) {
+    const behavior = process.env.FAKE_ADAPTER_BEHAVIOR;
+    if (!behavior) {
+      return { text: FAKE_DIFF_SUCCESS };
     }
-    id() {
-        return 'fake';
+    const behaviors = behavior.split(',');
+    const currentBehavior = behaviors.shift() || 'SUCCESS';
+    process.env.FAKE_ADAPTER_BEHAVIOR = behaviors.join(',');
+    if (currentBehavior === 'FAIL') {
+      return { text: FAKE_DIFF_FAIL };
     }
-    capabilities() {
-        return {
-            name: 'Fake',
-            streaming: false,
-            functions: false,
-        };
-    }
-    async generate(request, context) {
-        const behavior = process.env.FAKE_ADAPTER_BEHAVIOR;
-        if (!behavior) {
-            return { text: FAKE_DIFF_SUCCESS };
-        }
-        const behaviors = behavior.split(',');
-        const currentBehavior = behaviors.shift() || 'SUCCESS';
-        process.env.FAKE_ADAPTER_BEHAVIOR = behaviors.join(',');
-        if (currentBehavior === 'FAIL') {
-            return { text: FAKE_DIFF_FAIL };
-        }
-        return { text: FAKE_DIFF_SUCCESS };
-    }
+    return { text: FAKE_DIFF_SUCCESS };
+  }
 }
 exports.FakeAdapter = FakeAdapter;
 //# sourceMappingURL=adapter.js.map

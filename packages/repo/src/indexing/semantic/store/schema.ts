@@ -41,4 +41,4 @@ CREATE TABLE IF NOT EXISTS semantic_embeddings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_semantic_chunks_path ON semantic_chunks (path);
-`
+`;

@@ -5,91 +5,94 @@
  */
 export declare const RUN_SUMMARY_SCHEMA_VERSION = 1;
 export interface RunSummary {
-    schemaVersion: typeof RUN_SUMMARY_SCHEMA_VERSION;
-    runId: string;
-    command: string[];
-    goal?: string;
-    repoRoot: string;
-    repoId?: string;
-    startedAt: string;
-    finishedAt: string;
-    durationMs: number;
-    status: 'success' | 'failure';
-    stopReason?: string;
-    thinkLevel: number;
-    selectedProviders: {
-        planner: string;
-        executor: string;
-        reviewer?: string;
+  schemaVersion: typeof RUN_SUMMARY_SCHEMA_VERSION;
+  runId: string;
+  command: string[];
+  goal?: string;
+  repoRoot: string;
+  repoId?: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  status: 'success' | 'failure';
+  stopReason?: string;
+  thinkLevel: number;
+  selectedProviders: {
+    planner: string;
+    executor: string;
+    reviewer?: string;
+  };
+  budgets: {
+    maxIterations: number;
+    maxToolRuns: number;
+    maxWallTimeMs: number;
+    maxCostUsd?: number;
+  };
+  patchStats?: {
+    filesChanged: number;
+    linesAdded: number;
+    linesDeleted: number;
+    finalDiffPath?: string;
+  };
+  verification?: {
+    enabled: boolean;
+    passed?: boolean;
+    failedChecks?: number;
+    reportPaths?: string[];
+  };
+  tools: {
+    enabled: boolean;
+    runs: Array<{
+      command: string;
+      exitCode: number;
+      durationMs: number;
+      stdoutPath?: string;
+      stderrPath?: string;
+      truncated: boolean;
+    }>;
+  };
+  memory: {
+    enabled: boolean;
+    hitsUsedCount?: number;
+    writesCount?: number;
+    staleHitsCount?: number;
+  };
+  indexing?: {
+    enabled: boolean;
+    autoUpdated?: boolean;
+    drift?: boolean;
+    indexPath?: string;
+  };
+  costs: {
+    perProvider: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        estimatedCostUsd: number | null;
+      }
+    >;
+    totals: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      estimatedCostUsd: number | null;
     };
-    budgets: {
-        maxIterations: number;
-        maxToolRuns: number;
-        maxWallTimeMs: number;
-        maxCostUsd?: number;
-    };
-    patchStats?: {
-        filesChanged: number;
-        linesAdded: number;
-        linesDeleted: number;
-        finalDiffPath?: string;
-    };
-    verification?: {
-        enabled: boolean;
-        passed?: boolean;
-        failedChecks?: number;
-        reportPaths?: string[];
-    };
-    tools: {
-        enabled: boolean;
-        runs: Array<{
-            command: string;
-            exitCode: number;
-            durationMs: number;
-            stdoutPath?: string;
-            stderrPath?: string;
-            truncated: boolean;
-        }>;
-    };
-    memory: {
-        enabled: boolean;
-        hitsUsedCount?: number;
-        writesCount?: number;
-        staleHitsCount?: number;
-    };
-    indexing?: {
-        enabled: boolean;
-        autoUpdated?: boolean;
-        drift?: boolean;
-        indexPath?: string;
-    };
-    costs: {
-        perProvider: Record<string, {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCostUsd: number | null;
-        }>;
-        totals: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            estimatedCostUsd: number | null;
-        };
-    };
-    artifacts: {
-        manifestPath: string;
-        tracePath: string;
-        patchPaths?: string[];
-        contextPaths?: string[];
-        toolLogPaths?: string[];
-    };
-    telemetry?: {
-        enabled: boolean;
-        mode: 'local' | 'remote';
-    };
+  };
+  artifacts: {
+    manifestPath: string;
+    tracePath: string;
+    patchPaths?: string[];
+    contextPaths?: string[];
+    toolLogPaths?: string[];
+  };
+  telemetry?: {
+    enabled: boolean;
+    mode: 'local' | 'remote';
+  };
 }
 export declare class SummaryWriter {
-    static write(summary: RunSummary, runDir: string): Promise<string>;
+  static write(summary: RunSummary, runDir: string): Promise<string>;
 }
 //# sourceMappingURL=summary.d.ts.map

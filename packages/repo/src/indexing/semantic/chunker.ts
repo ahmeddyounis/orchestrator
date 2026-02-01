@@ -1,4 +1,3 @@
-
 import { createHash } from 'crypto';
 import Parser, { Query } from 'tree-sitter';
 import { getLanguageForFile, getParser } from '../../tree-sitter';
@@ -36,9 +35,10 @@ const KIND_MAP: Record<string, SemanticChunk['kind']> = {
 };
 
 function getNodeName(node: Parser.SyntaxNode): string {
-  const nameNode = node.descendantsOfType('identifier')[0] ??
-                   node.descendantsOfType('property_identifier')[0] ??
-                   node.descendantsOfType('type_identifier')[0];
+  const nameNode =
+    node.descendantsOfType('identifier')[0] ??
+    node.descendantsOfType('property_identifier')[0] ??
+    node.descendantsOfType('type_identifier')[0];
   return nameNode?.text ?? 'anonymous';
 }
 
@@ -74,7 +74,7 @@ export class SemanticChunker {
       const startLine = node.startPosition.row;
       const endLine = node.endPosition.row;
       let content = node.text;
-      
+
       if (content.length > HARD_MAX_CHUNK_CHARS) {
         content = content.substring(0, HARD_MAX_CHUNK_CHARS) + '...[TRUNCATED]';
       } else if (content.length > MAX_CHUNK_CHARS) {
@@ -105,26 +105,26 @@ export class SemanticChunker {
 
     return chunks;
   }
-  
+
   private findParentName(node: Parser.SyntaxNode): string | undefined {
     let current = node.parent;
-    while(current) {
-        if (current.type === 'class_declaration') {
-            return getNodeName(current);
-        }
-        current = current.parent;
+    while (current) {
+      if (current.type === 'class_declaration') {
+        return getNodeName(current);
+      }
+      current = current.parent;
     }
     return undefined;
   }
 
   private getQuery(language: string): string {
-    switch(language.toLowerCase()) {
-        case 'typescript':
-        case 'javascript':
-        case 'tsx':
-            return TS_QUERY;
-        default:
-            return '';
+    switch (language.toLowerCase()) {
+      case 'typescript':
+      case 'javascript':
+      case 'tsx':
+        return TS_QUERY;
+      default:
+        return '';
     }
   }
 }

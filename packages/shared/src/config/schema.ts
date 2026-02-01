@@ -10,35 +10,17 @@ export const SemanticIndexingConfigSchema = z
         minChunkChars: z.number().default(200),
         includeKinds: z
           .array(z.string())
-          .default([
-            'function',
-            'class',
-            'method',
-            'interface',
-            'type',
-            'export',
-            'const',
-          ]),
+          .default(['function', 'class', 'method', 'interface', 'type', 'export', 'const']),
       })
       .default({
         strategy: 'tree-sitter',
         maxChunkChars: 12000,
         minChunkChars: 200,
-        includeKinds: [
-          'function',
-          'class',
-          'method',
-          'interface',
-          'type',
-          'export',
-          'const',
-        ],
+        includeKinds: ['function', 'class', 'method', 'interface', 'type', 'export', 'const'],
       }),
     embeddings: z
       .object({
-        provider: z
-          .enum(['openai', 'anthropic', 'google', 'local-hash'])
-          .default('local-hash'),
+        provider: z.enum(['openai', 'anthropic', 'google', 'local-hash']).default('local-hash'),
         model: z.string().optional(),
         dims: z.number().default(384),
         batchSize: z.number().default(32),
@@ -61,24 +43,10 @@ export const SemanticIndexingConfigSchema = z
       .object({
         enabled: z
           .array(z.string())
-          .default([
-            'typescript',
-            'tsx',
-            'javascript',
-            'python',
-            'go',
-            'rust',
-          ]),
+          .default(['typescript', 'tsx', 'javascript', 'python', 'go', 'rust']),
       })
       .default({
-        enabled: [
-          'typescript',
-          'tsx',
-          'javascript',
-          'python',
-          'go',
-          'rust',
-        ],
+        enabled: ['typescript', 'tsx', 'javascript', 'python', 'go', 'rust'],
       }),
   })
   .refine(
@@ -89,7 +57,8 @@ export const SemanticIndexingConfigSchema = z
       return true;
     },
     {
-      message: "embeddings.model is required when semantic indexing is enabled and provider is not 'local-hash'",
+      message:
+        "embeddings.model is required when semantic indexing is enabled and provider is not 'local-hash'",
       path: ['embeddings', 'model'],
     },
   );

@@ -12,10 +12,7 @@ export function registerIndexUpdateCommand(parent: Command) {
     .command('update')
     .description('Update an existing repository index')
     .option('--semantic', 'Enable semantic indexing', false)
-    .option(
-      '--semantic-embedder <provider>',
-      'Specify semantic embedding provider',
-    )
+    .option('--semantic-embedder <provider>', 'Specify semantic embedding provider')
     .action(async (options, command: Command) => {
       let program = command.parent;
       while (program?.parent) {

@@ -52,12 +52,14 @@ async function main() {
   console.log('🔍 Analyzing results...');
 
   const { successRate, error: errorCount } = summary.summary;
-  const errors = summary.results.filter(r => r.status === 'error');
+  const errors = summary.results.filter((r) => r.status === 'error');
 
   let failed = false;
 
   if (successRate < MIN_SUCCESS_RATE) {
-    console.error(`❌ FAILED: Success rate is ${successRate}, which is below the threshold of ${MIN_SUCCESS_RATE}.`);
+    console.error(
+      `❌ FAILED: Success rate is ${successRate}, which is below the threshold of ${MIN_SUCCESS_RATE}.`,
+    );
     failed = true;
   } else {
     console.log(`✅ PASSED: Success rate is ${successRate}.`);
@@ -65,7 +67,7 @@ async function main() {
 
   if (!ALLOW_ERRORS && errorCount > 0) {
     console.error(`❌ FAILED: Found ${errorCount} tasks with errors.`);
-    errors.forEach(e => console.error(`  - Task ${e.id} resulted in an error.`));
+    errors.forEach((e) => console.error(`  - Task ${e.id} resulted in an error.`));
     failed = true;
   } else {
     console.log(`✅ PASSED: No tasks with errors.`);
@@ -79,7 +81,7 @@ async function main() {
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('An unexpected error occurred:', err);
   process.exit(1);
 });
