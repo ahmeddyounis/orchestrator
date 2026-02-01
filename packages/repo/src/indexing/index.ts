@@ -16,3 +16,5 @@ export {
 } from './store';
 export * from './hasher';
 export * from './status';
+
+export * from './semantic';

@@ -1,5 +1,5 @@
 import path from 'path';
-import Parser from 'tree-sitter';
+import Parser, { Language } from 'tree-sitter';
 
 export type SupportedLanguage = 'typescript' | 'javascript' | 'python' | 'go' | 'rust';
 
@@ -26,12 +26,14 @@ export function getLanguageForFile(filePath: string): SupportedLanguage | null {
     return extToLang[ext] ?? null;
 }
 
-export function getParser(lang: SupportedLanguage): Parser | null {
+export function getParser(lang: SupportedLanguage): { parser: Parser, language: Language } | null {
     try {
         const parser = new Parser();
-        const language = langLoaders[lang]();
-        parser.setLanguage(language.typescript || language.javascript || language.python || language.go || language.rust || language);
-        return parser;
+        const languageModule = langLoaders[lang]();
+        // Handle module inconsistencies: some export the language, some have a property.
+        const language = languageModule[lang] || languageModule.typescript || languageModule;
+        parser.setLanguage(language);
+        return { parser, language };
     } catch (e) {
         console.error(`Failed to load parser for ${lang}`, e);
         return null;
@@ -39,11 +41,11 @@ export function getParser(lang: SupportedLanguage): Parser | null {
 }
 
 export function parse(content: string, lang: SupportedLanguage): Parser.Tree | null {
-    const parser = getParser(lang);
-    if (!parser) {
+    const parserInfo = getParser(lang);
+    if (!parserInfo) {
         return null;
     }
-    return parser.parse(content);
+    return parserInfo.parser.parse(content);
 }
 
 export async function parseFileToTree(content: string, filePath: string, languageHint?: SupportedLanguage) {
@@ -52,8 +54,8 @@ export async function parseFileToTree(content: string, filePath: string, languag
         return null;
     }
 
-    const parser = getParser(language);
-    if (!parser) {
+    const parserInfo = getParser(language);
+    if (!parserInfo) {
         return null;
     }
     
@@ -61,7 +63,7 @@ export async function parseFileToTree(content: string, filePath: string, languag
     const timeout = 500;
     
     const parsePromise = new Promise<Parser.Tree>((resolve) => {
-        const tree = parser.parse(content);
+        const tree = parserInfo.parser.parse(content);
         resolve(tree);
     });
 
