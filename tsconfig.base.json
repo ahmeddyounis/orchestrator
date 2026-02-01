@@ -3,19 +3,13 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "strict": true,
-    "noImplicitAny": true,
+    "lib": ["es2020", "dom"],
+    "module": "commonjs",
+    "moduleResolution": "node",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@orchestrator/*": ["packages/*/src"]
-    },
-    "types": ["vitest/globals"]
+    "strict": true,
+    "strictNullChecks": true,
+    "resolveJsonModule": true
   }
 }

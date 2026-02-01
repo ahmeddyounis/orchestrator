@@ -1,3 +1,9 @@
+export interface ScanOptions {
+  excludes?: string[];
+  maxFiles?: number;
+  maxFileSize?: number;
+}
+
 export interface RepoFileMeta {
   path: string;
   absPath: string;
@@ -11,4 +17,5 @@ export interface RepoFileMeta {
 export interface RepoSnapshot {
   repoRoot: string;
   files: RepoFileMeta[];
+  warnings: string[];
 }

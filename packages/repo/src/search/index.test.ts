@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { SearchService } from './service';
@@ -90,5 +90,22 @@ describe('SearchService', () => {
 
     expect(result.stats.engine).toBe('js-fallback');
     expect(result.matches.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('should cache search results', async () => {
+    const service = new SearchService();
+    const options = { query: 'galaxy', cwd: FIXTURES_DIR };
+
+    // @ts-expect-error - spy on private method
+    const searchSpy = vi.spyOn(service.rg, 'search');
+
+    const result1 = await service.search(options);
+    expect(searchSpy).toHaveBeenCalledTimes(1);
+    expect(result1.matches[0].path).toBe('subdir/c.ts');
+
+    const result2 = await service.search(options);
+    expect(searchSpy).toHaveBeenCalledTimes(1); // Should not be called again
+    expect(result2).toEqual(result1);
+    expect(result2).not.toBe(result1); // Should be a deep clone
   });
 });

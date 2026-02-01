@@ -894,6 +894,30 @@ END_DIFF
     return runResult;
   }
 
+  private async measure<T>(
+    name: string,
+    eventBus: EventBus,
+    runId: string,
+    fn: () => Promise<T>,
+    metadataFn?: (result: T) => Record<string, unknown>,
+  ): Promise<T> {
+    const start = Date.now();
+    const result = await fn();
+    const durationMs = Date.now() - start;
+    await eventBus.emit({
+      type: 'PerformanceMeasured',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId,
+      payload: {
+        name,
+        durationMs,
+        metadata: metadataFn ? metadataFn(result) : undefined,
+      },
+    });
+    return result;
+  }
+
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
     const artifacts = await createRunDir(this.repoRoot, runId);
@@ -1140,17 +1164,30 @@ END_DIFF
       let contextPack;
       try {
         const scanner = new RepoScanner();
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const snapshot = await scanner.scan(this.repoRoot, {
-          excludes: this.config.context?.exclude,
-        });
+        const snapshot = await this.measure(
+          'repo_scan',
+          eventBus,
+          runId,
+          () => scanner.scan(this.repoRoot, {
+            excludes: this.config.context?.exclude,
+            maxFiles: this.config.context?.scanner?.maxFiles,
+            maxFileSize: this.config.context?.scanner?.maxFileSize,
+          }),
+          (s) => ({ fileCount: s.files.length }),
+        );
 
         const searchService = new SearchService(this.config.context?.rgPath);
-        const searchResults = await searchService.search({
-          query: step,
-          cwd: this.repoRoot,
-          maxMatchesPerFile: 5,
-        });
+        const searchResults = await this.measure(
+          'lexical_search',
+          eventBus,
+          runId,
+          () => searchService.search({
+            query: step,
+            cwd: this.repoRoot,
+            maxMatchesPerFile: 5,
+          }),
+          (r) => ({ matchCount: r.matches.length }),
+        );
 
         const lexicalMatches = searchResults.matches;
 
@@ -1172,10 +1209,16 @@ END_DIFF
                   eventBus,
                 });
 
-                const hits = await semanticSearchService.search(
-                  step,
-                  this.config.indexing.semantic.topK ?? 5,
+                const hits = await this.measure(
+                  'semantic_search',
+                  eventBus,
                   runId,
+                  () => semanticSearchService.search(
+                    step,
+                    this.config.indexing.semantic.topK ?? 5,
+                    runId,
+                  ),
+                  (h) => ({ hitCount: h.length }),
                 );
 
                 if (hits.length > 0) {
@@ -1233,13 +1276,30 @@ END_DIFF
           });
         }
 
+        allMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+        const limitedMatches = this.config.context?.maxCandidates
+          ? allMatches.slice(0, this.config.context.maxCandidates)
+          : allMatches;
+
         const extractor = new SnippetExtractor();
-        const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
+        const candidates = await this.measure(
+          'snippet_extraction',
+          eventBus,
+          runId,
+          () => extractor.extractSnippets(limitedMatches, { cwd: this.repoRoot }),
+          (c) => ({ candidateCount: c.length }),
+        );
 
         const packer = new SimpleContextPacker();
-        contextPack = packer.pack(step, [], candidates, {
-          tokenBudget: this.config.context?.tokenBudget || 8000,
-        });
+        contextPack = await this.measure(
+          'context_packing',
+          eventBus,
+          runId,
+          () => packer.pack(step, [], candidates, {
+            tokenBudget: this.config.context?.tokenBudget || 8000,
+          }),
+          (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
+        );
       } catch {
         // Ignore context errors
       }

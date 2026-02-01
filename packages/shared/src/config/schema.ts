@@ -382,9 +382,14 @@ export const ConfigSchema = z.object({
   context: z
     .object({
       tokenBudget: z.number().optional(),
+      maxCandidates: z.number().optional(),
       include: z.array(z.string()).optional(),
       exclude: z.array(z.string()).optional(),
       rgPath: z.string().optional(),
+      scanner: z.object({
+        maxFiles: z.number().optional(),
+        maxFileSize: z.number().optional(),
+      }).optional(),
     })
     .optional(),
   commandPolicy: z

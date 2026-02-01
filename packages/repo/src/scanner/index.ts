@@ -1,8 +1,9 @@
 import nodeFs from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
-import { RepoSnapshot, RepoFileMeta } from './types';
+import { RepoSnapshot, RepoFileMeta, ScanOptions } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
+import { objectHash } from 'ohash';
 
 export * from './types';
 
@@ -10,13 +11,20 @@ type Fs = typeof nodeFs;
 
 export class RepoScanner {
   private fs: Fs;
+  private scanCache: Map<string, RepoSnapshot> = new Map();
 
   constructor(fs: Fs = nodeFs) {
     this.fs = fs;
   }
 
-  async scan(repoRoot: string, options: { excludes?: string[] } = {}): Promise<RepoSnapshot> {
+  async scan(repoRoot: string, options: ScanOptions = {}): Promise<RepoSnapshot> {
+    const cacheKey = objectHash({ repoRoot, options });
+    if (this.scanCache.has(cacheKey)) {
+      return this.scanCache.get(cacheKey)!;
+    }
+
     const ig = ignore();
+    const warnings: string[] = [];
 
     // 1. Add default ignores
     ig.add(DEFAULT_IGNORES);
@@ -45,9 +53,16 @@ export class RepoScanner {
     }
 
     const files: RepoFileMeta[] = [];
+    let stoppedEarly = false;
 
     // Walker function
     const walk = async (dir: string, relativeDir: string) => {
+      if (stoppedEarly) return;
+      if (options.maxFiles && files.length >= options.maxFiles) {
+        warnings.push(`Stopped scanning early, hit max files limit of ${options.maxFiles}.`);
+        stoppedEarly = true;
+        return;
+      }
       let entries;
       try {
         entries = await this.fs.readdir(dir, { withFileTypes: true });
@@ -57,6 +72,7 @@ export class RepoScanner {
       }
 
       for (const entry of entries) {
+        if (stoppedEarly) break;
         const entryName = entry.name;
         const entryRelativePath = relativeDir ? path.join(relativeDir, entryName) : entryName;
 
@@ -75,6 +91,10 @@ export class RepoScanner {
             stats = await this.fs.stat(absPath);
           } catch {
             continue; // Skip if stat fails
+          }
+          if (options.maxFileSize && stats.size > options.maxFileSize) {
+            warnings.push(`Skipping large file: ${entryRelativePath} (${stats.size} bytes)`);
+            continue;
           }
           const isText = !(await isBinaryFile(absPath, this.fs));
           const ext = path.extname(entryName);
@@ -97,10 +117,15 @@ export class RepoScanner {
     // Sort files for stability (deterministic order)
     files.sort((a, b) => a.path.localeCompare(b.path));
 
-    return {
+    const snapshot: RepoSnapshot = {
       repoRoot,
       files,
+      warnings,
     };
+    
+    this.scanCache.set(cacheKey, snapshot);
+    
+    return snapshot;
   }
 
   private getLanguageHint(ext: string): string | undefined {

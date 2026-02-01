@@ -2,10 +2,15 @@ import { EventEmitter } from 'node:events';
 import { SearchEngine, SearchOptions, SearchResult, SearchMatch } from './types';
 import { RipgrepSearch } from './ripgrep';
 import { JsFallbackSearch } from './simple';
+import { objectHash } from 'ohash';
+import rfdc from 'rfdc';
+
+const deepClone = rfdc();
 
 export class SearchService extends EventEmitter {
   private rg: RipgrepSearch;
   private js: JsFallbackSearch;
+  private searchCache: Map<string, SearchResult> = new Map();
 
   constructor(rgPath?: string) {
     super();
@@ -14,6 +19,11 @@ export class SearchService extends EventEmitter {
   }
 
   async search(options: SearchOptions): Promise<SearchResult> {
+    const cacheKey = objectHash(options);
+    if (this.searchCache.has(cacheKey)) {
+      return deepClone(this.searchCache.get(cacheKey)!);
+    }
+
     this.emit('RepoSearchStarted', { options });
 
     let engine: SearchEngine;
@@ -35,6 +45,9 @@ export class SearchService extends EventEmitter {
     result.matches = this.processMatches(result.matches, options);
 
     this.emit('RepoSearchFinished', { stats: result.stats });
+    
+    this.searchCache.set(cacheKey, deepClone(result));
+    
     return result;
   }
 

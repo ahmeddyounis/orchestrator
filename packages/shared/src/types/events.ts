@@ -409,6 +409,15 @@ export interface CandidateGenerated extends BaseEvent {
   };
 }
 
+export interface PerformanceMeasured extends BaseEvent {
+  type: 'PerformanceMeasured';
+  payload: {
+    name: string;
+    durationMs: number;
+    metadata?: Record<string, unknown>;
+  };
+}
+
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -461,7 +470,8 @@ export type OrchestratorEvent =
   | SemanticSearchFinishedEvent
   | SemanticSearchFailedEvent
   | DiagnosisStarted
-  | DiagnosisCompleted;
+  | DiagnosisCompleted
+  | PerformanceMeasured;
 
 // M17-06: Diagnosis events
 export interface DiagnosisStarted extends BaseEvent {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -40,6 +40,7 @@ describe('RepoScanner', () => {
       'README.md',
       'src/index.ts',
     ]); // Sorted order
+    expect(snapshot.warnings).toEqual([]);
   });
 
   it('respects default ignores', async () => {
@@ -105,5 +106,60 @@ describe('RepoScanner', () => {
     });
     const snapshot = await scanner.scan(tmpDir);
     expect(snapshot.files.map((f) => f.path)).toEqual(['a.txt', 'b.txt', 'c/d.txt']);
+  });
+
+  describe('guardrails', () => {
+    it('enforces maxFiles limit', async () => {
+      await createFiles({
+        'a.txt': 'a',
+        'b.txt': 'b',
+        'c.txt': 'c',
+        'd.txt': 'd',
+      });
+      const snapshot = await scanner.scan(tmpDir, { maxFiles: 2 });
+      expect(snapshot.files).toHaveLength(2);
+      expect(snapshot.warnings).toHaveLength(1);
+      expect(snapshot.warnings[0]).toContain('hit max files limit');
+    });
+
+    it('enforces maxFileSize limit', async () => {
+      await createFiles({
+        'small.txt': 'small',
+        'large.txt': 'a'.repeat(200),
+      });
+      const snapshot = await scanner.scan(tmpDir, { maxFileSize: 100 });
+      expect(snapshot.files.map((f) => f.path)).toEqual(['small.txt']);
+      expect(snapshot.warnings).toHaveLength(1);
+      expect(snapshot.warnings[0]).toContain('Skipping large file');
+    });
+  });
+
+  describe('caching', () => {
+    it('caches scan results', async () => {
+      await createFiles({ 'a.txt': 'a' });
+
+      const readdirSpy = vi.spyOn(fs, 'readdir');
+
+      const snapshot1 = await scanner.scan(tmpDir);
+      expect(snapshot1.files.map((f) => f.path)).toEqual(['a.txt']);
+      expect(readdirSpy).toHaveBeenCalledTimes(1);
+
+      // Second call should be cached
+      const snapshot2 = await scanner.scan(tmpDir);
+      expect(snapshot2).toBe(snapshot1); // Exact same object
+      expect(readdirSpy).toHaveBeenCalledTimes(1); // Not called again
+    });
+
+    it('busts cache if options change', async () => {
+      await createFiles({ 'a.txt': 'a', 'b.log': 'log' });
+      const readdirSpy = vi.spyOn(fs, 'readdir');
+
+      await scanner.scan(tmpDir);
+      expect(readdirSpy).toHaveBeenCalledTimes(1);
+
+      // Different options, should re-scan
+      await scanner.scan(tmpDir, { excludes: ['*.log'] });
+      expect(readdirSpy).toHaveBeenCalledTimes(2);
+    });
   });
 });

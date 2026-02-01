@@ -30,6 +30,8 @@
     "@orchestrator/shared": "workspace:*",
     "better-sqlite3": "^11.1.2",
     "ignore": "^7.0.5",
-    "is-binary-path": "^3.0.0"
+    "is-binary-path": "^3.0.0",
+    "ohash": "^2.0.11",
+    "rfdc": "^1.4.1"
   }
 }
