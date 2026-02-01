@@ -1,4 +1,3 @@
-
 import { ToolCall, ToolPolicy } from '@orchestrator/shared';
 
 export class DenyAllToolPolicy implements ToolPolicy {

@@ -1,9 +1,4 @@
-
-import {
-  type EvalResult,
-  type EvalTask,
-  type EvalTaskResult,
-} from '@orchestrator/shared';
+import { type EvalResult, type EvalTask, type EvalTaskResult } from '@orchestrator/shared';
 import chalk from 'chalk';
 
 export class SimpleRenderer {
@@ -15,7 +10,7 @@ export class SimpleRenderer {
   logTaskStarted(task: EvalTask, index: number, total: number, baseline = false) {
     const baselineTag = baseline ? chalk.yellow('[BASELINE] ') : '';
     console.log(
-      chalk.gray(`\n(${index + 1}/${total})`) + 
+      chalk.gray(`\n(${index + 1}/${total})`) +
         ` ${baselineTag}Starting task: ${chalk.bold(task.id)} - ${task.title}`,
     );
   }
@@ -43,7 +38,7 @@ export class SimpleRenderer {
     );
 
     if (result.status === 'error' && result.failure) {
-        console.log(chalk.red(`    Error: ${result.failure.message}`));
+      console.log(chalk.red(`    Error: ${result.failure.message}`));
     }
   }
 
@@ -54,8 +49,7 @@ export class SimpleRenderer {
     console.log('='.repeat(80));
 
     const successRate = ag.passRate * 100;
-    const rateColor =
-      successRate > 80 ? chalk.green : successRate > 50 ? chalk.yellow : chalk.red;
+    const rateColor = successRate > 80 ? chalk.green : successRate > 50 ? chalk.yellow : chalk.red;
 
     console.log(`
       Suite:          ${chalk.bold(result.suiteName)}

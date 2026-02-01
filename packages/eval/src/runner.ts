@@ -51,10 +51,7 @@ export class EvalRunner {
     this.renderer = new SimpleRenderer();
   }
 
-  async runSuite(
-    suitePath: string,
-    options: EvalRunnerOptions,
-  ): Promise<EvalResult> {
+  async runSuite(suitePath: string, options: EvalRunnerOptions): Promise<EvalResult> {
     await this.loadBaselines();
 
     const suite = await this.loadSuite(suitePath);
@@ -116,10 +113,7 @@ export class EvalRunner {
 
     let comparison: EvalComparison | undefined;
     if (baselineResult) {
-      comparison = this.compareAggregates(
-        orchestratorResult.aggregates,
-        baselineResult.aggregates,
-      );
+      comparison = this.compareAggregates(orchestratorResult.aggregates, baselineResult.aggregates);
     }
 
     const finalReportPath = await this.writeAllResults(
@@ -140,43 +134,27 @@ export class EvalRunner {
     return {
       passRateDelta: orchestrator.passRate - baseline.passRate,
       avgDurationDelta: orchestrator.avgDurationMs - baseline.avgDurationMs,
-      totalCostDelta:
-        (orchestrator.totalCostUsd ?? 0) - (baseline.totalCostUsd ?? 0),
+      totalCostDelta: (orchestrator.totalCostUsd ?? 0) - (baseline.totalCostUsd ?? 0),
     };
   }
 
   private async loadBaselines(): Promise<void> {
     const repoRoot = await findRepoRoot();
-    const baselinesPath = path.join(
-      repoRoot,
-      'packages/eval/src/baselines.json',
-    );
+    const baselinesPath = path.join(repoRoot, 'packages/eval/src/baselines.json');
     if (await fs.pathExists(baselinesPath)) {
       this.baselines = await fs.readJson(baselinesPath);
     }
   }
 
-  private calculateAggregates(
-    tasks: EvalTaskResult[],
-    totalDurationMs: number,
-  ): EvalAggregates {
+  private calculateAggregates(tasks: EvalTaskResult[], totalDurationMs: number): EvalAggregates {
     const totalTasks = tasks.length;
     const passed = tasks.filter((t) => t.status === 'pass').length;
     const failed = tasks.filter((t) => t.status === 'fail').length;
     const error = tasks.filter((t) => t.status === 'error').length;
     const skipped = tasks.filter((t) => t.status === 'skipped').length;
-    const totalCostUsd = tasks.reduce(
-      (sum, t) => sum + (t.metrics?.estimatedCostUsd ?? 0),
-      0,
-    );
-    const totalIterations = tasks.reduce(
-      (sum, t) => sum + (t.metrics?.iterations ?? 0),
-      0,
-    );
-    const totalToolRuns = tasks.reduce(
-      (sum, t) => sum + (t.metrics?.toolRuns ?? 0),
-      0,
-    );
+    const totalCostUsd = tasks.reduce((sum, t) => sum + (t.metrics?.estimatedCostUsd ?? 0), 0);
+    const totalIterations = tasks.reduce((sum, t) => sum + (t.metrics?.iterations ?? 0), 0);
+    const totalToolRuns = tasks.reduce((sum, t) => sum + (t.metrics?.toolRuns ?? 0), 0);
 
     return {
       totalTasks,
@@ -198,9 +176,7 @@ export class EvalRunner {
     const suiteContent = await fs.readJson(suitePath);
     const validationResult = validateEvalSuite(suiteContent);
     if (!validationResult.success) {
-      throw new Error(
-        `Invalid eval suite: ${validationResult.error.message}`,
-      );
+      throw new Error(`Invalid eval suite: ${validationResult.error.message}`);
     }
     return validationResult.data as EvalSuite;
   }
@@ -211,15 +187,13 @@ export class EvalRunner {
 
     try {
       workDir = await this.setupTask(task);
-      const { runId, runDir, summary } = await this.executeTask(
-        task,
-        workDir,
-        this.config,
-      );
+      const { runId, runDir, summary } = await this.executeTask(task, workDir, this.config);
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed, results } =
-        await this.evaluateSuccess(task.successCriteria, summary);
+      const { passed, verificationPassed, results } = await this.evaluateSuccess(
+        task.successCriteria,
+        summary,
+      );
 
       return {
         taskId: task.id,
@@ -236,8 +210,7 @@ export class EvalRunner {
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
-            (summary.patchStats?.linesAdded ?? 0) +
-            (summary.patchStats?.linesDeleted ?? 0),
+            (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
         },
         artifacts: {
           runDir: runDir,
@@ -265,9 +238,7 @@ export class EvalRunner {
 
   private async setupTask(task: EvalTask): Promise<string> {
     const repoRoot = await findRepoRoot();
-    const workDir = await fs.mkdtemp(
-      path.join(repoRoot, '.tmp', 'eval-'),
-    );
+    const workDir = await fs.mkdtemp(path.join(repoRoot, '.tmp', 'eval-'));
 
     const fixturePath = path.resolve(repoRoot, task.repo.fixturePath);
     await fs.copy(fixturePath, workDir);
@@ -309,15 +280,13 @@ export class EvalRunner {
         },
       };
 
-      const { runId, runDir, summary } = await this.executeTask(
-        task,
-        workDir,
-        baselineRunConfig,
-      );
+      const { runId, runDir, summary } = await this.executeTask(task, workDir, baselineRunConfig);
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed, results } =
-        await this.evaluateSuccess(task.successCriteria, summary);
+      const { passed, verificationPassed, results } = await this.evaluateSuccess(
+        task.successCriteria,
+        summary,
+      );
 
       return {
         taskId: task.id,
@@ -334,8 +303,7 @@ export class EvalRunner {
           estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
-            (summary.patchStats?.linesAdded ?? 0) +
-            (summary.patchStats?.linesDeleted ?? 0),
+            (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
         },
         artifacts: {
           runDir: runDir,
@@ -379,9 +347,9 @@ export class EvalRunner {
     });
 
     const thinkLevel = task.thinkLevel === 'auto' ? 'L1' : task.thinkLevel || 'L1';
-    
+
     if (task.command !== 'run') {
-        throw new Error(`Eval task command '${task.command}' not yet supported.`);
+      throw new Error(`Eval task command '${task.command}' not yet supported.`);
     }
 
     const result = await orchestrator.run(task.goal, { thinkLevel });
@@ -449,26 +417,16 @@ export class EvalRunner {
     baselineResult?: EvalResult,
     comparison?: EvalComparison,
   ): Promise<string> {
-    const resultsDir = path.join(
-      this.outputDir,
-      suiteName,
-      String(orchestratorResult.startedAt),
-    );
+    const resultsDir = path.join(this.outputDir, suiteName, String(orchestratorResult.startedAt));
     await fs.ensureDir(resultsDir);
 
-    const orchestratorResultsPath = path.join(
-      resultsDir,
-      'results_orchestrator.json',
-    );
+    const orchestratorResultsPath = path.join(resultsDir, 'results_orchestrator.json');
     await fs.writeJson(orchestratorResultsPath, orchestratorResult, {
       spaces: 2,
     });
 
     if (baselineResult) {
-      const baselineResultsPath = path.join(
-        resultsDir,
-        'results_baseline.json',
-      );
+      const baselineResultsPath = path.join(resultsDir, 'results_baseline.json');
       await fs.writeJson(baselineResultsPath, baselineResult, { spaces: 2 });
     }
 
@@ -479,11 +437,14 @@ export class EvalRunner {
 
     const summaryReport = {
       suite: suiteName,
-      status: orchestratorResult.aggregates.failed > 0 || orchestratorResult.aggregates.error > 0 ? 'FAIL' : 'PASS',
+      status:
+        orchestratorResult.aggregates.failed > 0 || orchestratorResult.aggregates.error > 0
+          ? 'FAIL'
+          : 'PASS',
       aggregates: orchestratorResult.aggregates,
       comparison,
     };
-    
+
     const finalReportPath = path.join(resultsDir, 'summary.json');
     await fs.writeJson(finalReportPath, summaryReport, { spaces: 2 });
 

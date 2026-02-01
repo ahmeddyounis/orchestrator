@@ -1,4 +1,3 @@
-
 /**
  * Defines the interface for interacting with the user,
  * for prompts and confirmations.
