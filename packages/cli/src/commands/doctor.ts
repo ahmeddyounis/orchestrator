@@ -174,6 +174,44 @@ async function checkProviderConfig(configPath?: string): Promise<DoctorCheck> {
   }
 }
 
+async function checkTelemetryConfig(configPath?: string): Promise<DoctorCheck> {
+  try {
+    const config = ConfigLoader.load({ configPath });
+    const telemetry = config.telemetry;
+
+    if (!telemetry?.enabled) {
+      return {
+        name: 'Telemetry',
+        status: 'ok',
+        message: 'Telemetry is disabled. No data is sent.',
+        remediation: 'To help improve Orchestrator, consider enabling telemetry.',
+      };
+    }
+
+    if (telemetry.mode === 'remote') {
+      return {
+        name: 'Telemetry',
+        status: 'warn',
+        message: `Telemetry is enabled in 'remote' mode. This feature is not yet fully implemented.`,
+        remediation: `Set telemetry.mode to 'local' for now.`,
+      };
+    }
+
+    return {
+      name: 'Telemetry',
+      status: 'ok',
+      message: `Telemetry is enabled in '${telemetry.mode}' mode. Run artifacts are stored locally.`,
+    };
+  } catch (e) {
+    // Ignore config loading errors, as they are handled by other checks
+    return {
+      name: 'Telemetry',
+      status: 'warn',
+      message: 'Could not check telemetry status due to a configuration error.',
+    };
+  }
+}
+
 async function checkExternalWorkers(configPath?: string): Promise<DoctorCheck> {
   const config = ConfigLoader.load({ configPath });
   const claudeCodeConfig = Object.values(config.providers || {}).find(
@@ -225,6 +263,7 @@ export function registerDoctorCommand(program: Command) {
           checkGitCleanState(),
           checkRg(),
           checkProviderConfig(globalOpts.config),
+          checkTelemetryConfig(globalOpts.config),
           checkExternalWorkers(globalOpts.config),
         ]);
         checks.push(...allChecks);

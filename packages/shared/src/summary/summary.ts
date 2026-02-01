@@ -93,6 +93,10 @@ export interface RunSummary {
     contextPaths?: string[];
     toolLogPaths?: string[];
   };
+  telemetry?: {
+    enabled: boolean;
+    mode: 'local' | 'remote';
+  };
 }
 
 export class SummaryWriter {

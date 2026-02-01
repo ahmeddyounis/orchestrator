@@ -113,6 +113,12 @@ export const MemoryConfigSchema = z
     writePolicy: { ...cfg.writePolicy, enabled: cfg.writePolicy.enabled ?? cfg.enabled },
   }));
 
+export const TelemetryConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  mode: z.enum(['local', 'remote']).default('local'),
+  redact: z.boolean().default(true),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2']).default('L1'),
@@ -204,6 +210,7 @@ export const ConfigSchema = z.object({
       },
     }),
   indexing: IndexingConfigSchema.optional(),
+  telemetry: TelemetryConfigSchema.optional(),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

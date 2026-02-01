@@ -47,6 +47,15 @@ execution:
 # Memory settings for the orchestrator.
 memory:
   enabled: false
+
+# Telemetry settings. For more details, see docs/telemetry.md
+# We take your privacy seriously. Telemetry is disabled by default.
+telemetry:
+  enabled: false
+  # Mode can be 'local' or 'remote'. Currently, only 'local' is supported.
+  mode: local
+  # Redact secrets and sensitive information from telemetry data.
+  redact: true
 `;
 
 export function registerInitCommand(program: Command) {
