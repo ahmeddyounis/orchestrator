@@ -44,6 +44,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "tree-sitter",
       "tree-sitter-go",
       "tree-sitter-javascript",
       "tree-sitter-python",

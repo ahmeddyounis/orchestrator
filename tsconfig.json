@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "include": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/adapters" },
+    { "path": "packages/memory" },
+    { "path": "packages/exec" },
+    { "path": "packages/repo" },
+    { "path": "packages/core" },
+    { "path": "packages/cli" },
+    { "path": "packages/eval" }
+  ]
+}

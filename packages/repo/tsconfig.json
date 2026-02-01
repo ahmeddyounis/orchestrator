@@ -6,5 +6,11 @@
   },
   "include": ["src/**/*"],
   "exclude": ["src/__fixtures__"],
-  "references": [{ "path": "../shared" }]
+  "references": [
+    { "path": "../shared" },
+    { "path": "../adapters" },
+    { "path": "../core" },
+    { "path": "../exec" },
+    { "path": "../memory" }
+  ]
 }
