@@ -26,10 +26,12 @@ describe('Eval Schemas', () => {
             enabled: true,
             requireConfirmation: false,
           },
-          successCriteria: {
-            type: 'verification_pass' as const,
-            details: {},
-          },
+          successCriteria: [
+            {
+              name: 'verification_pass' as const,
+              details: {},
+            },
+          ],
         },
       ],
     };

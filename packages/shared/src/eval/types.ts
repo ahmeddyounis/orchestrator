@@ -40,10 +40,7 @@ export interface EvalTask {
     requireConfirmation: boolean;
     allowNetwork?: boolean;
   };
-  successCriteria: {
-    type: 'verification_pass' | 'file_contains' | 'script_exit';
-    details: object;
-  };
+  successCriteria: Criterion[];
   tags?: string[];
 }
 
@@ -80,6 +77,21 @@ export interface EvalTaskResult {
     kind: string;
     message: string;
   };
+  criteria?: Array<{
+    criterion: Criterion;
+    result: CriterionResult;
+  }>;
+}
+
+export interface Criterion {
+  name: 'verification_pass' | 'file_contains' | 'script_exit';
+  details?: any;
+}
+
+export interface CriterionResult {
+  passed: boolean;
+  message?: string;
+  details?: unknown;
 }
 
 export interface EvalAggregates {

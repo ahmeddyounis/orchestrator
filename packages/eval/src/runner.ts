@@ -10,8 +10,10 @@ import {
   type RunSummary,
   type EvalAggregates,
   type EvalComparison,
+  type CriterionResult,
 } from '@orchestrator/shared';
 import { findRepoRoot } from '@orchestrator/repo';
+import { file_contains, script_exit, verification_pass } from './criteria';
 
 export interface EvalRunnerOptions {
   baseline?: string;
@@ -158,10 +160,9 @@ export class EvalRunner {
 
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed } = this.evaluateSuccess(
+      const { passed, verificationPassed, results } = await this.evaluateSuccess(
         task.successCriteria,
         summary,
-        workDir,
       );
 
       return {
@@ -171,6 +172,7 @@ export class EvalRunner {
         durationMs: finishedAt - startedAt,
         stopReason: summary.stopReason,
         verificationPassed,
+        criteria: results,
         metrics: {
           iterations: summary.patchStats ? 1 : 0, // Simplified
           toolRuns: summary.tools?.runs?.length,
@@ -230,10 +232,9 @@ export class EvalRunner {
 
       const finishedAt = Date.now();
 
-      const { passed, verificationPassed } = this.evaluateSuccess(
+      const { passed, verificationPassed, results } = await this.evaluateSuccess(
         task.successCriteria,
         summary,
-        workDir,
       );
 
       return {
@@ -243,6 +244,7 @@ export class EvalRunner {
         durationMs: finishedAt - startedAt,
         stopReason: summary.stopReason,
         verificationPassed,
+        criteria: results,
         metrics: {
           iterations: summary.patchStats ? 1 : 0, // Simplified
           toolRuns: summary.tools?.runs?.length,
@@ -389,28 +391,47 @@ ${stderr}`),
     return fs.readJson(summaryPath);
   }
 
-  private evaluateSuccess(
+  private async evaluateSuccess(
     criteria: EvalTask['successCriteria'],
     summary: RunSummary,
-    workDir: string,
-  ): { passed: boolean; verificationPassed?: boolean } {
-    if (criteria.type === 'verification_pass') {
-      const passed = summary.verification?.passed === true;
-      return { passed, verificationPassed: passed };
+  ): Promise<{
+    passed: boolean;
+    verificationPassed?: boolean;
+    results: EvalTaskResult['criteria'];
+  }> {
+    const evaluators = {
+      verification_pass,
+      file_contains,
+      script_exit,
+    };
+
+    const results: EvalTaskResult['criteria'] = [];
+    let allPassed = true;
+    let verificationPassed: boolean | undefined;
+
+    for (const criterion of criteria) {
+      const evaluator = evaluators[criterion.name];
+      if (!evaluator) {
+        const result: CriterionResult = {
+          passed: false,
+          message: `Unknown criterion type: ${criterion.name}`,
+        };
+        results.push({ criterion, result });
+        allPassed = false;
+        continue;
+      }
+
+      const result = await evaluator(summary, criterion.details);
+      results.push({ criterion, result });
+      if (!result.passed) {
+        allPassed = false;
+      }
+      if (criterion.name === 'verification_pass') {
+        verificationPassed = result.passed;
+      }
     }
-    if (criteria.type === 'file_contains') {
-      const details = criteria.details as { path: string; content: string };
-      const filePath = path.join(workDir, details.path);
-      if (!fs.existsSync(filePath)) return { passed: false };
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const passed = content.includes(details.content);
-      return { passed };
-    }
-    if (criteria.type === 'script_exit') {
-      // Not implemented yet
-      return { passed: false };
-    }
-    return { passed: false };
+
+    return { passed: allPassed, verificationPassed, results };
   }
 
   private async writeAllResults(

@@ -19,13 +19,15 @@
         "enabled": true,
         "requireConfirmation": false
       },
-      "successCriteria": {
-        "type": "file_contains",
-        "details": {
-          "path": "new-file.txt",
-          "content": "hello world"
+      "successCriteria": [
+        {
+          "name": "file_contains",
+          "details": {
+            "path": "new-file.txt",
+            "substring": "hello world"
+          }
         }
-      }
+      ]
     }
   ]
 }

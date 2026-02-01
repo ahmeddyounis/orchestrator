@@ -47,10 +47,12 @@ const EvalTaskSchema = z.object({
     requireConfirmation: z.boolean(),
     allowNetwork: z.boolean().optional(),
   }),
-  successCriteria: z.object({
-    type: z.enum(['verification_pass', 'file_contains', 'script_exit']),
-    details: z.object({}).passthrough(),
-  }),
+  successCriteria: z.array(
+    z.object({
+      name: z.enum(['verification_pass', 'file_contains', 'script_exit']),
+      details: z.object({}).passthrough().optional(),
+    }),
+  ),
   tags: z.array(z.string()).optional(),
 });
 
@@ -90,6 +92,21 @@ const EvalTaskResultSchema = z.object({
       kind: z.string(),
       message: z.string(),
     })
+    .optional(),
+  criteria: z
+    .array(
+      z.object({
+        criterion: z.object({
+          name: z.enum(['verification_pass', 'file_contains', 'script_exit']),
+          details: z.any().optional(),
+        }),
+        result: z.object({
+          passed: z.boolean(),
+          message: z.string().optional(),
+          details: z.any().optional(),
+        }),
+      }),
+    )
     .optional(),
 });
 
