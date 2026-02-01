@@ -6,6 +6,8 @@ export * from './adapter';
 
 export * from './errors';
 
+export * from './embed';
+
 export * from './openai';
 export * from './anthropic';
 export * from './subprocess';

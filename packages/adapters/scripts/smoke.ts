@@ -78,6 +78,23 @@ async function runSmoke() {
       console.error('❌ OpenAI Smoke Test Failed:', error);
       process.exitCode = 1;
     }
+
+    console.log('Testing OpenAI Embedder...');
+    try {
+      const { OpenAIEmbedder } = await import('../src/embed');
+      const embedder = new OpenAIEmbedder({
+        apiKey: openaiKey,
+      });
+
+      const embeddings = await embedder.embedTexts(['hello world from smoke test']);
+
+      console.log('OpenAI Embedder Dims:', embedder.dims());
+      console.log('OpenAI Embedder Result (first 5):', embeddings[0].slice(0, 5));
+      console.log('✅ OpenAI Embedder Smoke Test Passed');
+    } catch (error) {
+      console.error('❌ OpenAI Embedder Smoke Test Failed:', error);
+      process.exitCode = 1;
+    }
   } else {
     console.log('⏭️  Skipping OpenAI (no OPENAI_API_KEY)');
   }
