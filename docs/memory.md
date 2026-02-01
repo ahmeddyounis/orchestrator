@@ -1,84 +1,61 @@
 # Memory
 
-The Orchestrator can remember information from past runs to improve its performance and provide more contextually aware assistance.
+The orchestrator has a sophisticated memory system that allows it to retain context between runs, leading to more efficient and intelligent assistance. This system is divided into short-term memory (for the current session) and long-term memory (persisted across sessions).
+
+Long-term memory can be further enhanced with different retrieval strategies, including lexical search and advanced vector-based semantic search.
 
 ## How it Works
 
-When memory is enabled, the orchestrator saves details about each run to a local file in your project's `.orchestrator` directory. This includes:
+When memory is enabled, the orchestrator saves information about each run to a local database in your project's `.orchestrator` directory. This includes:
 
-- The initial task description.
-- The files that were changed.
-- The commands that were run.
-- The final outcome of the run.
+- The objectives of the run.
+- Files that were read or modified.
+- Commands that were executed.
+- The final outcome.
 
-On subsequent runs, the orchestrator will use this information to better understand your project and your goals.
+On subsequent runs, the orchestrator can query this memory to retrieve relevant context, enabling "warm starts" for iterative development and a deeper understanding of your project's history.
 
 ## Enabling Memory
 
-You can enable memory in two ways:
+You can enable long-term memory in your configuration file by setting `memory.enabled` to `true`.
 
-1.  **With a command-line flag:**
-
-    Add the `--memory` flag to any `run` command:
-
-    ```bash
-    orchestrator run "Add a new component" --memory
-    ```
-
-2.  **In your configuration file:**
-
-    Set `"enabled": true` in the `memory` section of your `.orchestrator/config.json`:
-
-    ```json
-    {
-      "memory": {
-        "enabled": true
-      }
-    }
-    ```
-
-    With this setting, memory will be enabled for all runs without needing the command-line flag.
-
-## Example: A Memory-Enabled "Warm Start"
-
-Memory is particularly useful for iterative development. Let's say you're working on a new feature and need to make several changes.
-
----
-
-### Run 1: Scaffolding the Feature
-
-First, you ask the orchestrator to create the basic files for a new feature.
-
-```bash
-orchestrator run "Scaffold a new 'UserProfile' feature. It should have a React component, a connected data-fetching hook, and a basic test file." --memory
+**`.orchestrator.jsonc`:**
+```jsonc
+{
+  "memory": {
+    "enabled": true
+  }
+}
 ```
 
-The orchestrator creates `UserProfile.tsx`, `useUserProfile.ts`, and `UserProfile.test.tsx`. The memory now contains the knowledge that these files are related to the "UserProfile" feature.
+## Retrieval Modes: Lexical, Vector, and Hybrid
 
----
+The real power of the memory system comes from its different retrieval modes, which determine how the orchestrator finds relevant information from its long-term store.
 
-### Run 2: Adding to the Feature
+- **`lexical` (Default):** A fast and reliable keyword-based search.
+- **`vector`:** A powerful semantic search that understands the *meaning* of your query, not just the keywords.
+- **`hybrid`:** The recommended mode, which combines the strengths of both `lexical` and `vector` search.
 
-Now, you can make a follow-up request using a "warm start". The orchestrator already has context.
-
-```bash
-orchestrator run "Flesh out the component to display the user's name and email. Also, add a test for the data-fetching hook." --memory
-```
-
-Because the orchestrator remembers the previous run, it knows which files to edit. It will add the rendering logic to `UserProfile.tsx` and the new test to `UserProfile.test.tsx` without you needing to specify the file paths again.
-
-This "warm start" capability makes iterative development much faster and more natural.
-
----
+For a detailed explanation of these modes, how they work, and how to configure advanced backends (like Qdrant, Chroma, or pgvector), please see the **[Vector and Hybrid Memory](./memory-vector.md)** documentation.
 
 ## Privacy
 
-Your memory data is stored locally in your project directory and is never sent to any remote server. It is completely private to you and your project.
+Your memory database, including both lexical and vector data (if using the default `sqlite` backend), is stored locally within your project directory. It is never sent to any remote server.
+
+If you configure a [remote vector backend](./memory-vector.md#backends), only numerical embeddings and file identifiers are sent, not your source code. Please read the privacy details carefully before enabling remote backends.
 
 ## Wiping Memory
 
-If you want to clear the orchestrator's memory for a project, you can delete the memory file:
+To clear the memory for a project, use the `memory wipe` command.
 
-```bash
-rm .orchestrator/memory.sqlite
+```sh
+# Wipe the lexical memory index
+gemini memory wipe
+
+# Wipe the vector memory index
+gemini memory wipe --vector
+
+# Wipe both
+gemini memory wipe --all
 ```
+

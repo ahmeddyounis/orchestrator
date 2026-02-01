@@ -75,6 +75,60 @@ Configure logging verbosity.
 
 ### `memory` (Optional)
 
-Configure the memory feature.
+Configure the memory feature. See the [Memory Guide](memory.md) for a high-level overview and the [Vector and Hybrid Memory Guide](memory-vector.md) for advanced usage.
 
-- `"enabled"`: If `true`, the orchestrator will remember context from previous runs to improve its performance. See the [Memory Guide](memory.md) for more details.
+- `"enabled"`: If `true`, the orchestrator will remember context from previous runs.
+
+A minimal configuration just enables the feature:
+```json
+"memory": {
+  "enabled": true
+}
+```
+
+For advanced semantic search, you can configure retrieval modes and vector backends:
+
+```json
+"memory": {
+  "enabled": true,
+  "retrieval": {
+    "mode": "hybrid", // "lexical", "vector", or "hybrid"
+    "topK": 10,
+    "topKVector": 8,
+    "hybridWeights": {
+      "lexical": 0.5,
+      "vector": 0.5
+    }
+  },
+  "vector": {
+    "backend": "sqlite", // "sqlite", "qdrant", "chroma", "pgvector"
+    "remoteOptIn": false,
+    
+    // Config for "qdrant" backend
+    "qdrant": {
+      "url": "http://localhost:6333",
+      "collectionName": "my-project"
+    },
+    
+    // Config for "chroma" backend
+    "chroma": {
+      "url": "http://localhost:8000",
+      "collectionName": "my-project"
+    },
+
+    // Config for "pgvector" backend
+    "pgvector": {
+      "connectionStringEnv": "DATABASE_URL"
+    }
+  },
+  "embeddings": {
+    "provider": "local-hash" // or "openai", "anthropic", etc.
+  }
+}
+```
+
+- **`retrieval.mode`**: Can be `lexical` (keyword search), `vector` (semantic search), or `hybrid` (combined and re-ranked).
+- **`vector.backend`**: The database for storing vectors. `sqlite` is the local default. `qdrant`, `chroma`, and `pgvector` are for remote databases.
+- **`vector.remoteOptIn`**: Must be set to `true` to use a remote vector backend. This is a security measure to acknowledge that data (embeddings and file IDs) will be sent over the network.
+- **`embeddings.provider`**: Determines how embeddings are created. `local-hash` is fast and fully private. Using a provider like `openai` yields better results but sends file content to the provider's API.
+
