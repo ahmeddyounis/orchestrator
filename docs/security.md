@@ -1,98 +1,121 @@
 # Threat Model & Safety Baseline
 
-This document outlines the security posture for the Orchestrator CLI. It identifies key assets, potential threats, and the controls (both MVP and future) implemented to mitigate risks.
+This document outlines the security posture for the Orchestrator CLI. It identifies key assets, potential threats, and the controls implemented to mitigate risks.
+
+**For a step-by-step guide to applying these controls, see the [Hardening Guide](./hardening.md).**
 
 ## Assets
 
-1.  **Repository Code:** The user's codebase, which may contain proprietary logic.
-2.  **Secrets:** API keys (e.g., LLM provider keys), database credentials, and other sensitive environment variables.
+1.  **Repository Code:** The user's codebase, which may contain proprietary logic, secrets, or other sensitive data.
+2.  **Secrets & Configuration:** API keys, environment variables, and configuration files on the user's machine.
 3.  **User Machine:** The local file system and execution environment where the CLI runs.
-4.  **Logs:** Execution logs, which might inadvertently capture sensitive data.
-5.  **Memory Database:** Vector database storing embeddings of code and interactions (if enabled).
+4.  **Logs & Artifacts:** Execution logs and run artifacts, which might inadvertently capture sensitive data.
+5.  **Memory Database:** The vector database storing embeddings of code and interactions, which could be targeted to reconstruct proprietary information.
 
 ## Threats
 
-### 1. Prompt Injection via Repository Content
+The primary threats involve the agent being manipulated into performing unintended actions or leaking sensitive data.
 
-- **Description:** Malicious instructions embedded in the codebase (e.g., in a README or code comment) that could trick the LLM into executing unauthorized actions.
-- **Risk:** Medium to High (depending on autonomy level).
+### 1. Prompt Injection
+
+- **Description:** Malicious instructions embedded in the codebase (e.g., in a README, code comment, or dependency) that trick the LLM into executing unauthorized actions, such as writing malicious code or exfiltrating data.
+- **Risk:** High. This is an active and unsolved research area. The primary mitigation is human-in-the-loop confirmation for all actions.
 
 ### 2. Secrets Exfiltration
 
-- **Description:** The agent accidentally reading environment files (like `.env`) and sending them to the LLM provider, or logging them to disk.
+- **Description:** The agent reading secrets from files (e.g., `.env`, `~/.aws/credentials`) or environment variables and sending them to the LLM provider, logging them to disk, or printing them to the console.
 - **Risk:** High.
 
-### 3. Destructive Commands
+### 3. Destructive Tool Use
 
-- **Description:** The agent executing shell commands that delete files (`rm -rf`), modify system settings, or install malware.
+- **Description:** The agent using authorized tools like `shell` or `file` to perform destructive actions, such as `rm -rf /`, deleting source code, or corrupting project files.
 - **Risk:** Critical.
 
-### 4. Malicious Plugins/Tools
+### 4. Compromised Memory Persistence
 
-- **Description:** Loading third-party tools or extensions that compromise the environment.
-- **Risk:** Medium (mitigated by strict tool definitions).
+- **Description:** An attacker gaining access to the local memory database (`.orchestrator/memory.sqlite`). While content can be encrypted, an attacker could analyze unencrypted vectors and metadata to infer information about the codebase or past activities.
+- **Risk:** Medium.
+
+### 5. Malicious External Adapters
+
+- **Description:** The CLI's architecture allows for custom adapters to other CLIs or tools. A malicious or poorly secured adapter could introduce significant vulnerabilities, bypassing built-in controls. For example, an adapter could execute shell commands directly instead of using the Orchestrator's secured `shell` tool.
+- **Risk:** High (if using untrusted adapters).
 
 ## Security Principles
 
-1.  **Least Privilege:** The agent should only have access to the files and commands necessary for the task.
-2.  **Explicit Confirmation:** High-risk actions (file writes, shell execution) require user approval (human-in-the-loop).
-3.  **Local-First Logs:** Logs are stored locally and redacted before any potential sharing or analysis.
-4.  **Defense in Depth:** Multiple layers of security (LLM prompt engineering, application-level checks, OS-level permissions).
+1.  **Least Privilege:** The agent should only have access to the files, environment variables, and commands necessary for the task.
+2.  **Explicit Confirmation:** High-risk actions (file writes, shell execution, network calls) require user approval by default. **This is the most important control.**
+3.  **Local-First:** Data and logs are stored locally. Code is only sent to the configured LLM provider.
+4.  **Defense in Depth:** Multiple layers of security (LLM prompting, application-level checks, user confirmation, and operational practices).
 
-## MVP Controls
+## Controls & Mitigations
 
-These controls are enforced in the initial version of the Orchestrator.
+### 1. Tool Confirmation & Policy
 
-### 1. Command Execution Policy
-
-- **Denylist:** The agent is explicitly forbidden from running dangerous commands (e.g., `sudo`, dangerous `rm` patterns) without explicit, granular confirmation.
-- **Confirmation:** All shell commands defaults to requiring user confirmation unless they match a configured **Allowlist**.
-- **Flags:** Users can enforce strict non-interactive modes (`--non-interactive`) or opt-in to riskier auto-approval (`--yes`).
-- **Documentation:** See [docs/tools.md](tools.md) for full configuration details.
+- **Confirmation by Default:** All high-risk tools (`shell`, `file`) require user confirmation before execution. This is controlled by the `confirm` flag in `.orchestrator/config.yaml`.
+- **Network Policy:** All outbound network access is **denied by default**. Users must create an explicit `allow` list for trusted domains in the configuration.
+- **Environment Variable Gating:** Access to environment variables is **denied by default**. An explicit `allow` list is required.
 
 ### 2. Secrets Handling
 
-- **Redaction:** A redaction layer is applied to logs and LLM outputs to mask patterns looking like API keys or credentials.
-- **File Ignoring:** The agent respects `.gitignore` and `.dockerignore` to avoid reading sensitive ignored files.
+- **Redaction:** A redaction layer scans logs and LLM outputs to mask patterns that look like API keys or other credentials.
+- **File Ignoring:** The agent respects `.gitignore` and `.geminiignore` to avoid reading sensitive files.
 
 ### 3. Memory & Privacy
 
-- **Opt-In Memory:** Long-term memory features are off by default.
-- **Local Execution:** The CLI runs locally; code is only sent to the configured LLM provider and nowhere else.
+- **Opt-In Memory:** Long-term memory is **disabled by default**.
+- **Encryption-at-Rest:** When enabled, sensitive fields in the memory database are encrypted using AES-256-GCM. See the configuration details below. However, vector embeddings and metadata remain unencrypted.
 
-### 4. Encryption-at-Rest for Memory
+## Recommended Baseline Configuration
 
-- **Opt-In:** Field-level encryption for memory database content is available via configuration.
-- **Algorithm:** AES-256-GCM with scrypt key derivation.
-- **What's Encrypted:** When enabled, `content` and `evidenceJson` fields in the memory SQLite database are encrypted before storage. Metadata (titles, timestamps, IDs) and vectors remain unencrypted.
-- **Key Management:** The encryption key is read from an environment variable (default: `ORCHESTRATOR_ENC_KEY`, configurable via `security.encryption.keyEnv`).
-- **Configuration:**
-  ```yaml
-  memory:
-    storage:
-      encryptAtRest: true
-  security:
-    encryption:
-      keyEnv: ORCHESTRATOR_ENC_KEY # default
-  ```
-- **Limitations:**
-  - Run artifacts under `.orchestrator/runs` are **not** encrypted (planned for future work).
-  - Vector embeddings are stored unencrypted (vectors alone don't reveal original content).
-  - The encryption key must be available at runtime; if `encryptAtRest` is enabled but the key is missing, the CLI exits with an error.
+For most projects, especially TypeScript monorepos, we recommend a "safe-by-default" configuration. This configuration should be the starting point and only relaxed for specific, trusted tasks.
 
-## Future Controls
+```yaml
+# .orchestrator/config.yaml
 
-- **Sandboxing:** Running the agent or its tool execution environment within a Docker container or Firecracker microVM.
-- **Run Artifacts Encryption:** Encrypting the local run artifacts under `.orchestrator/runs`.
-- **Stricter Policy Engine:** A configurable policy engine allowing users to define fine-grained allow/deny lists for tools and paths.
-- **PII/Secret Scanning:** Advanced pre-flight scanning of context sent to the LLM.
-- **OS Keychain Integration:** Storing encryption keys in the system keychain rather than environment variables.
+# Disable long-term memory to prevent code/conversation persistence.
+memory:
+  enabled: false
 
-## Artifact Logs & Sensitive Data
+# Enforce confirmation for all high-risk tool operations.
+tools:
+  l2:
+    shell:
+      confirm: true
+    file:
+      confirm: true
 
-- **Principle:** Logs should be safe to share for debugging purposes.
-- **Implementation:** All logger outputs pass through a redactor. This redactor attempts to identify and mask:
-  - Credit card numbers
-  - API keys (AWS, Stripe, OpenAI, etc.)
-  - Email addresses (optional/configurable)
-  - IP addresses (optional/configurable)
+# Default to denying all network access and environment variable access.
+security:
+  networkPolicy: 'deny'
+  env:
+    allow: [] # Explicitly empty
+
+# Optional: Encrypt memory if you choose to enable it.
+# The key must be set in the ORCHESTRATOR_ENC_KEY environment variable.
+# memory:
+#   enabled: true
+#   storage:
+#     encryptAtRest: true
+```
+**For a more detailed checklist, see the [Hardening Guide](./hardening.md).**
+
+## Operational Best Practices
+
+Technology controls are only part of the solution. Your operational posture is critical.
+
+- **Run in Isolated Environments:** For untrusted repositories, always run the CLI inside a container (e.g., Docker) or a VM to isolate its file system and network access.
+- **Use Scoped, Ephemeral API Keys:** Generate unique API keys for the Orchestrator with limited permissions and rotate them regularly.
+- **Regularly Wipe Memory:** If using the memory feature, periodically delete `.orchestrator/memory.sqlite` to purge sensitive context.
+- **Vet External Adapters:** Only install and use third-party adapters from trusted sources. Review their implementation to understand the permissions they require.
+
+## Limitations & Future Work
+
+The Orchestrator is a powerful tool, and its security is an evolving process. Users should be aware of the following limitations:
+
+- **Prompt Injection is Unsolved:** No system is immune to prompt injection. User confirmation is the final and most effective line of defense.
+- **Run Artifacts are Unencrypted:** Files and logs under `.orchestrator/runs` are currently stored in plain text.
+- **Vectors are Unencrypted:** In the memory database, vector embeddings are not encrypted. This could potentially leak information about the structure or content of your code.
+- **Sandboxing is Not Yet Implemented:** The CLI does not yet run tool commands in a sandboxed environment. A compromised tool could potentially access anything the host user can access.
+
+Future work aims to address these limitations by introducing run artifact encryption, full sandboxing for tool execution, and more advanced PII/secret scanning.
