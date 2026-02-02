@@ -112,6 +112,17 @@ export class ProcessManager extends EventEmitter {
       });
       this.pid = this.childProcess.pid;
 
+      // Writing to stdin can race with process exit and may produce EPIPE.
+      // Attach an error handler to avoid uncaught exceptions.
+      if (this.childProcess.stdin) {
+        this.childProcess.stdin.on('error', (err: NodeJS.ErrnoException) => {
+          if (err.code === 'EPIPE') {
+            return;
+          }
+          this.emit('error', err);
+        });
+      }
+
       if (this.childProcess.stdout) {
         this.childProcess.stdout.setEncoding('utf8');
         this.childProcess.stdout.on('data', (data) => this.handleOutput(data.toString(), 'stdout'));

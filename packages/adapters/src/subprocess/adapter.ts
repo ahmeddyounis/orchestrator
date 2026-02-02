@@ -120,35 +120,39 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       // Consume initial prompt
       await pm.readUntilHeuristic(this.compatibilityProfile.initialPromptTimeoutMs, isPrompt);
 
-      // Only clear outputText if pm.isRunning after initial read
-      // Non-interactive processes exit and their output is the response
-      // Some non-interactive commands may print a "prompt-looking" marker right before exiting;
-      // give them a brief window to exit before treating them as interactive.
-      if (pm.isRunning) {
-        await new Promise((r) => setTimeout(r, 25));
-      }
-      if (pm.isRunning) {
-        outputText = '';
-      }
-
       // Render prompt
       const prompt = req.messages
         .filter((m) => m.role === 'system' || m.role === 'user')
         .map((m) => m.content)
         .join('\n');
 
-      // Send input
-      // Send input with newline to ensure it's processed
-      const input = prompt + '\n';
-      // Log input as well? Spec says "raw transcripts". Usually includes input.
-      // But process manager 'output' event only covers stdout/stderr.
-      // We manually log stdin.
-      await logTranscript(input);
-      pm.write(input);
+      const shouldSendInput = prompt.trim().length > 0;
 
-      // Wait for termination
-      if (pm.isRunning) {
-        await pm.readUntilHeuristic(this.compatibilityProfile.promptInactivityTimeoutMs, isPrompt);
+      // Only clear outputText if we're going to send input to an interactive process.
+      // Some non-interactive commands may print a "prompt-looking" marker right before exiting;
+      // give them a brief window to exit before treating them as interactive.
+      if (shouldSendInput && pm.isRunning) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (pm.isRunning) {
+          outputText = '';
+        }
+      }
+
+      // Send input (only if we have something to send and the process is still running).
+      if (shouldSendInput && pm.isRunning) {
+        // Send input with newline to ensure it's processed.
+        const input = prompt + '\n';
+        // Log stdin for "raw transcripts".
+        await logTranscript(input);
+        pm.write(input);
+
+        // Wait for termination.
+        if (pm.isRunning) {
+          await pm.readUntilHeuristic(
+            this.compatibilityProfile.promptInactivityTimeoutMs,
+            isPrompt,
+          );
+        }
       }
 
       if (timedOut) {
