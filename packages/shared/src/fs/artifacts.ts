@@ -3,6 +3,8 @@ import * as fs from 'fs/promises';
 
 export const ORCHESTRATOR_DIR = '.orchestrator';
 export const RUNS_DIR = 'runs';
+export const MANIFEST_FILENAME = 'manifest.json';
+export const MANIFEST_VERSION = 1;
 
 export interface RunArtifactPaths {
   root: string;
@@ -14,6 +16,7 @@ export interface RunArtifactPaths {
 }
 
 export interface Manifest {
+  schemaVersion: typeof MANIFEST_VERSION;
   runId: string;
   startedAt: string;
   finishedAt?: string;
@@ -26,6 +29,22 @@ export interface Manifest {
   patchPaths: string[];
   contextPaths?: string[];
   toolLogPaths: string[];
+  verificationPaths?: string[];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function normalizeManifest(manifest: Manifest): Manifest {
+  return {
+    ...manifest,
+    schemaVersion: manifest.schemaVersion ?? MANIFEST_VERSION,
+    patchPaths: uniqueStrings(manifest.patchPaths ?? []),
+    toolLogPaths: uniqueStrings(manifest.toolLogPaths ?? []),
+    contextPaths: uniqueStrings(manifest.contextPaths ?? []),
+    verificationPaths: uniqueStrings(manifest.verificationPaths ?? []),
+  };
 }
 
 /**
@@ -45,7 +64,7 @@ export async function createRunDir(baseDir: string, runId: string): Promise<RunA
     root: runRootDir,
     trace: join(runRootDir, 'trace.jsonl'),
     summary: join(runRootDir, 'summary.json'),
-    manifest: join(runRootDir, 'manifest.json'),
+    manifest: join(runRootDir, MANIFEST_FILENAME),
     patchesDir: patchesDir,
     toolLogsDir: toolLogsDir,
   };
@@ -60,7 +79,7 @@ export function getRunArtifactPaths(baseDir: string, runId: string): RunArtifact
     root: runRootDir,
     trace: join(runRootDir, 'trace.jsonl'),
     summary: join(runRootDir, 'summary.json'),
-    manifest: join(runRootDir, 'manifest.json'),
+    manifest: join(runRootDir, MANIFEST_FILENAME),
     patchesDir: join(runRootDir, 'patches'),
     toolLogsDir: join(runRootDir, 'tool_logs'),
   };
@@ -68,4 +87,21 @@ export function getRunArtifactPaths(baseDir: string, runId: string): RunArtifact
 
 export async function writeManifest(manifestPath: string, manifest: Manifest): Promise<void> {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+}
+
+export async function readManifest(manifestPath: string): Promise<Manifest> {
+  const raw = await fs.readFile(manifestPath, 'utf-8');
+  const parsed = JSON.parse(raw) as Manifest;
+  return normalizeManifest(parsed);
+}
+
+export async function updateManifest(
+  manifestPath: string,
+  updater: (manifest: Manifest) => void,
+): Promise<Manifest> {
+  const manifest = await readManifest(manifestPath);
+  updater(manifest);
+  const normalized = normalizeManifest(manifest);
+  await writeManifest(manifestPath, normalized);
+  return normalized;
 }

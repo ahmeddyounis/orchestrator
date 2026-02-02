@@ -21,7 +21,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10.25.0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -32,14 +32,5 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm -r typecheck
-
-      - name: Build
-        run: pnpm -r build
-
-      - name: Test
-        run: pnpm test
+      - name: Check (format, lint, typecheck, test)
+        run: pnpm check

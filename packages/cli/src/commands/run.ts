@@ -8,11 +8,16 @@ import {
   type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
-import { ClaudeCodeAdapter, FakeAdapter } from '@orchestrator/adapters';
 import {
-  ProviderCapabilities,
+  AnthropicAdapter,
+  ClaudeCodeAdapter,
+  FakeAdapter,
+  OpenAIAdapter,
+} from '@orchestrator/adapters';
+import {
   ProviderConfig,
   ToolPolicy,
+  getRunArtifactPaths,
   type Config,
   UsageError,
 } from '@orchestrator/shared';
@@ -237,25 +242,10 @@ export function registerRunCommand(program: Command) {
 
       const costTracker = new CostTracker(config);
       const registry = new ProviderRegistry(config, costTracker);
-
-      const stubFactory = (cfg: ProviderConfig) => ({
-        id: () => cfg.type,
-        capabilities: () =>
-          ({
-            supportsStreaming: false,
-            supportsToolCalling: false,
-            supportsJsonMode: false,
-            modality: 'text' as const,
-            latencyClass: 'medium' as const,
-          }) as ProviderCapabilities,
-        generate: async () => ({ text: 'Stub response' }),
-      });
-
-      registry.registerFactory('openai', stubFactory);
-      registry.registerFactory('anthropic', stubFactory);
-      registry.registerFactory('mock', stubFactory);
-      registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
-      registry.registerFactory('fake', (cfg) => new FakeAdapter(cfg));
+      registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
+      registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
+      registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
+      registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
 
       const ui = new ConsoleUI();
       const defaultToolPolicy: ToolPolicy = {
@@ -263,7 +253,9 @@ export function registerRunCommand(program: Command) {
         requireConfirmation: true,
         allowlistPrefixes: [],
         denylistPatterns: [],
-        allowNetwork: false,
+        networkPolicy: 'deny',
+        envAllowlist: [],
+        allowShell: false,
         maxOutputBytes: 1024 * 1024,
         timeoutMs: 600000,
         autoApprove: false,
@@ -271,15 +263,15 @@ export function registerRunCommand(program: Command) {
       };
       const toolPolicy = config.execution?.tools || defaultToolPolicy;
 
-    const orchestrator = await Orchestrator.create({
-      config,
-      git: new GitService(repoRoot),
-      registry,
-      repoRoot,
-      costTracker,
-      toolPolicy,
-      ui,
-    });
+      const orchestrator = await Orchestrator.create({
+        config,
+        git,
+        registry,
+        repoRoot,
+        costTracker,
+        toolPolicy,
+        ui,
+      });
 
       const result = await orchestrator.run(goal, { thinkLevel, runId });
 
@@ -291,7 +283,7 @@ export function registerRunCommand(program: Command) {
         status: result.status === 'success' ? 'SUCCESS' : 'FAILURE',
         goal,
         runId: result.runId,
-        artifactsDir: orchestrator.getArtifactsDir(),
+        artifactsDir: getRunArtifactPaths(repoRoot, result.runId).root,
         changedFiles: result.filesChanged || [],
         cost: costTracker.getSummary(),
         verification: result.verification,

@@ -1,7 +1,7 @@
 // packages/shared/src/fs/io.ts
 import { promises as fs } from 'fs';
-import { dirname } from './path';
-import { tmpName } from 'tmp-promise';
+import { randomUUID } from 'node:crypto';
+import { dirname, join } from './path';
 import { ensureDir as fseEnsureDir } from 'fs-extra';
 
 export async function ensureDir(path: string): Promise<void> {
@@ -10,7 +10,7 @@ export async function ensureDir(path: string): Promise<void> {
 
 export async function atomicWrite(path: string, content: string | Buffer): Promise<void> {
   await ensureDir(path);
-  const tempPath = await tmpName({ dir: dirname(path) });
+  const tempPath = join(dirname(path), `.tmp-${randomUUID()}`);
   await fs.writeFile(tempPath, content);
   await fs.rename(tempPath, path);
 }

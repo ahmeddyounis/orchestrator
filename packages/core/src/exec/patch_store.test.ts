@@ -3,7 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { PatchStore } from './patch_store';
-import { Manifest } from '@orchestrator/shared';
+import { MANIFEST_VERSION, Manifest } from '@orchestrator/shared';
 
 describe('PatchStore', () => {
   let tmpDir: string;
@@ -20,6 +20,7 @@ describe('PatchStore', () => {
 
     // Create initial manifest
     const manifest: Manifest = {
+      schemaVersion: MANIFEST_VERSION,
       runId: 'test-run',
       startedAt: new Date().toISOString(),
       command: 'test',

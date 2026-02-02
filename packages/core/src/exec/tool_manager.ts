@@ -9,6 +9,7 @@ import {
   ToolRunRequest,
   ToolPolicy,
   ToolRunResult,
+  MANIFEST_VERSION,
   Manifest,
   writeManifest,
   AppError,
@@ -175,6 +176,9 @@ export class ToolManager {
     try {
       const content = await fs.readFile(this.manifestPath, 'utf-8');
       const manifest: Manifest = JSON.parse(content);
+
+      // Backfill in case we are updating an older manifest.
+      manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
 
       let changed = false;
       if (!manifest.toolLogPaths) {

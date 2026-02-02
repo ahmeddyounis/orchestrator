@@ -1,14 +1,7 @@
 // packages/shared/src/eval/schemas.ts
 
 import { z } from 'zod';
-import {
-  EVAL_SCHEMA_VERSION,
-  EvalAggregates,
-  EvalResult,
-  EvalSuite,
-  EvalTask,
-  EvalTaskResult,
-} from './types';
+import { EVAL_SCHEMA_VERSION, EvalResult, EvalSuite } from './types';
 
 const EvalTaskSchema = z.object({
   id: z.string(),

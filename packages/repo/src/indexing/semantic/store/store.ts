@@ -1,14 +1,12 @@
 // packages/repo/src/indexing/semantic/store/store.ts
 
-import Database, { type Database as DB } from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { CREATE_TABLES_SQL } from './schema';
-import {
-  type Chunk,
-  type Embedding,
-  type FileMeta,
-  type SemanticIndexMeta,
-  SCHEMA_VERSION,
-} from './types';
+import { type Chunk, type FileMeta, type SemanticIndexMeta, SCHEMA_VERSION } from './types';
+
+type DB = DatabaseSync;
 
 function float32ArrayToBase64(array: Float32Array): string {
   const buffer = Buffer.from(array.buffer);
@@ -28,7 +26,10 @@ export class SemanticIndexStore {
   private db: DB | null = null;
 
   init(dbPath: string): void {
-    this.db = new Database(dbPath);
+    mkdirSync(dirname(dbPath), { recursive: true });
+    this.db = new DatabaseSync(dbPath);
+    // node:sqlite may enable FK enforcement depending on build/runtime; we handle cascades manually.
+    this.db.exec('PRAGMA foreign_keys = OFF');
     this.db.exec(CREATE_TABLES_SQL);
   }
 
@@ -47,13 +48,29 @@ export class SemanticIndexStore {
   getMeta(): SemanticIndexMeta | null {
     const db = this.getDb();
     const stmt = db.prepare('SELECT * FROM semantic_meta');
-    const meta = stmt.get() as any;
-    if (meta) {
-      return {
-        ...meta,
-      };
-    }
-    return null;
+    const metaRow = stmt.get() as SemanticIndexMeta | undefined;
+    return metaRow ?? null;
+  }
+
+  getStats(): { fileCount: number; chunkCount: number; embeddingCount: number } {
+    const db = this.getDb();
+    const fileCount = (
+      db.prepare('SELECT COUNT(*) as count FROM semantic_files').get() as {
+        count: number;
+      }
+    ).count;
+    const chunkCount = (
+      db.prepare('SELECT COUNT(*) as count FROM semantic_chunks').get() as {
+        count: number;
+      }
+    ).count;
+    const embeddingCount = (
+      db.prepare('SELECT COUNT(*) as count FROM semantic_embeddings').get() as {
+        count: number;
+      }
+    ).count;
+
+    return { fileCount, chunkCount, embeddingCount };
   }
 
   setMeta(meta: SemanticIndexMeta): void {
@@ -68,7 +85,7 @@ export class SemanticIndexStore {
       meta.dims,
       meta.builtAt,
       meta.updatedAt,
-      SCHEMA_VERSION,
+      meta.schemaVersion ?? SCHEMA_VERSION,
     );
   }
 
@@ -88,22 +105,36 @@ export class SemanticIndexStore {
 
   deleteFile(path: string): void {
     const db = this.getDb();
-    // Deletion will cascade to chunks and embeddings due to FOREIGN KEY constraints
-    const stmt = db.prepare('DELETE FROM semantic_files WHERE path = ?');
-    stmt.run(path);
+    db.exec('BEGIN TRANSACTION');
+    try {
+      // Delete embeddings/chunks explicitly so tests (and callers) don't rely on FK pragmas.
+      db.prepare(
+        'DELETE FROM semantic_embeddings WHERE chunkId IN (SELECT chunkId FROM semantic_chunks WHERE path = ?)',
+      ).run(path);
+      db.prepare('DELETE FROM semantic_chunks WHERE path = ?').run(path);
+      db.prepare('DELETE FROM semantic_files WHERE path = ?').run(path);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   getAllFiles(): FileMeta[] {
     const db = this.getDb();
     const stmt = db.prepare('SELECT * FROM semantic_files');
-    return stmt.all() as FileMeta[];
+    return stmt.all() as unknown as FileMeta[];
   }
 
   replaceChunksForFile(path: string, chunks: Chunk[]): void {
     const db = this.getDb();
-    const transaction = db.transaction(() => {
+    db.exec('BEGIN TRANSACTION');
+    try {
+      db.prepare(
+        'DELETE FROM semantic_embeddings WHERE chunkId IN (SELECT chunkId FROM semantic_chunks WHERE path = ?)',
+      ).run(path);
+
       // First, delete existing chunks for the file.
-      // This will cascade to embeddings.
       const deleteChunksStmt = db.prepare('DELETE FROM semantic_chunks WHERE path = ?');
       deleteChunksStmt.run(path);
 
@@ -125,21 +156,28 @@ export class SemanticIndexStore {
           chunk.fileHash,
         );
       }
-    });
-    transaction();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   upsertEmbeddings(embeddings: Map<string, Float32Array>): void {
     const db = this.getDb();
-    const transaction = db.transaction(() => {
+    db.exec('BEGIN TRANSACTION');
+    try {
       const stmt = db.prepare(
         'INSERT OR REPLACE INTO semantic_embeddings (chunkId, vectorB64) VALUES (?, ?)',
       );
       for (const [chunkId, vector] of embeddings.entries()) {
         stmt.run(chunkId, float32ArrayToBase64(vector));
       }
-    });
-    transaction();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   getAllEmbeddings(): Map<string, Float32Array> {
@@ -165,7 +203,7 @@ export class SemanticIndexStore {
       WHERE e.vectorB64 IS NOT NULL
     `);
 
-    const rows = stmt.all() as (Chunk & { vectorB64: string })[];
+    const rows = stmt.all() as unknown as (Chunk & { vectorB64: string })[];
 
     return rows.map((row) => ({
       ...row,

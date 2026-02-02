@@ -163,6 +163,15 @@ export interface RunFinished extends BaseEvent {
   };
 }
 
+export interface RunEscalated extends BaseEvent {
+  type: 'RunEscalated';
+  payload: {
+    from: 'L0' | 'L1' | 'L2' | 'L3';
+    to: 'L0' | 'L1' | 'L2' | 'L3';
+    reason: 'non_improving' | 'patch_apply_failure';
+  };
+}
+
 export interface MemoryWrite extends BaseEvent {
   type: 'MemoryWrite';
   payload: {
@@ -434,6 +443,7 @@ export type OrchestratorEvent =
   | ToolRunFinished
   | VerifyResult
   | RunFinished
+  | RunEscalated
   | RunStopped
   | MemoryWrite
   | MemoryRedaction

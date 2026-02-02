@@ -2,11 +2,18 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { loadPlugin, PluginVersionMismatchError, type Logger } from '@orchestrator/plugin-sdk';
 import pluginExport, { DummyProviderPlugin, manifest } from './index';
 
+const mockLogger: Logger = {
+  log: async () => {},
+  trace: async () => {},
+  debug: async () => {},
+  info: async () => {},
+  warn: async () => {},
+  error: async () => {},
+  child: () => mockLogger,
+};
+
 describe('DummyProviderPlugin', () => {
   let plugin: DummyProviderPlugin;
-  const mockLogger: Logger = {
-    log: async () => {},
-  };
   const mockCtx = {
     runId: 'test-run',
     logger: mockLogger,
@@ -37,9 +44,7 @@ describe('DummyProviderPlugin', () => {
   it('generates response echoing user message', async () => {
     const response = await plugin.generate(
       {
-        messages: [
-          { role: 'user', content: 'Hello world' },
-        ],
+        messages: [{ role: 'user', content: 'Hello world' }],
       },
       mockCtx,
     );
@@ -50,7 +55,7 @@ describe('DummyProviderPlugin', () => {
   it('uses custom response prefix from config', async () => {
     const customPlugin = new DummyProviderPlugin();
     await customPlugin.init({ responsePrefix: 'echo: ' }, mockCtx);
-    
+
     const response = await customPlugin.generate(
       {
         messages: [{ role: 'user', content: 'test' }],
@@ -62,9 +67,9 @@ describe('DummyProviderPlugin', () => {
 
   it('throws when generate called before init', async () => {
     const uninitPlugin = new DummyProviderPlugin();
-    await expect(
-      uninitPlugin.generate({ messages: [] }, mockCtx),
-    ).rejects.toThrow('Plugin not initialized');
+    await expect(uninitPlugin.generate({ messages: [] }, mockCtx)).rejects.toThrow(
+      'Plugin not initialized',
+    );
   });
 
   it('reports capabilities', () => {
@@ -78,7 +83,7 @@ describe('DummyProviderPlugin', () => {
   it('can be loaded via loadPlugin', async () => {
     const loadedPlugin = await loadPlugin(pluginExport, {}, mockCtx);
     expect(loadedPlugin.name).toBe('dummy-provider');
-    
+
     const health = await loadedPlugin.healthCheck();
     expect(health.healthy).toBe(true);
   });
@@ -94,9 +99,7 @@ describe('DummyProviderPlugin', () => {
 describe('version mismatch detection', () => {
   const mockCtx = {
     runId: 'test-run',
-    logger: {
-      log: async () => {},
-    } as Logger,
+    logger: mockLogger,
   };
 
   it('rejects plugin with incompatible SDK version', async () => {

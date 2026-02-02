@@ -42,7 +42,7 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
     }
   }
 
-  async init(ctx: object): Promise<void> {
+  async init(_ctx: object): Promise<void> {
     if (!this.config.url || !this.config.collection) {
       throw new MemoryError('Qdrant URL and collection name are required.');
     }
@@ -55,7 +55,7 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
   private async makeRequest<T>(
     endpoint: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    body?: any,
+    body?: unknown,
   ): Promise<T> {
     const url = `${this.config.url}${endpoint}`;
     const headers: Record<string, string> = {
@@ -83,7 +83,8 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
       if (error instanceof MemoryError) {
         throw error;
       }
-      throw new MemoryError(`Qdrant network error: ${(error as Error).message}`, { cause: error });
+      const message = error instanceof Error ? error.message : String(error);
+      throw new MemoryError(`Qdrant network error: ${message}`, { cause: error });
     }
   }
 
@@ -109,9 +110,9 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
     topK: number,
     filter?: VectorQueryFilter,
   ): Promise<VectorQueryResult[]> {
-    const qdrantFilter: any = {
-      must: [{ key: 'repoId', match: { value: repoId } }],
-    };
+    const qdrantFilter: {
+      must: Array<{ key: string; match: { value: string | boolean } }>;
+    } = { must: [{ key: 'repoId', match: { value: repoId } }] };
 
     if (filter?.type) {
       qdrantFilter.must.push({ key: 'type', match: { value: filter.type } });
@@ -120,7 +121,7 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
       qdrantFilter.must.push({ key: 'stale', match: { value: filter.stale } });
     }
 
-    const response = await this.makeRequest<{ result: any[] }>(
+    const response = await this.makeRequest<{ result: Array<{ id: string; score: number }> }>(
       `/collections/${this.config.collection}/points/search`,
       'POST',
       {
@@ -156,12 +157,17 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
     });
   }
 
-  async info(ctx: object): Promise<VectorBackendInfo> {
+  async info(_ctx: object): Promise<VectorBackendInfo> {
     try {
-      const collectionInfo = await this.makeRequest<{ result: any }>(
-        `/collections/${this.config.collection}`,
-        'GET',
-      );
+      const collectionInfo = await this.makeRequest<{
+        result: {
+          vectors_config: {
+            params: {
+              size: number;
+            };
+          };
+        };
+      }>(`/collections/${this.config.collection}`, 'GET');
       return {
         backend: 'qdrant',
         dims: collectionInfo.result.vectors_config.params.size,
@@ -169,7 +175,7 @@ export class QdrantVectorBackend implements VectorMemoryBackend {
         location: this.config.url,
         supportsFilters: true,
       };
-    } catch (e) {
+    } catch {
       // If we can't get info, return defaults.
       return {
         backend: 'qdrant',

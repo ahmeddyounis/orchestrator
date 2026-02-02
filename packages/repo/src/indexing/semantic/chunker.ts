@@ -12,16 +12,16 @@ const HARD_MAX_CHUNK_CHARS = 5000;
 const TS_QUERY = `
 (function_declaration name: (identifier) @name) @body
 (lexical_declaration (variable_declarator name: (identifier) @name (arrow_function) @body)) @export
-(function name: (identifier) @name) @body
+(function_expression name: (identifier) @name) @body
 (method_definition name: (property_identifier) @name) @body
 (class_declaration name: (type_identifier) @name) @body
 (interface_declaration name: (type_identifier) @name) @body
 (type_alias_declaration name: (type_identifier) @name) @body
-(export_statement (lexical_declaration (variable_declarator name: (identifier) @name)) @body)
+(export_statement (lexical_declaration (variable_declarator name: (identifier) @name))) @body
 (export_statement (function_declaration name: (identifier) @name)) @body
-(export_statement (class_declaration name: (identifier) @name)) @body
-(export_statement (interface_declaration name: (identifier) @name)) @body
-(export_statement (type_alias_declaration name: (identifier) @name)) @body
+(export_statement (class_declaration name: (type_identifier) @name)) @body
+(export_statement (interface_declaration name: (type_identifier) @name)) @body
+(export_statement (type_alias_declaration name: (type_identifier) @name)) @body
 `;
 
 const KIND_MAP: Record<string, SemanticChunk['kind']> = {
@@ -35,10 +35,15 @@ const KIND_MAP: Record<string, SemanticChunk['kind']> = {
 };
 
 function getNodeName(node: Parser.SyntaxNode): string {
+  const directNameNode = node.childForFieldName('name');
+  if (directNameNode) {
+    return directNameNode.text;
+  }
+
   const nameNode =
-    node.descendantsOfType('identifier')[0] ??
     node.descendantsOfType('property_identifier')[0] ??
-    node.descendantsOfType('type_identifier')[0];
+    node.descendantsOfType('type_identifier')[0] ??
+    node.descendantsOfType('identifier')[0];
   return nameNode?.text ?? 'anonymous';
 }
 
@@ -66,6 +71,15 @@ export class SemanticChunker {
     const chunks: SemanticChunk[] = [];
     for (const match of matches) {
       const node = match.captures[0].node;
+      const nameCapture = match.captures.find((capture) => capture.name === 'name');
+      const name = nameCapture?.node.text ?? getNodeName(node);
+
+      if (node.type === 'method_definition' && name === 'constructor') {
+        continue;
+      }
+      if (node.type === 'lexical_declaration' && node.parent?.type === 'export_statement') {
+        continue;
+      }
 
       if (node.endIndex - node.startIndex < MIN_CHUNK_CHARS) {
         continue;
@@ -82,7 +96,6 @@ export class SemanticChunker {
         content = content.substring(0, MAX_CHUNK_CHARS) + '...[TRUNCATED]';
       }
 
-      const name = getNodeName(node);
       const kind = getNodeKind(node);
 
       const chunkId = createHash('sha256')
@@ -99,7 +112,7 @@ export class SemanticChunker {
         endLine,
         content,
         fileHash: file.fileHash,
-        parentName: this.findParentName(node),
+        parentName: this.findParentName(node) ?? null,
       });
     }
 

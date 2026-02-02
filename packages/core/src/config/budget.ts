@@ -60,8 +60,8 @@ function parseDuration(input: string): number {
   }
 }
 
-export const DEFAULT_BUDGET: Budget = {
+export const DEFAULT_BUDGET = {
   iter: 4,
   tool: 6,
   time: 10 * 60 * 1000, // 10m
-};
+} satisfies Required<Pick<Budget, 'iter' | 'tool' | 'time'>> & Budget;

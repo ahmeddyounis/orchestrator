@@ -85,7 +85,8 @@ export class SimpleContextFuser implements ContextFuser {
       let content = item.content;
 
       // M18-03: Apply prompt injection defenses.
-      content = wrapUntrustedContent(filterInjectionPhrases(content));
+      const filtered = filterInjectionPhrases(content);
+      content = filtered === content ? filtered : wrapUntrustedContent(filtered);
 
       if (this.redactionEnabled && this.scanner) {
         const findings = this.scanner.scan(content);

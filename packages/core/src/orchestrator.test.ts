@@ -24,6 +24,7 @@ vi.mock('@orchestrator/shared', async (importOriginal) => {
     ...actual,
     createRunDir: vi.fn(),
     writeManifest: vi.fn(),
+    updateManifest: vi.fn(),
     JsonlLogger: MockJsonlLogger,
   };
 });
@@ -94,7 +95,10 @@ vi.mock('@orchestrator/memory', async (importOriginal) => {
 
 describe('Orchestrator', () => {
   let orchestrator: Orchestrator;
-  const mockGit = {};
+  const mockGit = {
+    getHeadSha: vi.fn().mockResolvedValue('HEAD'),
+    diff: vi.fn().mockResolvedValue(''),
+  };
   const mockRegistry = {
     getAdapter: vi.fn(),
     resolveRoleProviders: vi.fn(),
@@ -312,8 +316,24 @@ describe('Orchestrator', () => {
           type: 'procedural',
           title: 'How to do X',
           content: 'Run command Y',
+          stale: false,
+          lexicalScore: 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         },
       ]),
+      get: vi.fn().mockImplementation((id: string) => {
+        if (id !== 'mem1') return null;
+        return {
+          id: 'mem1',
+          repoId: repoRoot,
+          type: 'procedural',
+          title: 'How to do X',
+          content: 'Run command Y',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+      }),
       close: vi.fn(),
     };
     (createMemoryStore as ReturnType<typeof vi.fn>).mockReturnValue(mockMemoryStore);
@@ -321,8 +341,9 @@ describe('Orchestrator', () => {
     const memConfig: Config['memory'] = {
       enabled: true,
       retrieval: {
-        topK: 5,
         mode: 'lexical',
+        topKLexical: 5,
+        topKVector: 5,
         staleDownrank: true,
       },
       maxChars: 2000,
@@ -362,9 +383,6 @@ describe('Orchestrator', () => {
       'goal that matches memory step 1',
       {
         topK: 5,
-        intent: 'implementation',
-        staleDownrank: true,
-        failureSignature: undefined,
       },
     );
 

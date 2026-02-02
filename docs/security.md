@@ -91,6 +91,7 @@ security:
   env:
     allow: [] # Explicitly empty
 
+
 # Optional: Encrypt memory if you choose to enable it.
 # The key must be set in the ORCHESTRATOR_ENC_KEY environment variable.
 # memory:
@@ -98,6 +99,7 @@ security:
 #   storage:
 #     encryptAtRest: true
 ```
+
 **For a more detailed checklist, see the [Hardening Guide](./hardening.md).**
 
 ## Operational Best Practices

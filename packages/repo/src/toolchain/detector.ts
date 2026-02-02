@@ -69,7 +69,12 @@ export class ToolchainDetector {
       // The spec explicitly focuses on pnpm monorepo.
       // We will leave commands empty or undefined if not pnpm,
       // or maybe just map root scripts if they exist.
-      if (scriptAvailability.test) commands.testCmd = `${packageManager} run test`;
+      if (scriptAvailability.test) {
+        commands.testCmd =
+          packageManager === 'npm' || packageManager === 'yarn'
+            ? `${packageManager} test`
+            : `${packageManager} run test`;
+      }
       if (scriptAvailability.lint) commands.lintCmd = `${packageManager} run lint`;
       if (scriptAvailability.typecheck) commands.typecheckCmd = `${packageManager} run typecheck`;
     }

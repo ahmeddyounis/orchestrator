@@ -15,7 +15,7 @@ describe('JsonlLogger', () => {
   });
 
   it('logs events to file in JSONL format', async () => {
-        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
+    tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
     const logPath = join(tmpDir, 'trace.jsonl');
     const logger = new JsonlLogger(logPath);
 
@@ -34,7 +34,7 @@ describe('JsonlLogger', () => {
   });
 
   it('appends multiple events', async () => {
-        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
+    tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
     const logPath = join(tmpDir, 'trace.jsonl');
     const logger = new JsonlLogger(logPath);
 

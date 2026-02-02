@@ -23,11 +23,11 @@ import { UserInterface } from '@orchestrator/exec';
 import { ProviderAdapter } from '@orchestrator/adapters';
 import { VerificationRunner } from './verify/runner';
 import type { VerificationReport } from './verify/types';
+import { tmpdir } from 'node:os';
 
 const execAsync = promisify(exec);
 
 const FIXTURES_DIR = path.resolve(__dirname, '../../repo/src/__fixtures__');
-const TEMP_DIR = path.resolve(__dirname, '../../../../.tmp/l2-tests');
 
 async function copyDirectory(src: string, dest: string) {
   await fs.mkdir(dest, { recursive: true });
@@ -85,19 +85,19 @@ class FakeExecutor implements ProviderAdapter {
 describe('Orchestrator L2 Deterministic', () => {
   let testRepoPath: string;
   let runId: string;
+  let tempDir: string;
 
   beforeEach(async () => {
-    await fs.rm(TEMP_DIR, { recursive: true, force: true });
-    await fs.mkdir(TEMP_DIR, { recursive: true });
+    tempDir = await fs.mkdtemp(path.join(tmpdir(), 'orchestrator-l2-tests-'));
     runId = `test-run-${Date.now()}`;
   });
 
   afterEach(async () => {
-    await fs.rm(TEMP_DIR, { recursive: true, force: true });
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   async function setupTestRepo(fixtureName: string) {
-    testRepoPath = path.join(TEMP_DIR, fixtureName);
+    testRepoPath = path.join(tempDir, fixtureName);
     const fixturePath = path.join(FIXTURES_DIR, fixtureName);
     await copyDirectory(fixturePath, testRepoPath);
 

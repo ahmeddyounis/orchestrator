@@ -152,7 +152,7 @@ describe('MemoryWriter', () => {
     const repoState: RepoState = { gitSha: 'sha-1' };
 
     const memory = await memoryWriter.extractProcedural(toolRunMeta, toolRunResult, repoState);
-    expect(memory?.content).toBe('pnpm test --token=[REDACTED]');
+    expect(memory?.content).toBe('pnpm test --token=[REDACTED:openai-api-key]');
   });
 
   describe('extractEpisodic', () => {

@@ -102,8 +102,9 @@ export class MemorySearchService {
         topKVector,
       );
       vectorHits = await this.hydrateVectorHits(rawVectorHits);
-    } catch (error: any) {
+    } catch (error: unknown) {
       events.push('VectorSearchFailed');
+      const message = error instanceof Error ? error.message : String(error);
       if (fallbackToLexicalOnVectorError) {
         events.push('VectorSearchFailedFallback');
         return {
@@ -112,7 +113,7 @@ export class MemorySearchService {
           events,
         };
       } else {
-        throw new MemoryError(`Vector search failed: ${error.message}`);
+        throw new MemoryError(`Vector search failed: ${message}`, { cause: error });
       }
     }
 

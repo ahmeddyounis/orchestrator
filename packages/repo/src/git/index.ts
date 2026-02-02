@@ -92,6 +92,11 @@ export class GitService {
     return this.exec(['diff', 'HEAD']);
   }
 
+  async diff(fromRef: string): Promise<string> {
+    // `git diff <fromRef>` shows changes in the working tree (or HEAD when clean) relative to <fromRef>.
+    return this.exec(['diff', fromRef]);
+  }
+
   async createCheckpoint(label: string): Promise<string> {
     // We use git commit as the checkpoint mechanism.
     // 1. Check if there are changes to commit.

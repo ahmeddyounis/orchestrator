@@ -9,7 +9,6 @@ import {
 import {
   ToolRunResult,
   OrchestratorEvent,
-  RunSummary,
   Config,
   SecretScanner,
   redact,
@@ -21,6 +20,7 @@ import { VerificationReport } from '../verify/types';
 import { createMemoryStore, VectorMemoryBackend, MemoryEntry } from '@orchestrator/memory';
 import { Embedder } from '@orchestrator/adapters';
 import { assessMemoryIntegrity } from './critic';
+export * from './reconciler';
 
 const memoryStore = new Map<string, Memory>();
 
@@ -74,7 +74,7 @@ export class MemoryWriter {
     this.runId = deps.runId || 'unknown';
     this.embedder = deps.embedder;
     this.vectorBackend = deps.vectorBackend;
-    this.redactionEnabled = deps.securityConfig?.redaction?.enabled ?? false;
+    this.redactionEnabled = deps.securityConfig?.redaction?.enabled ?? true;
     if (this.redactionEnabled) {
       this.scanner = new SecretScanner();
     }
@@ -104,8 +104,16 @@ export class MemoryWriter {
     const vectors = await this.embedder.embedTexts([textToEmbed]);
 
     if (vectors.length > 0) {
-      await this.vectorBackend.upsert(repoId, [
-        { id: memory.id, vector: vectors[0], metadata: { type: memory.type } },
+      await this.vectorBackend.upsert({}, repoId, [
+        {
+          id: memory.id,
+          vector: new Float32Array(vectors[0]),
+          metadata: {
+            type: memory.type,
+            stale: false,
+            updatedAt: memory.updatedAt.getTime(),
+          },
+        },
       ]);
       if (repoState.memoryDbPath) {
         const store = ensureSqliteStore(repoState.memoryDbPath, repoState);
@@ -245,7 +253,7 @@ export class MemoryWriter {
     ) as ProceduralMemory | undefined;
 
     const evidence = {
-      command: request.command,
+      command: normalizedCommand,
       exitCode,
       durationMs,
       toolRunId,
@@ -354,7 +362,7 @@ export class MemoryWriter {
     const store = ensureSqliteStore(dbPath, repoState);
     store.wipe(repoId);
     memoryStore.clear();
-    await this.vectorBackend?.wipeRepo(repoId);
+    await this.vectorBackend?.wipeRepo({}, repoId);
   }
 
   // for testing

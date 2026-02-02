@@ -1,16 +1,20 @@
 import path from 'node:path';
 import fs from 'fs-extra';
+import { spawn } from 'node:child_process';
 import {
   type EvalSuite,
   type EvalTask,
   type EvalResult,
   type EvalTaskResult,
   validateEvalSuite,
+  EVAL_SCHEMA_VERSION,
   type RunSummary,
   type EvalAggregates,
   type EvalComparison,
   type CriterionResult,
   type Config,
+  type ProviderConfig,
+  type ProviderCapabilities,
   ConfigError,
   UsageError,
   VerificationError,
@@ -20,13 +24,15 @@ import {
   Orchestrator,
   ProviderRegistry,
   NoopUserInterface,
-  AllowAllToolPolicy,
+  allowAllToolPolicy,
+  CostTracker,
 } from '@orchestrator/core';
 import { file_contains, script_exit, verification_pass } from './criteria';
 import { SimpleRenderer } from './renderer';
 
 export interface EvalRunnerOptions {
   baseline?: string;
+  quiet?: boolean;
 }
 
 export interface EvalRunnerConstructorOptions {
@@ -36,7 +42,7 @@ export interface EvalRunnerConstructorOptions {
 
 interface BaselineConfig {
   provider: string;
-  thinkLevel: 'L0' | 'L1' | 'L2' | 'auto';
+  thinkLevel: Config['thinkLevel'];
   args: {
     model: string;
   };
@@ -60,14 +66,21 @@ export class EvalRunner {
     const suite = await this.loadSuite(suitePath);
     const suiteName = suite.name;
     const startedAt = Date.now();
-    this.renderer.logSuiteStarted(suiteName);
+    const quiet = options.quiet ?? false;
+    if (!quiet) {
+      this.renderer.logSuiteStarted(suiteName);
+    }
 
     const orchestratorTaskResults: EvalTaskResult[] = [];
     for (const [index, task] of suite.tasks.entries()) {
-      this.renderer.logTaskStarted(task, index, suite.tasks.length);
+      if (!quiet) {
+        this.renderer.logTaskStarted(task, index, suite.tasks.length);
+      }
       const taskResult = await this.runTask(task);
       orchestratorTaskResults.push(taskResult);
-      this.renderer.logTaskFinished(taskResult);
+      if (!quiet) {
+        this.renderer.logTaskFinished(taskResult);
+      }
     }
 
     let baselineResult: EvalResult | undefined;
@@ -79,10 +92,14 @@ export class EvalRunner {
 
       const baselineTaskResults: EvalTaskResult[] = [];
       for (const [index, task] of suite.tasks.entries()) {
-        this.renderer.logTaskStarted(task, index, suite.tasks.length, true);
+        if (!quiet) {
+          this.renderer.logTaskStarted(task, index, suite.tasks.length, true);
+        }
         const taskResult = await this.runBaselineTask(task, baselineConfig);
         baselineTaskResults.push(taskResult);
-        this.renderer.logTaskFinished(taskResult, true);
+        if (!quiet) {
+          this.renderer.logTaskFinished(taskResult, true);
+        }
       }
       const baselineFinishedAt = Date.now();
       const baselineAggregates = this.calculateAggregates(
@@ -90,7 +107,7 @@ export class EvalRunner {
         baselineFinishedAt - startedAt,
       );
       baselineResult = {
-        schemaVersion: '1',
+        schemaVersion: EVAL_SCHEMA_VERSION,
         suiteName,
         startedAt: startedAt,
         finishedAt: baselineFinishedAt,
@@ -106,7 +123,7 @@ export class EvalRunner {
     );
 
     const orchestratorResult: EvalResult = {
-      schemaVersion: '1',
+      schemaVersion: EVAL_SCHEMA_VERSION,
       suiteName,
       startedAt,
       finishedAt,
@@ -125,7 +142,9 @@ export class EvalRunner {
       baselineResult,
       comparison,
     );
-    this.renderer.logSuiteFinished(orchestratorResult, finalReportPath);
+    if (!quiet) {
+      this.renderer.logSuiteFinished(orchestratorResult, finalReportPath);
+    }
 
     return orchestratorResult;
   }
@@ -177,11 +196,46 @@ export class EvalRunner {
 
   private async loadSuite(suitePath: string): Promise<EvalSuite> {
     const suiteContent = await fs.readJson(suitePath);
-    const validationResult = validateEvalSuite(suiteContent);
-    if (!validationResult.success) {
-      throw new ConfigError(`Invalid eval suite: ${validationResult.error.message}`);
+    try {
+      return validateEvalSuite(suiteContent);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ConfigError(`Invalid eval suite: ${message}`);
     }
-    return validationResult.data as EvalSuite;
+  }
+
+  private async runCommand(command: string, args: string[], cwd: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(command, args, { cwd });
+      let stderr = '';
+
+      child.stderr.on('data', (d) => {
+        stderr += String(d);
+      });
+
+      child.on('error', (error) => {
+        reject(error);
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(
+          new Error(
+            `${command} ${args.join(' ')} failed with code ${code}: ${stderr.trim() || '(no stderr)'}`,
+          ),
+        );
+      });
+    });
+  }
+
+  private async initGitRepo(repoRoot: string): Promise<void> {
+    await this.runCommand('git', ['init'], repoRoot);
+    // Ensure commits work in ephemeral temp directories regardless of global git config.
+    await this.runCommand('git', ['config', 'user.email', 'eval@orchestrator.local'], repoRoot);
+    await this.runCommand('git', ['config', 'user.name', 'Orchestrator Eval Runner'], repoRoot);
   }
 
   private async runTask(task: EvalTask): Promise<EvalTaskResult> {
@@ -207,10 +261,9 @@ export class EvalRunner {
         verificationPassed,
         criteria: results,
         metrics: {
-          iterations: summary.iterations,
           toolRuns: summary.tools?.runs?.length,
           tokens: summary.costs?.totals?.totalTokens,
-          estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
+          estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd ?? undefined,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
             (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
@@ -241,14 +294,17 @@ export class EvalRunner {
 
   private async setupTask(task: EvalTask): Promise<string> {
     const repoRoot = await findRepoRoot();
-    const workDir = await fs.mkdtemp(path.join(repoRoot, '.tmp', 'eval-'));
+    const tmpRoot = path.join(repoRoot, '.tmp');
+    await fs.ensureDir(tmpRoot);
+    const workDir = await fs.mkdtemp(path.join(tmpRoot, 'eval-'));
 
     const fixturePath = path.resolve(repoRoot, task.repo.fixturePath);
     await fs.copy(fixturePath, workDir);
 
-    const git = new GitService(workDir);
-    await git.init();
-    await git.addAll();
+    await this.initGitRepo(workDir);
+
+    const git = new GitService({ repoRoot: workDir });
+    await git.stageAll();
     await git.commit('Initial commit');
 
     return workDir;
@@ -264,14 +320,21 @@ export class EvalRunner {
     try {
       workDir = await this.setupTask(task);
 
-      const baselineRunConfig = {
+      const baseProvider = this.config.providers?.[baselineConfig.provider];
+      if (!baseProvider) {
+        throw new ConfigError(
+          `Baseline provider '${baselineConfig.provider}' not found in config.providers.`,
+        );
+      }
+
+      const baselineRunConfig: Config = {
         ...this.config,
-        thinkLevel: baselineConfig.thinkLevel || this.config.thinkLevel,
-        memory: { enabled: false }, // Baselines run without memory
+        thinkLevel: baselineConfig.thinkLevel ?? this.config.thinkLevel,
+        memory: { ...this.config.memory, enabled: false }, // Baselines run without memory
         providers: {
-          ...this.config.providers,
+          ...(this.config.providers ?? {}),
           [baselineConfig.provider]: {
-            ...this.config.providers?.[baselineConfig.provider],
+            ...baseProvider,
             model: baselineConfig.args.model,
           },
         },
@@ -300,10 +363,9 @@ export class EvalRunner {
         verificationPassed,
         criteria: results,
         metrics: {
-          iterations: summary.iterations,
           toolRuns: summary.tools?.runs?.length,
           tokens: summary.costs?.totals?.totalTokens,
-          estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd,
+          estimatedCostUsd: summary.costs?.totals?.estimatedCostUsd ?? undefined,
           filesChanged: summary.patchStats?.filesChanged,
           linesChanged:
             (summary.patchStats?.linesAdded ?? 0) + (summary.patchStats?.linesDeleted ?? 0),
@@ -337,15 +399,36 @@ export class EvalRunner {
     workDir: string,
     config: Config,
   ): Promise<{ runId: string; runDir: string; summary: RunSummary }> {
-    const registry = new ProviderRegistry(config.providers || {});
-    const git = new GitService(workDir);
+    const costTracker = new CostTracker(config);
+    const registry = new ProviderRegistry(config, costTracker);
 
-    const orchestrator = new Orchestrator({
+    const stubFactory = (cfg: ProviderConfig) => ({
+      id: () => cfg.type,
+      capabilities: () =>
+        ({
+          supportsStreaming: false,
+          supportsToolCalling: false,
+          supportsJsonMode: false,
+          modality: 'text' as const,
+          latencyClass: 'medium' as const,
+        }) as ProviderCapabilities,
+      generate: async () => ({ text: 'Stub response' }),
+    });
+
+    const providers = config.providers ?? {};
+    for (const providerCfg of Object.values(providers)) {
+      registry.registerFactory(providerCfg.type, stubFactory);
+    }
+
+    const git = new GitService({ repoRoot: workDir });
+
+    const orchestrator = await Orchestrator.create({
       config,
       git,
       registry,
       repoRoot: workDir,
-      toolPolicy: new AllowAllToolPolicy(), // Evals run with full tool access
+      costTracker,
+      toolPolicy: allowAllToolPolicy(), // Evals run with full tool access
       ui: new NoopUserInterface(), // Evals are non-interactive
     });
 

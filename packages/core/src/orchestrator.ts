@@ -2,7 +2,9 @@ import {
   Config,
   OrchestratorEvent,
   createRunDir,
+  MANIFEST_VERSION,
   writeManifest,
+  updateManifest,
   JsonlLogger,
   ToolPolicy,
   RetrievalIntent,
@@ -32,9 +34,9 @@ import {
   ProceduralMemoryQuery,
   MemorySearchService,
   VectorBackendFactory,
-  NoOpVectorMemoryBackend,
+  NoopVectorMemoryBackend,
 } from '@orchestrator/memory';
-import { Embedder } from '@orchestrator/adapters';
+import { createEmbedder, type ProviderAdapter } from '@orchestrator/adapters';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -54,12 +56,7 @@ import { DEFAULT_BUDGET } from './config/budget';
 import { ConfigLoader } from './config/loader';
 import { PluginLoader, LoadedPlugin } from './plugins/loader';
 import { SimpleContextFuser } from './context';
-import {
-  CandidateGenerator,
-  StepContext,
-  Candidate,
-  CandidateGenerationResult,
-} from './orchestrator/l3/candidate_generator';
+import { CandidateGenerator, StepContext, Candidate } from './orchestrator/l3/candidate_generator';
 import {
   CandidateEvaluator,
   EvaluationResult,
@@ -99,6 +96,10 @@ export interface RunResult {
     summary?: string;
     failedChecks?: string[];
     reportPaths?: string[];
+    checks?: VerificationReport['checks'];
+    commandSources?: VerificationReport['commandSources'];
+    failureSignature?: VerificationReport['failureSignature'];
+    failureSummary?: VerificationReport['failureSummary'];
   };
   lastFailureSignature?: string;
 }
@@ -162,7 +163,6 @@ export class Orchestrator {
   private config: Config;
   private git: GitService;
   private readonly registry: ProviderRegistry;
-  private loadedPlugins: LoadedPlugin[] = [];
   private repoRoot: string;
   private costTracker?: CostTracker;
   private toolPolicy?: ToolPolicy;
@@ -170,7 +170,10 @@ export class Orchestrator {
   private suppressEpisodicMemoryWrite = false;
   private escalationCount = 0;
 
-  private constructor(options: OrchestratorOptions, private loadedPlugins: LoadedPlugin[] = []) {
+  private constructor(
+    options: OrchestratorOptions,
+    private loadedPlugins: LoadedPlugin[] = [],
+  ) {
     this.config = options.config;
     this.git = options.git;
     this.registry = options.registry;
@@ -181,25 +184,25 @@ export class Orchestrator {
   }
 
   public static async create(options: OrchestratorOptions): Promise<Orchestrator> {
-    const logger = new JsonlLogger(path.join(options.repoRoot, '.orchestrator', 'logs', 'plugins.jsonl'));
+    const logger = new JsonlLogger(
+      path.join(options.repoRoot, '.orchestrator', 'logs', 'plugins.jsonl'),
+    );
     const pluginLoader = new PluginLoader(options.config, logger, options.repoRoot);
     const loadedPlugins = await pluginLoader.loadPlugins();
 
     for (const loadedPlugin of loadedPlugins) {
       if (loadedPlugin.manifest.type === 'provider') {
-        options.registry.registerProvider(loadedPlugin.manifest.name, () => {
+        options.registry.registerFactory(loadedPlugin.manifest.name, (_config) => {
           // This is a bit of a hack, as the plugin is already initialized.
           // We should ideally pass the config to the plugin loader.
           // For now, we just return the already initialized plugin.
-          return loadedPlugin.plugin as any;
+          return loadedPlugin.plugin as unknown as ProviderAdapter;
         });
       }
     }
 
     return new Orchestrator(options, loadedPlugins);
   }
-
-
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
     const runId = options.runId || Date.now().toString();
@@ -347,6 +350,8 @@ export class Orchestrator {
     const root = artifactsRoot;
     const patchesDir = path.join(root, 'patches');
     const toolLogsDir = path.join(root, 'tool_logs');
+    const verificationDir = path.join(root, 'verification');
+    const selectionDir = path.join(root, 'selection');
 
     const addDirFiles = (dir: string, filter?: (name: string) => boolean) => {
       if (!fsSync.existsSync(dir)) return;
@@ -363,6 +368,8 @@ export class Orchestrator {
 
     addDirFiles(patchesDir, (n) => n.endsWith('.patch'));
     addDirFiles(toolLogsDir);
+    addDirFiles(verificationDir, (n) => n.endsWith('.json') || n.endsWith('.txt'));
+    addDirFiles(selectionDir, (n) => n.endsWith('.json'));
 
     addDirFiles(
       root,
@@ -549,6 +556,7 @@ export class Orchestrator {
 
   async runL0(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
+    const startedAt = new Date().toISOString();
     // 1. Setup Artifacts
     const artifacts = await createRunDir(this.repoRoot, runId);
     ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
@@ -571,8 +579,9 @@ export class Orchestrator {
 
     // Initialize manifest
     await writeManifest(artifacts.manifest, {
+      schemaVersion: MANIFEST_VERSION,
       runId,
-      startedAt: new Date().toISOString(),
+      startedAt,
       command: `run ${goal}`,
       repoRoot: this.repoRoot,
       artifactsDir: artifacts.root,
@@ -581,6 +590,7 @@ export class Orchestrator {
       effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
       patchPaths: [],
       toolLogPaths: [],
+      verificationPaths: [],
     });
 
     // 2. Build Minimal Context
@@ -588,11 +598,9 @@ export class Orchestrator {
     const searchService = new SearchService();
 
     // Wire up search events to logger
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     searchService.on('RepoSearchStarted', (_e) => {
       /* log if needed */
     });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     searchService.on('RepoSearchFinished', (_e) => {
       /* log if needed */
     });
@@ -719,19 +727,13 @@ END_DIFF
       );
       await SummaryWriter.write(summary, artifacts.root);
 
-      // Write manifest before returning
-      await writeManifest(artifacts.manifest, {
-        runId,
-        startedAt: new Date().toISOString(),
-        command: `run ${goal}`,
-        repoRoot: this.repoRoot,
-        artifactsDir: artifacts.root,
-        tracePath: artifacts.trace,
-        summaryPath: artifacts.summary,
-        effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-        patchPaths: [],
-        toolLogPaths: [],
-      });
+      try {
+        await updateManifest(artifacts.manifest, (manifest) => {
+          manifest.finishedAt = new Date().toISOString();
+        });
+      } catch {
+        // Non-fatal: artifact updates should not fail the run.
+      }
 
       await this.writeEpisodicMemory(
         summary,
@@ -762,7 +764,7 @@ END_DIFF
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
     const patchPath = await patchStore.saveSelected(0, diffContent);
-    await patchStore.saveFinalDiff(diffContent);
+    const finalDiffPath = await patchStore.saveFinalDiff(diffContent);
 
     await emitEvent({
       type: 'PatchProposed',
@@ -814,7 +816,7 @@ END_DIFF
         runId,
         summary: 'Patch applied successfully',
         filesChanged: result.filesChanged,
-        patchPaths: [patchPath],
+        patchPaths: [patchPath, finalDiffPath],
         memory: this.config.memory,
         verification: {
           enabled: false,
@@ -847,7 +849,7 @@ END_DIFF
         status: 'failure',
         runId,
         summary: `Patch application failed: ${msg}`,
-        patchPaths: [patchPath],
+        patchPaths: [patchPath, finalDiffPath],
         memory: this.config.memory,
         verification: {
           enabled: false,
@@ -868,19 +870,13 @@ END_DIFF
     );
     await SummaryWriter.write(summary, artifacts.root);
 
-    // Write manifest
-    await writeManifest(artifacts.manifest, {
-      runId,
-      startedAt: new Date().toISOString(),
-      command: `run ${goal}`,
-      repoRoot: this.repoRoot,
-      artifactsDir: artifacts.root,
-      tracePath: artifacts.trace,
-      summaryPath: artifacts.summary,
-      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-      patchPaths: [patchPath],
-      toolLogPaths: [],
-    });
+    try {
+      await updateManifest(artifacts.manifest, (manifest) => {
+        manifest.finishedAt = new Date().toISOString();
+      });
+    } catch {
+      // Non-fatal: artifact updates should not fail the run.
+    }
 
     await this.writeEpisodicMemory(
       summary,
@@ -898,7 +894,7 @@ END_DIFF
     name: string,
     eventBus: EventBus,
     runId: string,
-    fn: () => Promise<T>,
+    fn: () => T | Promise<T>,
     metadataFn?: (result: T) => Record<string, unknown>,
   ): Promise<T> {
     const start = Date.now();
@@ -920,9 +916,11 @@ END_DIFF
 
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
+    const startedAt = new Date().toISOString();
     const artifacts = await createRunDir(this.repoRoot, runId);
     ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
     const logger = new JsonlLogger(artifacts.trace);
+    const baseRef = await this.git.getHeadSha();
 
     const eventBus: EventBus = {
       emit: async (e) => {
@@ -943,8 +941,9 @@ END_DIFF
 
     // Initialize manifest
     await writeManifest(artifacts.manifest, {
+      schemaVersion: MANIFEST_VERSION,
       runId,
-      startedAt: new Date().toISOString(),
+      startedAt,
       command: `run ${goal}`,
       repoRoot: this.repoRoot,
       artifactsDir: artifacts.root,
@@ -954,6 +953,7 @@ END_DIFF
       patchPaths: [],
       contextPaths: [],
       toolLogPaths: [],
+      verificationPaths: [],
     });
 
     const plannerId = this.config.defaults?.planner || 'openai';
@@ -1070,19 +1070,27 @@ END_DIFF
         payload: { status, summary: summaryMsg },
       });
 
-      await writeManifest(artifacts.manifest, {
-        runId,
-        startedAt: new Date().toISOString(),
-        command: `run ${goal}`,
-        repoRoot: this.repoRoot,
-        artifactsDir: artifacts.root,
-        tracePath: artifacts.trace,
-        summaryPath: artifacts.summary,
-        effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-        patchPaths,
-        contextPaths,
-        toolLogPaths: [],
-      });
+      const finishedAt = new Date().toISOString();
+      try {
+        const finalDiff = await this.git.diff(baseRef);
+        if (finalDiff.trim().length > 0) {
+          const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+          const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
+          if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
+        }
+      } catch {
+        // Non-fatal: artifact generation should not fail the run.
+      }
+
+      try {
+        await updateManifest(artifacts.manifest, (manifest) => {
+          manifest.finishedAt = finishedAt;
+          manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
+          manifest.contextPaths = [...(manifest.contextPaths ?? []), ...contextPaths];
+        });
+      } catch {
+        // Non-fatal: artifact updates should not fail the run.
+      }
 
       const runResult: RunResult = {
         status,
@@ -1109,20 +1117,6 @@ END_DIFF
         artifacts,
       );
       await SummaryWriter.write(summary, artifacts.root);
-
-      await writeManifest(artifacts.manifest, {
-        runId,
-        startedAt: new Date().toISOString(),
-        command: `run ${goal}`,
-        repoRoot: this.repoRoot,
-        artifactsDir: artifacts.root,
-        tracePath: artifacts.trace,
-        summaryPath: artifacts.summary,
-        effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-        patchPaths,
-        contextPaths,
-        toolLogPaths: [],
-      });
 
       await this.writeEpisodicMemory(
         summary,
@@ -1161,18 +1155,19 @@ END_DIFF
         payload: { step, index: stepsCompleted, total: steps.length },
       });
 
-      let contextPack;
+      let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
         const scanner = new RepoScanner();
-        const snapshot = await this.measure(
+        await this.measure(
           'repo_scan',
           eventBus,
           runId,
-          () => scanner.scan(this.repoRoot, {
-            excludes: this.config.context?.exclude,
-            maxFiles: this.config.context?.scanner?.maxFiles,
-            maxFileSize: this.config.context?.scanner?.maxFileSize,
-          }),
+          () =>
+            scanner.scan(this.repoRoot, {
+              excludes: this.config.context?.exclude,
+              maxFiles: this.config.context?.scanner?.maxFiles,
+              maxFileSize: this.config.context?.scanner?.maxFileSize,
+            }),
           (s) => ({ fileCount: s.files.length }),
         );
 
@@ -1181,75 +1176,92 @@ END_DIFF
           'lexical_search',
           eventBus,
           runId,
-          () => searchService.search({
-            query: step,
-            cwd: this.repoRoot,
-            maxMatchesPerFile: 5,
-          }),
+          () =>
+            searchService.search({
+              query: step,
+              cwd: this.repoRoot,
+              maxMatchesPerFile: 5,
+            }),
           (r) => ({ matchCount: r.matches.length }),
         );
 
         const lexicalMatches = searchResults.matches;
 
         // M15-07: Semantic Search
-        let semanticHits: { path: string; startLine: number; content: string }[] = [];
-        if (this.config.indexing?.semantic?.enabled) {
+        type SemanticHit = {
+          path: string;
+          startLine: number;
+          endLine: number;
+          content: string;
+          score?: number;
+        };
+        let semanticHits: SemanticHit[] = [];
+        const semanticConfig = this.config.indexing?.semantic;
+        if (semanticConfig?.enabled) {
+          let store: SemanticIndexStore | undefined;
           try {
-            const indexPath = path.join(this.repoRoot, this.config.indexing.path);
-            if (fsSync.existsSync(path.join(indexPath, 'semantic.sqlite'))) {
-              const store = new SemanticIndexStore();
-              store.init(path.join(indexPath, 'semantic.sqlite'));
+            const semanticDbPath = path.isAbsolute(semanticConfig.storage.path)
+              ? semanticConfig.storage.path
+              : path.join(this.repoRoot, semanticConfig.storage.path);
 
-              const embedderId = store.getMeta()?.embedderId;
-              if (embedderId) {
-                const embedder = this.registry.getAdapter(embedderId);
-                const semanticSearchService = new SemanticSearchService({
-                  store,
-                  embedder,
-                  eventBus,
-                });
+            if (fsSync.existsSync(semanticDbPath)) {
+              store = new SemanticIndexStore();
+              store.init(semanticDbPath);
 
-                const hits = await this.measure(
-                  'semantic_search',
-                  eventBus,
-                  runId,
-                  () => semanticSearchService.search(
-                    step,
-                    this.config.indexing.semantic.topK ?? 5,
-                    runId,
-                  ),
-                  (h) => ({ hitCount: h.length }),
+              const embedder = createEmbedder(semanticConfig.embeddings);
+
+              const meta = store.getMeta();
+              if (meta?.embedderId && meta.embedderId !== embedder.id()) {
+                console.warn(
+                  `Semantic index embedder mismatch: index=${meta.embedderId} config=${embedder.id()}. Results may be degraded.`,
                 );
-
-                if (hits.length > 0) {
-                  const hitsArtifactPath = path.join(
-                    artifacts.root,
-                    `semantic_hits_step_${stepsCompleted}.json`,
-                  );
-                  await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
-                  contextPaths.push(hitsArtifactPath);
-                }
-
-                semanticHits = hits.map((hit) => ({
-                  path: hit.path,
-                  startLine: hit.startLine,
-                  endLine: hit.endLine,
-                  content: hit.content,
-                  score: hit.score,
-                }));
               }
-              store.close();
+
+              const semanticSearchService = new SemanticSearchService({
+                store,
+                embedder,
+                eventBus,
+              });
+
+              const topK = 5;
+              const hits = await this.measure(
+                'semantic_search',
+                eventBus,
+                runId,
+                () => semanticSearchService.search(step, topK, runId),
+                (h) => ({ hitCount: h.length }),
+              );
+
+              if (hits.length > 0) {
+                const hitsArtifactPath = path.join(
+                  artifacts.root,
+                  `semantic_hits_step_${stepsCompleted}.json`,
+                );
+                await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
+                contextPaths.push(hitsArtifactPath);
+              }
+
+              semanticHits = hits.map((hit) => ({
+                path: hit.path,
+                startLine: hit.startLine,
+                endLine: hit.endLine,
+                content: hit.content,
+                score: hit.score,
+              }));
             }
-          } catch (e: any) {
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
             await eventBus.emit({
               type: 'SemanticSearchFailed',
               schemaVersion: 1,
               runId,
               timestamp: new Date().toISOString(),
               payload: {
-                error: e.message,
+                error: message,
               },
             });
+          } finally {
+            store?.close();
           }
         }
 
@@ -1261,7 +1273,7 @@ END_DIFF
             column: 0,
             matchText: 'SEMANTIC_MATCH',
             lineText: '',
-            score: (h as any).score || 0.5,
+            score: h.score ?? 0.5,
           })),
         ];
 
@@ -1295,9 +1307,10 @@ END_DIFF
           'context_packing',
           eventBus,
           runId,
-          () => packer.pack(step, [], candidates, {
-            tokenBudget: this.config.context?.tokenBudget || 8000,
-          }),
+          () =>
+            packer.pack(step, [], candidates, {
+              tokenBudget: this.config.context?.tokenBudget || 8000,
+            }),
           (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
         );
       } catch {
@@ -1328,7 +1341,7 @@ END_DIFF
 
       const fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nCurrent Step: ${step}`,
-        repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+        repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
         budgets: fusionBudgets,
@@ -1520,6 +1533,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
     }
 
     const store = createMemoryStore();
+    let vectorBackend: ReturnType<typeof VectorBackendFactory.fromConfig> | undefined;
     try {
       const keyEnvVar = this.config.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
       const key = process.env[keyEnvVar];
@@ -1533,42 +1547,84 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
       });
 
       const { query } = args;
-      const topK = memConfig.retrieval.topK ?? 5;
+      const retrieval = memConfig.retrieval;
+      const mode = retrieval.mode;
+      const topKLexical = retrieval.topKLexical ?? 8;
+      const topKVector = retrieval.topKVector ?? 8;
+      const topKFinal = Math.max(topKLexical, topKVector);
 
-      const vectorBackend = memConfig.vector?.backend
-        ? VectorBackendFactory.fromConfig(
+      const repoId = this.repoRoot;
+
+      let hitsForArtifact: unknown[] = [];
+      let entries: MemoryEntry[] = [];
+
+      if (mode === 'lexical') {
+        const lexicalHits = store
+          .search(repoId, query, { topK: topKFinal })
+          .filter((hit) => hit.integrityStatus !== 'blocked');
+        hitsForArtifact = lexicalHits;
+        entries = lexicalHits
+          .map((hit) => store.get(hit.id))
+          .filter((entry): entry is MemoryEntry => !!entry && entry.integrityStatus !== 'blocked');
+      } else {
+        if (!memConfig.vector.enabled) {
+          vectorBackend = new NoopVectorMemoryBackend();
+        } else if (memConfig.vector.backend === 'sqlite') {
+          vectorBackend = VectorBackendFactory.fromConfig(
             {
-              ...memConfig.vector,
-              path: path.join(this.repoRoot, memConfig.vector.path || ''),
+              backend: 'sqlite',
+              path: path.join(this.repoRoot, '.orchestrator/memory_vectors.sqlite'),
             },
-            false,
-          )
-        : new NoOpVectorMemoryBackend();
+            memConfig.vector.remoteOptIn,
+          );
+        } else if (memConfig.vector.backend === 'qdrant') {
+          const qdrant = memConfig.vector.qdrant;
+          if (!qdrant) {
+            throw new ConfigError('`memory.vector.qdrant` is required when backend is qdrant.');
+          }
+          vectorBackend = VectorBackendFactory.fromConfig(
+            {
+              backend: 'qdrant',
+              url: qdrant.url,
+              apiKeyEnv: qdrant.apiKeyEnv,
+              collection: qdrant.collection,
+            } as unknown as Parameters<typeof VectorBackendFactory.fromConfig>[0],
+            memConfig.vector.remoteOptIn,
+          );
+        } else {
+          vectorBackend = VectorBackendFactory.fromConfig(
+            { backend: memConfig.vector.backend },
+            memConfig.vector.remoteOptIn,
+          );
+        }
 
-      const embedderId = memConfig.embedder;
-      if (!embedderId) {
-        throw new ConfigError('Memory search requires an embedder to be configured.');
+        const embedder = createEmbedder(memConfig.vector.embedder);
+        await vectorBackend.init({});
+
+        const searchService = new MemorySearchService({
+          memoryStore: store,
+          vectorBackend,
+          embedder,
+          repoId,
+        });
+
+        const result = await searchService.search({
+          query,
+          mode,
+          topKFinal,
+          topKLexical,
+          topKVector,
+          intent: args.intent,
+          staleDownrank: retrieval.staleDownrank,
+          episodicBoostFailureSignature: args.failureSignature,
+          fallbackToLexicalOnVectorError: retrieval.fallbackToLexicalOnVectorError,
+        });
+
+        hitsForArtifact = result.hits;
+        entries = result.hits
+          .map((hit) => store.get(hit.id))
+          .filter((entry): entry is MemoryEntry => !!entry && entry.integrityStatus !== 'blocked');
       }
-      const embedder = this.registry.getAdapter(embedderId) as Embedder;
-
-      const searchService = new MemorySearchService({
-        memoryStore: store,
-        vectorBackend,
-        embedder,
-        repoId: this.repoRoot,
-      });
-
-      const result = await searchService.search({
-        query,
-        mode: 'hybrid',
-        topKFinal: topK,
-        intent: args.intent,
-        staleDownrank: memConfig.retrieval.staleDownrank ?? true,
-        episodicBoostFailureSignature: args.failureSignature,
-        fallbackToLexicalOnVectorError: true,
-      });
-
-      const hits = result.hits;
 
       await eventBus.emit({
         type: 'MemorySearched',
@@ -1577,31 +1633,46 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         timestamp: new Date().toISOString(),
         payload: {
           query,
-          topK,
-          hitsCount: hits.length,
+          topK: topKFinal,
+          hitsCount: entries.length,
           intent: args.intent,
         },
       });
 
-      if (hits.length === 0) {
+      if (hitsForArtifact.length === 0) {
         return [];
       }
 
       const artifactPath = path.join(args.artifactsRoot, `memory_hits_step_${args.stepId}.json`);
-      await fs.writeFile(artifactPath, JSON.stringify(hits, null, 2));
+      await fs.writeFile(artifactPath, JSON.stringify(hitsForArtifact, null, 2));
 
-      return hits;
+      return entries;
     } catch (err) {
       // Log but don't fail
       console.error('Memory search failed:', err);
       return [];
     } finally {
       store.close();
+      await vectorBackend?.close?.();
     }
   }
 
   async runL2(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
+
+    const artifacts = await createRunDir(this.repoRoot, runId);
+    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
+    const logger = new JsonlLogger(artifacts.trace);
+
+    const eventBus: EventBus = {
+      emit: async (e) => {
+        const redactedEvent = this.config.security?.redaction?.enabled
+          ? (redactObject(e) as OrchestratorEvent)
+          : e;
+        await logger.log(redactedEvent);
+      },
+    };
+
     // 1. Initial Plan & Execute (L1)
     this.suppressEpisodicMemoryWrite = true;
     let l1Result: RunResult;
@@ -1612,16 +1683,6 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
     }
 
     if (l1Result.stopReason === 'budget_exceeded') {
-      const artifacts = await createRunDir(this.repoRoot, runId);
-      const logger = new JsonlLogger(artifacts.trace);
-      const eventBus: EventBus = {
-        emit: async (e) => {
-          const redactedEvent = this.config.security?.redaction?.enabled
-            ? (redactObject(e) as OrchestratorEvent)
-            : e;
-          await logger.log(redactedEvent);
-        },
-      };
       const summary = await this._buildRunSummary(
         runId,
         goal,
@@ -1644,16 +1705,6 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
-      const artifacts = await createRunDir(this.repoRoot, runId);
-      const logger = new JsonlLogger(artifacts.trace);
-      const eventBus: EventBus = {
-        emit: async (e) => {
-          const redactedEvent = this.config.security?.redaction?.enabled
-            ? (redactObject(e) as OrchestratorEvent)
-            : e;
-          await logger.log(redactedEvent);
-        },
-      };
       const summary = await this._buildRunSummary(
         runId,
         goal,
@@ -1676,15 +1727,6 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
       };
     }
-
-    const eventBus: EventBus = {
-      emit: async (e) => {
-        const redactedEvent = this.config.security?.redaction?.enabled
-          ? (redactObject(e) as OrchestratorEvent)
-          : e;
-        await logger.log(redactedEvent);
-      },
-    };
     const proceduralMemory = new ProceduralMemoryImpl(this.config, this.repoRoot);
     const verificationRunner = new VerificationRunner(
       proceduralMemory,
@@ -1736,9 +1778,8 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         memory: this.config.memory,
         verification: {
           enabled: profile.enabled,
-          passed: true,
-          summary: verification.summary,
           reportPaths,
+          ...verification,
         },
       };
 
@@ -1845,10 +1886,9 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
             memory: this.config.memory,
             verification: {
               enabled: profile.enabled,
-              passed: false,
-              summary: verification.summary,
               failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
               reportPaths,
+              ...verification,
             },
             lastFailureSignature: verification.failureSignature,
           };
@@ -2090,9 +2130,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           memory: this.config.memory,
           verification: {
             enabled: profile.enabled,
-            passed: true,
-            summary: verification.summary,
             reportPaths,
+            ...verification,
           },
         };
 
@@ -2150,10 +2189,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       memory: this.config.memory,
       verification: {
         enabled: profile.enabled,
-        passed: false,
-        summary: verification.summary,
         failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
         reportPaths,
+        ...verification,
       },
       lastFailureSignature: verification.failureSignature,
     };
@@ -2185,9 +2223,11 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
   async runL3(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
+    const startedAt = new Date().toISOString();
     const artifacts = await createRunDir(this.repoRoot, runId);
     ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
     const logger = new JsonlLogger(artifacts.trace);
+    const baseRef = await this.git.getHeadSha();
 
     const eventBus: EventBus = {
       emit: async (e) => await logger.log(e),
@@ -2203,8 +2243,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     // Initialize manifest
     await writeManifest(artifacts.manifest, {
+      schemaVersion: MANIFEST_VERSION,
       runId,
-      startedAt: new Date().toISOString(),
+      startedAt,
       command: `run ${goal}`,
       repoRoot: this.repoRoot,
       artifactsDir: artifacts.root,
@@ -2214,6 +2255,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       patchPaths: [],
       contextPaths: [],
       toolLogPaths: [],
+      verificationPaths: [],
     });
 
     const plannerId = this.config.defaults?.planner || 'openai';
@@ -2318,10 +2360,13 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       requireConfirmation: false,
       allowlistPrefixes: [],
       denylistPatterns: [],
-      allowNetwork: false,
+      networkPolicy: 'deny',
+      envAllowlist: [],
+      allowShell: false,
       maxOutputBytes: 1024 * 1024,
       timeoutMs: 60000,
       autoApprove: true,
+      interactive: false,
     };
     const ui = this.ui ?? {
       confirm: async () => true,
@@ -2390,19 +2435,27 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         payload: { status, summary: summaryMsg },
       });
 
-      await writeManifest(artifacts.manifest, {
-        runId,
-        startedAt: new Date().toISOString(),
-        command: `run ${goal}`,
-        repoRoot: this.repoRoot,
-        artifactsDir: artifacts.root,
-        tracePath: artifacts.trace,
-        summaryPath: artifacts.summary,
-        effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-        patchPaths,
-        contextPaths,
-        toolLogPaths: [],
-      });
+      const finishedAt = new Date().toISOString();
+      try {
+        const finalDiff = await this.git.diff(baseRef);
+        if (finalDiff.trim().length > 0) {
+          const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+          const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
+          if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
+        }
+      } catch {
+        // Non-fatal: artifact generation should not fail the run.
+      }
+
+      try {
+        await updateManifest(artifacts.manifest, (manifest) => {
+          manifest.finishedAt = finishedAt;
+          manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
+          manifest.contextPaths = [...(manifest.contextPaths ?? []), ...contextPaths];
+        });
+      } catch {
+        // Non-fatal: artifact updates should not fail the run.
+      }
 
       const runResult: RunResult = {
         status,
@@ -2467,13 +2520,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         payload: { step, index: stepsCompleted, total: steps.length },
       });
 
-      let contextPack;
+      let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
-        const scanner = new RepoScanner();
-        const snapshot = await scanner.scan(this.repoRoot, {
-          excludes: this.config.context?.exclude,
-        });
-
         const searchService = new SearchService(this.config.context?.rgPath);
         const searchResults = await searchService.search({
           query: step,
@@ -2482,7 +2530,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         });
 
         const lexicalMatches = searchResults.matches;
-        let semanticHits: { path: string; startLine: number; content: string }[] = [];
+        type SemanticHit = { path: string; startLine: number; score?: number };
+        const semanticHits: SemanticHit[] = [];
 
         // ... (semantic search logic from L1)
 
@@ -2494,7 +2543,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             column: 0,
             matchText: 'SEMANTIC_MATCH',
             lineText: '',
-            score: (h as any).score || 0.5,
+            score: h.score ?? 0.5,
           })),
         ];
 
@@ -2534,7 +2583,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       const fuser = new SimpleContextFuser(this.config.security);
       let fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nCurrent Step: ${step}`,
-        repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+        repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
         budgets: {
@@ -2578,22 +2627,20 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         logger,
       };
 
-      // Generate candidates and get reviews
-      const generationResult = await candidateGenerator.generateAndReviewCandidates(
-        stepContext,
-        bestOfN,
+      // Generate candidates (defer reviewer/judge until we know verification results)
+      const generatedCandidates = await candidateGenerator.generateCandidates(stepContext, bestOfN);
+      const validCandidates = generatedCandidates.filter(
+        (c): c is Candidate & { patch: string } =>
+          c.valid && typeof c.patch === 'string' && c.patch.length > 0,
       );
 
-      l3Metadata.candidatesGenerated += generationResult.candidates.length;
-      if (enableReviewer && generationResult.reviews.length > 0) {
-        l3Metadata.reviewerInvoked = true;
-      }
+      l3Metadata.candidatesGenerated += generatedCandidates.length;
 
       let bestCandidate: Candidate | null = null;
       let judgeInvoked = false;
       let judgeReason: string | undefined;
 
-      if (generationResult.candidates.length === 0) {
+      if (validCandidates.length === 0) {
         // No valid candidates - stop condition
         return finish(
           'failure',
@@ -2606,9 +2653,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       // Evaluate each candidate against verification profile
       const evaluationResults: EvaluationResult[] = [];
 
-      for (const candidate of generationResult.candidates) {
-        if (!candidate.patch) continue;
-
+      for (const candidate of validCandidates) {
         const evalResult = await candidateEvaluator.evaluate(
           { patch: candidate.patch, index: candidate.index },
           verificationProfile,
@@ -2641,14 +2686,18 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         // Select minimal passing candidate
         const selected = await selectBestCandidate(passingResults, artifacts.root, stepsCompleted);
         if (selected) {
-          bestCandidate =
-            generationResult.candidates.find((c) => c.index === selected.candidate.index) || null;
+          bestCandidate = validCandidates.find((c) => c.index === selected.candidate.index) || null;
           l3Metadata.passingCandidateSelected = true;
           l3Metadata.selectedCandidateId = String(selected.candidate.index);
         }
       } else if (evaluationResults.length > 0) {
         // No passing candidates - use reviewer/judge tie-break
-        const reviews = generationResult.reviews;
+        const reviews = enableReviewer
+          ? await candidateGenerator.reviewCandidates(stepContext, validCandidates)
+          : [];
+        if (enableReviewer && reviews.length > 0) {
+          l3Metadata.reviewerInvoked = true;
+        }
 
         // Check for near-tie or need for judge
         const { invoke: shouldInvokeJudge, reason: invokeReason } = Judge.shouldInvoke(
@@ -2678,9 +2727,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
           // Build judge input from actual evaluation results
           const judgeCandidates: JudgeCandidate[] = evaluationResults.map((r) => {
-            const candidate = generationResult.candidates.find(
-              (c) => c.index === r.candidate.index,
-            );
+            const candidate = validCandidates.find((c) => c.index === r.candidate.index);
             return {
               id: String(r.candidate.index),
               patch: r.candidate.patch,
@@ -2712,9 +2759,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
           // Select the winner
           const winnerId = parseInt(judgeOutput.winnerCandidateId, 10);
-          bestCandidate =
-            generationResult.candidates.find((c) => c.index === winnerId) ||
-            generationResult.candidates[0];
+          bestCandidate = validCandidates.find((c) => c.index === winnerId) || validCandidates[0];
           l3Metadata.selectedCandidateId = judgeOutput.winnerCandidateId;
         } else {
           // Use evaluation-based selection (least bad)
@@ -2725,7 +2770,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           );
           if (selected) {
             bestCandidate =
-              generationResult.candidates.find((c) => c.index === selected.candidate.index) || null;
+              validCandidates.find((c) => c.index === selected.candidate.index) || null;
             l3Metadata.selectedCandidateId = String(selected.candidate.index);
           }
         }

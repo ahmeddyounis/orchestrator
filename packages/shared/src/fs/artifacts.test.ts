@@ -2,7 +2,13 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
 import { join } from './path';
 import * as os from 'os';
-import { createRunDir, getRunArtifactPaths, writeManifest, Manifest } from './artifacts';
+import {
+  createRunDir,
+  getRunArtifactPaths,
+  writeManifest,
+  Manifest,
+  MANIFEST_VERSION,
+} from './artifacts';
 
 describe('artifacts', () => {
   let tmpDir: string;
@@ -14,7 +20,7 @@ describe('artifacts', () => {
   });
 
   it('createRunDir creates directory structure', async () => {
-        tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-test-'));
+    tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-test-'));
     const runId = 'test-run-123';
 
     const paths = await createRunDir(tmpDir, runId);
@@ -38,8 +44,8 @@ describe('artifacts', () => {
     expect(patchesDirExists).toBe(true);
 
     // Verify paths structure
-        expect(paths.trace).toBe(join(tmpDir, '.orchestrator/runs', runId, 'trace.jsonl'));
-        expect(paths.manifest).toBe(join(tmpDir, '.orchestrator/runs', runId, 'manifest.json'));
+    expect(paths.trace).toBe(join(tmpDir, '.orchestrator/runs', runId, 'trace.jsonl'));
+    expect(paths.manifest).toBe(join(tmpDir, '.orchestrator/runs', runId, 'manifest.json'));
   });
 
   it('getRunArtifactPaths returns correct paths without creating', () => {
@@ -47,7 +53,7 @@ describe('artifacts', () => {
     const runId = 'abc';
     const paths = getRunArtifactPaths(base, runId);
 
-        expect(paths.root).toBe(join(base, '.orchestrator/runs', runId));
+    expect(paths.root).toBe(join(base, '.orchestrator/runs', runId));
     expect(paths.trace).toBe(join(base, '.orchestrator/runs', runId, 'trace.jsonl'));
     expect(paths.toolLogsDir).toBe(join(base, '.orchestrator/runs', runId, 'tool_logs'));
     expect(paths.patchesDir).toBe(join(base, '.orchestrator/runs', runId, 'patches'));
@@ -59,6 +65,7 @@ describe('artifacts', () => {
     const paths = await createRunDir(tmpDir, runId);
 
     const manifest: Manifest = {
+      schemaVersion: MANIFEST_VERSION,
       runId,
       startedAt: new Date().toISOString(),
       command: 'run',

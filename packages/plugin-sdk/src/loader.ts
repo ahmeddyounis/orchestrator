@@ -85,8 +85,7 @@ export async function loadPlugin<T extends PluginLifecycle>(
 ): Promise<T> {
   // Extract name for error reporting (before validation)
   const rawManifest = pluginExport.manifest as unknown as Record<string, unknown> | undefined;
-  const pluginName =
-    typeof rawManifest?.name === 'string' ? rawManifest.name : 'unknown';
+  const pluginName = typeof rawManifest?.name === 'string' ? rawManifest.name : 'unknown';
 
   // Validate manifest
   if (!validateManifest(pluginExport.manifest)) {
@@ -97,11 +96,7 @@ export async function loadPlugin<T extends PluginLifecycle>(
 
   // Check version compatibility
   if (!isVersionCompatible(manifest.sdkVersion)) {
-    throw new PluginVersionMismatchError(
-      manifest.name,
-      manifest.sdkVersion,
-      SDK_VERSION,
-    );
+    throw new PluginVersionMismatchError(manifest.name, manifest.sdkVersion, SDK_VERSION);
   }
 
   // Create plugin instance

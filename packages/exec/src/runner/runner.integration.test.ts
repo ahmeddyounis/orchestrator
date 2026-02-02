@@ -19,7 +19,7 @@ describe('SafeCommandRunner Integration', () => {
   };
 
   const projectRoot = process.cwd();
-    const runsDir = join(projectRoot, '.orchestrator', 'runs', testRunId);
+  const runsDir = join(projectRoot, '.orchestrator', 'runs', testRunId);
 
   // Default policy: fairly restrictive but allows what we need
   const basePolicy: ToolPolicy = {
@@ -27,7 +27,9 @@ describe('SafeCommandRunner Integration', () => {
     requireConfirmation: false,
     allowlistPrefixes: [],
     denylistPatterns: [],
-    allowNetwork: false,
+    networkPolicy: 'deny',
+    envAllowlist: [],
+    allowShell: true,
     timeoutMs: 5000,
     maxOutputBytes: 1024 * 1024,
     interactive: false, // Assume non-interactive for automation
@@ -48,7 +50,7 @@ describe('SafeCommandRunner Integration', () => {
     };
 
     const req: ToolRunRequest = {
-      command: 'node packages/exec/src/runner/test-script.js',
+      command: 'node src/runner/test-script.js',
       reason: 'Integration test allowlist',
       cwd: process.cwd(),
     };
@@ -64,7 +66,7 @@ describe('SafeCommandRunner Integration', () => {
   it('should block a denylisted command', async () => {
     const policy: ToolPolicy = {
       ...basePolicy,
-      denylistPatterns: ['forbidden'],
+      denylistPatterns: ['.*forbidden.*'],
     };
 
     const req: ToolRunRequest = {
@@ -85,7 +87,7 @@ describe('SafeCommandRunner Integration', () => {
 
     // Run for 3 seconds
     const req: ToolRunRequest = {
-      command: 'node packages/exec/src/runner/test-timeout-script.js',
+      command: 'node src/runner/test-timeout-script.js',
       reason: 'Integration test timeout',
       cwd: process.cwd(),
     };

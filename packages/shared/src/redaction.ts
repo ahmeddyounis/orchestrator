@@ -25,7 +25,7 @@ export function redactForLogs(obj: unknown): unknown {
     return obj.map(redactForLogs);
   }
 
-  const newObj: { [key: string]: any } = {};
+  const newObj: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
     if (SENSITIVE_KEYS.has(key.toLowerCase())) {
@@ -43,16 +43,17 @@ export function redactForLogs(obj: unknown): unknown {
   }
 
   // Redact environment variables if present
-  if ('env' in newObj && typeof newObj.env === 'object' && newObj.env) {
-    const redactedEnv: { [key: string]: any } = {};
-    for (const [envKey, envValue] of Object.entries(newObj.env)) {
+  const env = newObj['env'];
+  if (env && typeof env === 'object' && !Array.isArray(env)) {
+    const redactedEnv: Record<string, unknown> = {};
+    for (const [envKey, envValue] of Object.entries(env as Record<string, unknown>)) {
       if (ALLOWED_ENV_VARS.has(envKey)) {
         redactedEnv[envKey] = envValue;
       } else {
         redactedEnv[envKey] = '[REDACTED]';
       }
     }
-    newObj.env = redactedEnv;
+    newObj['env'] = redactedEnv;
   }
 
   return newObj;

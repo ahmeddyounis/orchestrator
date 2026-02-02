@@ -5,6 +5,7 @@ The Plugin SDK provides stable interfaces for extending the orchestrator with cu
 ## Overview
 
 Plugins allow you to:
+
 - Add new LLM providers (OpenAI, Anthropic, custom models)
 - Implement custom embedding providers
 - Add vector storage backends (Qdrant, Pinecone, etc.)
@@ -99,7 +100,7 @@ export class MyProviderPlugin implements ProviderAdapterPlugin {
     const response = await fetch('https://api.myprovider.com/chat', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -159,17 +160,24 @@ export default pluginExport;
 import { loadPlugin } from '@orchestrator/plugin-sdk';
 import myPluginExport from './my-provider-plugin';
 
-const plugin = await loadPlugin(myPluginExport, {
-  apiKey: process.env.MY_API_KEY,
-}, {
-  runId: 'run-123',
-  logger: myLogger,
-});
+const plugin = await loadPlugin(
+  myPluginExport,
+  {
+    apiKey: process.env.MY_API_KEY,
+  },
+  {
+    runId: 'run-123',
+    logger: myLogger,
+  },
+);
 
 // Use the plugin
-const response = await plugin.generate({
-  messages: [{ role: 'user', content: 'Hello!' }],
-}, ctx);
+const response = await plugin.generate(
+  {
+    messages: [{ role: 'user', content: 'Hello!' }],
+  },
+  ctx,
+);
 ```
 
 ## Creating an Embedder Plugin
@@ -344,16 +352,15 @@ export class MyToolExecutorPlugin implements ToolExecutorPlugin {
 The SDK provides specific error classes:
 
 ```typescript
-import {
-  PluginValidationError,
-  PluginVersionMismatchError,
-} from '@orchestrator/plugin-sdk';
+import { PluginValidationError, PluginVersionMismatchError } from '@orchestrator/plugin-sdk';
 
 try {
   await loadPlugin(pluginExport, config, ctx);
 } catch (error) {
   if (error instanceof PluginVersionMismatchError) {
-    console.error(`Version mismatch: plugin requires ${error.requiredRange.minVersion}, SDK is ${error.currentVersion}`);
+    console.error(
+      `Version mismatch: plugin requires ${error.requiredRange.minVersion}, SDK is ${error.currentVersion}`,
+    );
   } else if (error instanceof PluginValidationError) {
     console.error(`Invalid plugin: ${error.message}`);
   }

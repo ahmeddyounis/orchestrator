@@ -1,16 +1,14 @@
-import {
-  Config,
-  ProviderConfig,
-  OrchestratorEvent,
-  ConfigError,
-  EventBus,
-} from '@orchestrator/shared';
+import { Config, ProviderConfig, ConfigError, EventBus } from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
 import { CostTracker } from './cost/tracker';
 import { CostTrackingAdapter } from './cost/proxy';
 
 export { EventBus };
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
+
+export class RegistryError extends ConfigError {
+  public readonly exitCode = 2;
+}
 
 export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();
@@ -34,26 +32,31 @@ export class ProviderRegistry {
     // Look up provider config
     const providerConfig = this.config.providers?.[providerId];
     if (!providerConfig) {
-      throw new ConfigError(`Provider '${providerId}' not found in configuration.`);
+      throw new RegistryError(`Provider '${providerId}' not found`);
     }
 
     // Look up factory
     const factory = this.factories.get(providerConfig.type);
     if (!factory) {
-      throw new ConfigError(
+      throw new RegistryError(
         `Unknown provider type '${providerConfig.type}' for provider '${providerId}'`,
       );
     }
 
     // Validate env vars
+    let resolvedConfig = providerConfig;
     if (providerConfig.api_key_env && !providerConfig.api_key) {
-      throw new ConfigError(
-        `Missing environment variable '${providerConfig.api_key_env}' for provider '${providerId}'`,
-      );
+      const fromEnv = process.env[providerConfig.api_key_env];
+      if (!fromEnv) {
+        throw new RegistryError(
+          `Missing environment variable '${providerConfig.api_key_env}' for provider '${providerId}'`,
+        );
+      }
+      resolvedConfig = { ...providerConfig, api_key: fromEnv };
     }
 
     // Create adapter
-    let adapter = factory(providerConfig);
+    let adapter = factory(resolvedConfig);
 
     if (this.costTracker) {
       adapter = new CostTrackingAdapter(providerId, adapter, this.costTracker);

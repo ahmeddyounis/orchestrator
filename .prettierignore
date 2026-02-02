@@ -2,7 +2,9 @@ node_modules
 dist
 coverage
 .turbo
+.orchestrator
 .t2
 .plans
 .logs
 .idea
+demos/ts-monorepo-demo

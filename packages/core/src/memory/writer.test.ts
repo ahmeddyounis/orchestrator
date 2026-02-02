@@ -54,7 +54,7 @@ describe('MemoryWriter', () => {
       expect(memory!.type).toBe('procedural');
       expect(memory!.title).toBe('How to run tests');
       expect(memory!.content).not.toContain('sk-12345678901234567890');
-      expect(memory!.content).toContain('[REDACTED]');
+      expect(memory!.content).toContain('[REDACTED:openai-api-key]');
     });
 
     it('should not create memory for a failed run', async () => {
@@ -69,7 +69,7 @@ describe('MemoryWriter', () => {
       expect(memory).toBeDefined();
 
       const sqliteStore = createMemoryStore();
-      sqliteStore.init(dbPath);
+      sqliteStore.init({ dbPath });
       const retrieved = sqliteStore.get(memory!.id);
       expect(retrieved).toBeDefined();
       expect(retrieved!.id).toBe(memory!.id);
@@ -93,7 +93,7 @@ describe('MemoryWriter', () => {
       expect(memory.type).toBe('episodic');
       expect(memory.title).toContain('Run run-id-1: completed');
       expect(memory.content).not.toContain('sk-12345678901234567890');
-      expect(memory.content).toContain('[REDACTED]');
+      expect(memory.content).toContain('[REDACTED:openai-api-key]');
     });
 
     it('should persist to sqlite if configured', async () => {
@@ -101,7 +101,7 @@ describe('MemoryWriter', () => {
       expect(memory).toBeDefined();
 
       const sqliteStore = createMemoryStore();
-      sqliteStore.init(dbPath);
+      sqliteStore.init({ dbPath });
       const retrieved = sqliteStore.get(memory.id);
       expect(retrieved).toBeDefined();
       expect(retrieved!.id).toBe(memory.id);

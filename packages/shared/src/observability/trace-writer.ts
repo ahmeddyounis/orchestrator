@@ -27,7 +27,7 @@ export class TraceWriter {
     if (!fs.existsSync(traceDir)) {
       fs.mkdirSync(traceDir, { recursive: true });
     }
-        const tracePath = join(traceDir, 'trace.jsonl');
+    const tracePath = join(traceDir, 'trace.jsonl');
     this.traceStream = fs.createWriteStream(tracePath, { flags: 'a' });
   }
 

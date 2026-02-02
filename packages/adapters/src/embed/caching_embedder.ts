@@ -1,5 +1,5 @@
 import { Embedder } from './embedder';
-import { objectHash } from 'ohash';
+import { hash } from 'ohash';
 
 export class CachingEmbedder implements Embedder {
   private cache: Map<string, number[][]> = new Map();
@@ -7,7 +7,7 @@ export class CachingEmbedder implements Embedder {
   constructor(private readonly underlyingEmbedder: Embedder) {}
 
   async embedTexts(texts: string[]): Promise<number[][]> {
-    const cacheKey = objectHash(texts);
+    const cacheKey = hash(texts);
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey)!;
     }

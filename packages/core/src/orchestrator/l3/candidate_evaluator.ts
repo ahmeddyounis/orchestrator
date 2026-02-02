@@ -2,7 +2,7 @@ import { VerificationReport, VerificationProfile, VerificationScope } from '../.
 import { VerificationRunner } from '../../verify/runner';
 import { GitService, PatchApplier } from '@orchestrator/repo';
 import { RunnerContext, UserInterface } from '@orchestrator/exec';
-import { Logger } from '@orchestrator/shared';
+import { Logger, updateManifest } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -39,7 +39,9 @@ export class CandidateEvaluator {
       `before-candidate-${iteration}-${candidate.index}-evaluation`,
     );
     try {
-      const patchResult = await this.patchApplier.applyUnifiedDiff(this.repoRoot, candidate.patch);
+      // git apply requires a trailing newline; without it patches can be treated as corrupt.
+      const patchText = candidate.patch.endsWith('\n') ? candidate.patch : candidate.patch + '\n';
+      const patchResult = await this.patchApplier.applyUnifiedDiff(this.repoRoot, patchText);
       if (!patchResult.applied) {
         // Patch application failed - return a failing evaluation with score reflecting that
         return {
@@ -81,6 +83,13 @@ export class CandidateEvaluator {
       `iter_${iteration}_candidate_${candidate.index}_report.json`,
     );
     await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
+    try {
+      await updateManifest(path.join(this.artifactsRoot, 'manifest.json'), (manifest) => {
+        manifest.verificationPaths = [...(manifest.verificationPaths ?? []), reportPath];
+      });
+    } catch {
+      // Non-fatal
+    }
   }
 
   private calculateScore(candidate: EvaluatorCandidate, report: VerificationReport): number {
@@ -134,6 +143,13 @@ export async function selectBestCandidate(
       status: r.report.passed ? 'PASS' : 'FAIL',
     }));
     await fs.writeFile(rankingPath, JSON.stringify(ranking, null, 2));
+    try {
+      await updateManifest(path.join(artifactsRoot, 'manifest.json'), (manifest) => {
+        manifest.verificationPaths = [...(manifest.verificationPaths ?? []), rankingPath];
+      });
+    } catch {
+      // Non-fatal
+    }
   }
 
   const passingCandidates = results.filter((r) => r.report.passed);

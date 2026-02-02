@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs/promises';
+import { tmpdir } from 'node:os';
 import { SubprocessProviderAdapter } from './adapter';
 import { ProcessManager } from './process-manager';
 import { AdapterContext } from '../types';
@@ -9,6 +10,10 @@ import { ModelRequest, Logger } from '@orchestrator/shared';
 const FAKE_CLI_PATH = path.resolve(__dirname, 'fixtures/fake-agent-cli.js');
 
 describe('Subprocess Integration', () => {
+  let originalCwd = process.cwd();
+  let tempCwd: string | undefined;
+  let runDir = '';
+
   const mockLogger = {
     log: vi.fn(),
     debug: vi.fn(),
@@ -23,23 +28,18 @@ describe('Subprocess Integration', () => {
     timeoutMs: 5000,
   };
 
-  const runDir = path.join(
-    process.cwd(),
-    '.orchestrator',
-    'runs',
-    'test-run-id-integration',
-    'tool_logs',
-  );
-
   beforeEach(async () => {
+    originalCwd = process.cwd();
+    tempCwd = await fs.mkdtemp(path.join(tmpdir(), 'orchestrator-adapters-'));
+    process.chdir(tempCwd);
+    runDir = path.join(process.cwd(), '.orchestrator', 'runs', ctx.runId, 'tool_logs');
     await fs.mkdir(runDir, { recursive: true });
   });
 
   afterEach(async () => {
-    try {
-      await fs.rm(runDir, { recursive: true, force: true });
-    } catch {
-      // ignore
+    process.chdir(originalCwd);
+    if (tempCwd) {
+      await fs.rm(tempCwd, { recursive: true, force: true });
     }
   });
 

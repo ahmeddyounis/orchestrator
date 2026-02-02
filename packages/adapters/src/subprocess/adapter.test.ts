@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { join, resolve } from '@orchestrator/shared';
+import { tmpdir } from 'node:os';
 import * as fs from 'fs/promises';
 import { SubprocessProviderAdapter } from './adapter';
 import { AdapterContext } from '../types';
@@ -8,6 +9,10 @@ import { ModelRequest, Logger } from '@orchestrator/shared';
 const FIXTURE_PATH = resolve(__dirname, 'fixtures/echo-cli.js');
 
 describe('SubprocessProviderAdapter', () => {
+  let originalCwd = process.cwd();
+  let tempCwd: string | undefined;
+  let runDir = '';
+
   const mockLogger = {
     log: vi.fn(),
     debug: vi.fn(),
@@ -22,15 +27,19 @@ describe('SubprocessProviderAdapter', () => {
     timeoutMs: 5000,
   };
 
-    const runDir = join(process.cwd(), '.orchestrator', 'runs', 'test-run-id', 'tool_logs');
-
   beforeEach(async () => {
+    originalCwd = process.cwd();
+    tempCwd = await fs.mkdtemp(join(tmpdir(), 'orchestrator-adapters-'));
+    process.chdir(tempCwd);
+    runDir = join(process.cwd(), '.orchestrator', 'runs', ctx.runId, 'tool_logs');
     await fs.mkdir(runDir, { recursive: true });
   });
 
   afterEach(async () => {
-    // Cleanup if needed
-    // await fs.rm(runDir, { recursive: true, force: true });
+    process.chdir(originalCwd);
+    if (tempCwd) {
+      await fs.rm(tempCwd, { recursive: true, force: true });
+    }
   });
 
   it('should generate text using echo-cli', async () => {
@@ -54,7 +63,7 @@ describe('SubprocessProviderAdapter', () => {
     expect(response.text).toContain('Echo: hello world');
 
     // Check if log file was created
-        const logPath = join(runDir, 'subprocess_subprocess.log');
+    const logPath = join(runDir, 'subprocess_subprocess.log');
     const logContent = await fs.readFile(logPath, 'utf-8');
     expect(logContent).toContain('hello world');
   });

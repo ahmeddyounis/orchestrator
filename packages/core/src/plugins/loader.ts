@@ -1,12 +1,11 @@
 import {
-  Config,
   PluginLifecycle,
   PluginManifest,
   safeLoadPlugin,
   PluginContext,
   LoadPluginResult,
 } from '@orchestrator/plugin-sdk';
-import { Logger } from '@orchestrator/shared';
+import { Config, Logger } from '@orchestrator/shared';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
@@ -36,10 +35,7 @@ export class PluginLoader {
       if (path.isAbsolute(p)) {
         return [p];
       }
-      return [
-        path.join(this.repoRoot, p),
-        path.join(os.homedir(), '.orchestrator', 'plugins'),
-      ];
+      return [path.join(this.repoRoot, p), path.join(os.homedir(), '.orchestrator', 'plugins')];
     });
 
     const discoveredFiles = await this.discoverPlugins(pluginPaths);
@@ -58,7 +54,7 @@ export class PluginLoader {
             files.push(path.join(dir, entry.name));
           }
         }
-      } catch (error) {
+      } catch {
         this.logger.debug(`Could not read plugin directory: ${dir}`);
       }
     }
@@ -85,14 +81,14 @@ export class PluginLoader {
         }
 
         const ctx: PluginContext = {
+          runId: `plugin-load:${manifest.name}`,
           logger: this.logger.child({ plugin: manifest.name }),
-          config: this.config,
         };
 
         const result: LoadPluginResult = await safeLoadPlugin(pluginExport, {}, ctx);
 
-        if (result.error) {
-          this.logger.warn(`Failed to load plugin ${manifest.name}: ${result.error.message}`);
+        if (!result.success) {
+          this.logger.warn(`Failed to load plugin ${manifest.name}: ${result.error}`);
           continue;
         }
 

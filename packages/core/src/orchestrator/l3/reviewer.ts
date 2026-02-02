@@ -1,5 +1,5 @@
 import { ProviderAdapter } from '@orchestrator/adapters';
-import { EventBus, Logger, Config, ModelRequest, ModelResponse } from '@orchestrator/shared';
+import { EventBus, Logger, ModelRequest, updateManifest } from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import { Candidate } from './candidate_generator';
@@ -59,18 +59,46 @@ export class Reviewer {
         { role: 'user', content: 'Review the candidates.' },
       ],
       temperature: 0.1,
-      schema: reviewerOutputSchema,
+      jsonMode: true,
     };
 
     const response = await reviewer.generate(request, { runId, logger });
+    const output = this.parseResponse(response.text);
 
     const reviewArtifactPath = path.join(
       artifactsRoot,
       `reviewer_iter_${input.candidates[0].index}.json`,
     );
-    await fs.writeFile(reviewArtifactPath, JSON.stringify(response.result, null, 2));
+    await fs.writeFile(reviewArtifactPath, JSON.stringify(output, null, 2));
+    try {
+      await updateManifest(path.join(artifactsRoot, 'manifest.json'), (manifest) => {
+        manifest.verificationPaths = [...(manifest.verificationPaths ?? []), reviewArtifactPath];
+      });
+    } catch {
+      // Non-fatal
+    }
 
-    return response.result as ReviewerOutput;
+    return output;
+  }
+
+  private parseResponse(text: string | undefined): ReviewerOutput {
+    const raw = (text ?? '').trim();
+    if (!raw) {
+      throw new Error('Reviewer returned empty response.');
+    }
+
+    const json = this.extractJson(raw);
+    return reviewerOutputSchema.parse(json) as ReviewerOutput;
+  }
+
+  private extractJson(text: string): unknown {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('No JSON object found in reviewer response.');
+    }
+    const jsonText = text.slice(firstBrace, lastBrace + 1);
+    return JSON.parse(jsonText) as unknown;
   }
 
   private buildPrompt(input: ReviewerInput): string {

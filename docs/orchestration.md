@@ -68,7 +68,7 @@ When you run a command, the Orchestrator generates several artifacts in the `.or
 - **`trace.jsonl`**: A detailed log of every tool call, thought, and result.
 - **`summary.json`**: High-level result of the run.
 - **`effective-config.json`**: The fully resolved configuration used for the run.
-- **L3 Artifacts**: For L3 runs, additional artifacts including candidate patches and rankings are stored in the `l3/` subdirectory.
+- **L3 Artifacts**: For L3 runs, additional artifacts (candidate patches, rankings, and candidate verification reports) are stored alongside other artifacts in subdirectories like `patches/`, `selection/`, and `verification/`.
 
 ### Stop Reasons
 

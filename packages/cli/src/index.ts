@@ -12,6 +12,7 @@ import { registerInitCommand } from './commands/init';
 import { registerSearchCommand } from './commands/search';
 import { registerTestCommand } from './commands/test';
 import { registerExportBundleCommand } from './commands/export-bundle';
+import { registerReportCommand } from './commands/report';
 
 import { AppError, ConfigError, UsageError } from '@orchestrator/shared';
 
@@ -38,6 +39,7 @@ registerInitCommand(program);
 registerSearchCommand(program);
 registerTestCommand(program);
 registerExportBundleCommand(program);
+registerReportCommand(program);
 
 async function main() {
   try {

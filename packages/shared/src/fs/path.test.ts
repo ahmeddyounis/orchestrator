@@ -1,4 +1,3 @@
-
 import { join, normalizePath } from './path';
 
 describe('path', () => {

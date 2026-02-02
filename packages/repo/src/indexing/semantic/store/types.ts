@@ -1,6 +1,7 @@
 // packages/repo/src/indexing/semantic/store/types.ts
 
 import { SupportedLanguage } from '../../../tree-sitter';
+import type { SemanticKind } from '../types';
 
 export const SCHEMA_VERSION = 1;
 
@@ -11,6 +12,7 @@ export interface SemanticIndexMeta {
   dims: number;
   builtAt: number;
   updatedAt: number;
+  schemaVersion?: number;
 }
 
 export interface FileMeta {
@@ -25,9 +27,9 @@ export interface Chunk {
   chunkId: string;
   path: string;
   language: SupportedLanguage;
-  kind: string;
+  kind: SemanticKind;
   name: string;
-  parentName: string;
+  parentName: string | null;
   startLine: number;
   endLine: number;
   content: string;

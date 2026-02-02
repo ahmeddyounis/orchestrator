@@ -15,6 +15,7 @@ export default [
       '**/.idea',
       '**/.orchestrator',
       '**/.tmp',
+      '**/__fixtures__/**',
     ],
   },
   { files: ['**/*.{js,mjs,cjs,ts}'] },
@@ -38,14 +39,6 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
-    },
-  },
-  {
-    files: ['**/__fixtures__/**/*.{js,cjs,mjs}'],
-    rules: {
-      '@typescript-eslint/no-require-imports': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
-      'no-empty': 'off',
     },
   },
   eslintConfigPrettier,

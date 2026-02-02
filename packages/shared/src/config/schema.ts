@@ -386,10 +386,12 @@ export const ConfigSchema = z.object({
       include: z.array(z.string()).optional(),
       exclude: z.array(z.string()).optional(),
       rgPath: z.string().optional(),
-      scanner: z.object({
-        maxFiles: z.number().optional(),
-        maxFileSize: z.number().optional(),
-      }).optional(),
+      scanner: z
+        .object({
+          maxFiles: z.number().optional(),
+          maxFileSize: z.number().optional(),
+        })
+        .optional(),
     })
     .optional(),
   commandPolicy: z
@@ -465,7 +467,6 @@ export const ConfigSchema = z.object({
   security: SecurityConfigSchema.optional(),
   plugins: PluginsConfigSchema.optional(),
 });
-
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;

@@ -14,11 +14,11 @@ export interface UserInterface {
  * Useful for non-interactive environments.
  */
 export class NoopUserInterface implements UserInterface {
-  async prompt(message: string): Promise<string> {
+  async prompt(_message: string): Promise<string> {
     throw new UsageError('Cannot prompt in non-interactive mode.');
   }
 
-  async confirm(): Promise<boolean> {
+  async confirm(_message: string): Promise<boolean> {
     throw new UsageError('Cannot confirm in non-interactive mode.');
   }
 }

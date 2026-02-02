@@ -164,15 +164,20 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
     const stmt = this.db.prepare(query);
     const rows = stmt.all(...params) as unknown as VectorRow[];
 
-    // Compute cosine similarity for each row
-    const results: VectorQueryResult[] = [];
+    // Compute similarity for each row
+    const results: Array<VectorQueryResult & { _dot: number }> = [];
     for (const row of rows) {
       const storedVector = blobToFloat32(row.vectorBlob);
+      let dotProduct = 0;
+      for (let i = 0; i < vector.length; i++) {
+        dotProduct += vector[i] * storedVector[i];
+      }
       const score = cosineSimilarity(vector, storedVector);
 
       results.push({
         id: row.entryId,
         score,
+        _dot: dotProduct,
         metadata: {
           type: row.type,
           stale: row.stale === 1,
@@ -183,10 +188,15 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
       });
     }
 
-    // Sort by score descending
-    results.sort((a, b) => b.score - a.score);
+    // Sort by cosine similarity, tie-break by dot product for deterministic ordering.
+    // Use an epsilon so near-identical cosine scores don't cause unstable ordering.
+    results.sort((a, b) => {
+      const scoreDiff = b.score - a.score;
+      if (Math.abs(scoreDiff) > 1e-12) return scoreDiff;
+      return b._dot - a._dot;
+    });
 
-    return results.slice(0, topK);
+    return results.slice(0, topK).map(({ _dot: _dot, ...rest }) => rest);
   }
 
   async deleteByIds(_ctx: object, repoId: string, ids: string[]): Promise<void> {

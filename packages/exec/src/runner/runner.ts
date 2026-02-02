@@ -1,4 +1,4 @@
-import { spawn, exec as execSync } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import { join, isWindows } from '@orchestrator/shared';
 import { randomUUID } from 'crypto';
@@ -22,7 +22,7 @@ function killProcessTree(pid: number, signal: NodeJS.Signals | number = 'SIGTERM
     // This requires the child process to have been spawned in detached mode.
     try {
       process.kill(-pid, signal);
-    } catch (e) {
+    } catch {
       // This can fail if the process is already dead, which is fine.
     }
   }
@@ -30,7 +30,7 @@ function killProcessTree(pid: number, signal: NodeJS.Signals | number = 'SIGTERM
 
 // Detects characters that require a shell to interpret.
 function isShellCommand(command: string): boolean {
-  return /[|&;()<>`!$]/.test(command);
+  return /[|&;<>`$]/.test(command);
 }
 
 // Common secret env vars to strip.
@@ -53,9 +53,12 @@ function getSafeEnv(
   const combinedEnv = { ...baseEnv, ...requestEnv };
 
   for (const key of Object.keys(combinedEnv)) {
+    const value = combinedEnv[key];
+    if (value === undefined) continue;
+
     // 1. Is it on the explicit allowlist?
     if (allowlist.has(key)) {
-      safeEnv[key] = combinedEnv[key]!;
+      safeEnv[key] = value;
       continue;
     }
 
@@ -64,6 +67,8 @@ function getSafeEnv(
     if (SENSITIVE_ENV_VARS.some((suffix) => upperKey.endsWith(suffix))) {
       continue; // Strip it
     }
+
+    safeEnv[key] = value;
   }
 
   return safeEnv;
@@ -94,9 +99,7 @@ export class SafeCommandRunner {
     }
 
     // 2. Policy Check: Denylist
-    const isDenied = policy.denylistPatterns.some((pattern) =>
-      new RegExp(pattern).test(req.command),
-    );
+    const isDenied = classifier.matchesDenylist(req.command, policy.denylistPatterns);
     if (isDenied) {
       return {
         isAllowed: false,
@@ -105,7 +108,7 @@ export class SafeCommandRunner {
       };
     }
 
-    const isAllowlisted = policy.allowlistPrefixes.some((prefix) => req.command.startsWith(prefix));
+    const isAllowlisted = classifier.matchesAllowlist(req.command, policy.allowlistPrefixes);
 
     // 3. Network Policy Check
     if (policy.networkPolicy === 'deny' && !isAllowlisted) {
@@ -173,17 +176,18 @@ export class SafeCommandRunner {
     // 4. Execution Setup
     const runId = ctx.runId;
     const toolRunId = ctx.toolRunId || randomUUID();
-    const projectRoot = req.cwd || ctx.cwd || process.cwd(); // Assuming root is CWD
+    const projectRoot = req.cwd || ctx.cwd || process.cwd();
+    const normalizedReq: ToolRunRequest = { ...req, cwd: projectRoot };
 
     // Artifacts paths
-        const runsDir = join(projectRoot, '.orchestrator', 'runs', runId, 'tool_logs');
+    const runsDir = join(projectRoot, '.orchestrator', 'runs', runId, 'tool_logs');
     fs.mkdirSync(runsDir, { recursive: true });
 
-        const stdoutPath = join(runsDir, `${toolRunId}_stdout.log`);
+    const stdoutPath = join(runsDir, `${toolRunId}_stdout.log`);
     const stderrPath = join(runsDir, `${toolRunId}_stderr.log`);
 
     // 5. Run Process
-    return this.exec(req, policy, stdoutPath, stderrPath);
+    return this.exec(normalizedReq, policy, stdoutPath, stderrPath);
   }
 
   protected async exec(

@@ -25,10 +25,7 @@ export function isVersionCompatible(range: SdkVersionRange): boolean {
 /**
  * Get a human-readable error message for version mismatch
  */
-export function getVersionMismatchError(
-  pluginName: string,
-  range: SdkVersionRange,
-): string {
+export function getVersionMismatchError(pluginName: string, range: SdkVersionRange): string {
   const expected =
     range.maxVersion && range.maxVersion !== range.minVersion
       ? `${range.minVersion}-${range.maxVersion}`

@@ -1,5 +1,5 @@
-import { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
-import { EventBus, Logger, Config, ModelRequest, ModelResponse } from '@orchestrator/shared';
+import { ProviderAdapter } from '@orchestrator/adapters';
+import { EventBus, Logger, Config, ModelRequest } from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import * as path from 'path';
@@ -39,7 +39,7 @@ export interface DiagnosisContext {
 
 export interface DiagnosisResult {
   selectedHypothesis: DiagnosisHypothesis | null;
-  evidence: Record<string, any>;
+  evidence: Record<string, unknown>;
 }
 
 export class Diagnoser {
@@ -58,11 +58,11 @@ export class Diagnoser {
         { role: 'user', content: 'Generate hypotheses for the failure.' },
       ],
       temperature: 0.4, // Higher temperature for creative hypotheses
-      schema: diagnosisResponseSchema,
+      jsonMode: true,
     };
 
     const response = await reasoner.generate(request, { runId, logger });
-    const diagnosis = response.result as DiagnosisResponse;
+    const diagnosis = this.parseResponse(response.text);
 
     if (!diagnosis || !diagnosis.hypotheses || diagnosis.hypotheses.length === 0) {
       logger.warn('Diagnosis model returned no hypotheses.');
@@ -104,6 +104,26 @@ export class Diagnoser {
       selectedHypothesis,
       evidence: {}, // Placeholder
     };
+  }
+
+  private parseResponse(text: string | undefined): DiagnosisResponse {
+    const raw = (text ?? '').trim();
+    if (!raw) {
+      throw new Error('Diagnosis model returned empty response.');
+    }
+
+    const json = this.extractJson(raw);
+    return diagnosisResponseSchema.parse(json) as DiagnosisResponse;
+  }
+
+  private extractJson(text: string): unknown {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('No JSON object found in diagnosis response.');
+    }
+    const jsonText = text.slice(firstBrace, lastBrace + 1);
+    return JSON.parse(jsonText) as unknown;
   }
 
   private buildPrompt(context: DiagnosisContext, maxBranches: number): string {

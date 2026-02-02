@@ -214,7 +214,7 @@ describe('VerificationRunner', () => {
     });
 
     const expectedPath = path.join(
-      process.cwd(),
+      '/app',
       '.orchestrator',
       'runs',
       mockCtx.runId,

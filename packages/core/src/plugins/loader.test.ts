@@ -1,23 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PluginLoader } from './loader';
-import { Config, ConfigSchema } from '@orchestrator/shared';
-import { Logger } from '@orchestrator/shared';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-
-vi.mock('fs/promises');
+import { Config, ConfigSchema, Logger } from '@orchestrator/shared';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { tmpdir } from 'node:os';
 
 describe('PluginLoader', () => {
   let config: Config;
   let logger: Logger;
   let repoRoot: string;
+  let pluginsDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    pluginsDir = await fs.mkdtemp(path.join(tmpdir(), 'orchestrator-plugin-loader-'));
     config = {
       ...ConfigSchema.parse({}),
       plugins: {
         enabled: true,
-        paths: ['.orchestrator/plugins'],
+        paths: [pluginsDir],
         allowlistIds: undefined,
       },
     };
@@ -28,7 +28,12 @@ describe('PluginLoader', () => {
       debug: vi.fn(),
       child: () => logger,
     } as unknown as Logger;
-    repoRoot = '/test/repo';
+    repoRoot = pluginsDir;
+  });
+
+  afterEach(async () => {
+    await fs.rm(pluginsDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
   it('should not load any plugins if disabled', async () => {
@@ -39,34 +44,25 @@ describe('PluginLoader', () => {
   });
 
   it('should discover and load a valid plugin', async () => {
-    const pluginDir = path.join(repoRoot, '.orchestrator/plugins');
-    const pluginFile = path.join(pluginDir, 'my-plugin.js');
-
-    vi.mocked(fs.readdir).mockResolvedValueOnce([
-      { name: 'my-plugin.js', isFile: () => true, isDirectory: () => false },
-    ] as any);
-
-    vi.mocked(fs.readFile).mockResolvedValueOnce('plugin content');
-
-    const mockPlugin = {
-      manifest: {
-        name: 'my-plugin',
-        version: '1.0.0',
-        type: 'provider',
-      },
-      createPlugin: () => ({
-        name: 'my-plugin',
-        sdkVersion: { minVersion: 1 },
-        init: async () => {},
-        healthCheck: async () => ({ ok: true }),
-        generate: async () => ({ text: '' }),
-      }),
-    };
-
-    vi.mock(pluginFile, () => ({
-      default: mockPlugin,
-      ...mockPlugin
-    }));
+    const pluginFile = path.join(pluginsDir, 'my-plugin.mjs');
+    await fs.writeFile(
+      pluginFile,
+      [
+        "export const manifest = { name: 'my-plugin', type: 'provider', sdkVersion: { minVersion: 1, maxVersion: 1 }, version: '1.0.0' };",
+        'export function createPlugin() {',
+        '  return {',
+        '    init: async () => {},',
+        '    shutdown: async () => {},',
+        "    healthCheck: async () => ({ healthy: true, message: 'ok' }),",
+        "    capabilities: () => ({ supportsStreaming: false, supportsToolCalling: false, supportsJsonMode: false, modality: 'text', latencyClass: 'fast' }),",
+        "    generate: async () => ({ text: '' }),",
+        '  };',
+        '}',
+        'export default { manifest, createPlugin };',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
 
     const loader = new PluginLoader(config, logger, repoRoot);
     const plugins = await loader.loadPlugins();
@@ -78,33 +74,24 @@ describe('PluginLoader', () => {
 
   it('should skip plugin not in allowlist', async () => {
     config.plugins!.allowlistIds = ['another-plugin'];
-    const pluginDir = path.join(repoRoot, '.orchestrator/plugins');
-    const pluginFile = path.join(pluginDir, 'my-plugin.js');
-
-    vi.mocked(fs.readdir).mockResolvedValueOnce([
-      { name: 'my-plugin.js', isFile: () => true, isDirectory: () => false },
-    ] as any);
-
-    vi.mocked(fs.readFile).mockResolvedValueOnce('plugin content');
-
-    const mockPlugin = {
-      manifest: {
-        name: 'my-plugin',
-        version: '1.0.0',
-        type: 'provider',
-      },
-      createPlugin: () => ({}),
-    };
-
-    vi.mock(pluginFile, () => ({
-      default: mockPlugin,
-      ...mockPlugin
-    }));
+    const pluginFile = path.join(pluginsDir, 'my-plugin.mjs');
+    await fs.writeFile(
+      pluginFile,
+      [
+        "export const manifest = { name: 'my-plugin', type: 'provider', sdkVersion: { minVersion: 1, maxVersion: 1 }, version: '1.0.0' };",
+        'export function createPlugin() { return { init: async () => {} }; }',
+        'export default { manifest, createPlugin };',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
 
     const loader = new PluginLoader(config, logger, repoRoot);
     const plugins = await loader.loadPlugins();
 
     expect(plugins).toHaveLength(0);
-    expect(logger.debug).toHaveBeenCalledWith('Skipping plugin my-plugin because it is not in the allowlist.');
+    expect(logger.debug).toHaveBeenCalledWith(
+      'Skipping plugin my-plugin because it is not in the allowlist.',
+    );
   });
 });

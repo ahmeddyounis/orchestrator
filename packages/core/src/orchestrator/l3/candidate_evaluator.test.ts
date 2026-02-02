@@ -76,7 +76,7 @@ describe('CandidateEvaluator', () => {
     );
 
     expect(mockGit.createCheckpoint).toHaveBeenCalled();
-    expect(mockPatchApplier.applyUnifiedDiff).toHaveBeenCalledWith('/repo', candidate.patch);
+    expect(mockPatchApplier.applyUnifiedDiff).toHaveBeenCalledWith('/repo', candidate.patch + '\n');
     expect(mockVerificationRunner.run).toHaveBeenCalled();
     expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('checkpoint-sha');
     expect(result.report.passed).toBe(true);

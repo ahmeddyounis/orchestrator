@@ -50,10 +50,10 @@ export function createCrypto(key: string): Crypto {
       decipher.setAuthTag(authTag);
       const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
       return decrypted.toString('utf8');
-    } catch (e: any) {
+    } catch (error: unknown) {
       throw new MemoryError(
         `Failed to decrypt data. The encryption key may be incorrect or the data may be corrupt.`,
-        { cause: e },
+        { cause: error },
       );
     }
   };

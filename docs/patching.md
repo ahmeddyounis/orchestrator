@@ -49,7 +49,7 @@ If you enable this setting:
 
 At the end of a run, the Orchestrator saves a final diff of all changes made during the session.
 
-- Location: `.orchestrator/runs/<runId>/patches/diff.patch`
+- Location: `.orchestrator/runs/<runId>/patches/final.diff.patch`
 - This file contains the unified diff of the entire `agent/<runId>` branch against the start state.
 
 ## How to Undo Everything

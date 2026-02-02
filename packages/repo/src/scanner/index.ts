@@ -3,7 +3,7 @@ import path from 'node:path';
 import ignore from 'ignore';
 import { RepoSnapshot, RepoFileMeta, ScanOptions } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
-import { objectHash } from 'ohash';
+import { hash } from 'ohash';
 
 export * from './types';
 
@@ -18,7 +18,7 @@ export class RepoScanner {
   }
 
   async scan(repoRoot: string, options: ScanOptions = {}): Promise<RepoSnapshot> {
-    const cacheKey = objectHash({ repoRoot, options });
+    const cacheKey = hash({ repoRoot, options });
     if (this.scanCache.has(cacheKey)) {
       return this.scanCache.get(cacheKey)!;
     }
@@ -55,14 +55,20 @@ export class RepoScanner {
     const files: RepoFileMeta[] = [];
     let stoppedEarly = false;
 
+    const stopForMaxFiles = () => {
+      if (!options.maxFiles) return false;
+      if (files.length < options.maxFiles) return false;
+      if (!stoppedEarly) {
+        warnings.push(`Stopped scanning early, hit max files limit of ${options.maxFiles}.`);
+        stoppedEarly = true;
+      }
+      return true;
+    };
+
     // Walker function
     const walk = async (dir: string, relativeDir: string) => {
       if (stoppedEarly) return;
-      if (options.maxFiles && files.length >= options.maxFiles) {
-        warnings.push(`Stopped scanning early, hit max files limit of ${options.maxFiles}.`);
-        stoppedEarly = true;
-        return;
-      }
+      if (stopForMaxFiles()) return;
       let entries;
       try {
         entries = await this.fs.readdir(dir, { withFileTypes: true });
@@ -73,6 +79,7 @@ export class RepoScanner {
 
       for (const entry of entries) {
         if (stoppedEarly) break;
+        if (stopForMaxFiles()) break;
         const entryName = entry.name;
         const entryRelativePath = relativeDir ? path.join(relativeDir, entryName) : entryName;
 
@@ -83,6 +90,7 @@ export class RepoScanner {
           // Recurse
           await walk(path.join(dir, entryName), entryRelativePath);
         } else if (entry.isFile()) {
+          if (stopForMaxFiles()) break;
           if (ig.ignores(entryRelativePath)) continue;
 
           const absPath = path.join(dir, entryName);
@@ -108,6 +116,8 @@ export class RepoScanner {
             isText,
             languageHint: this.getLanguageHint(ext),
           });
+
+          if (stopForMaxFiles()) break;
         }
       }
     };
@@ -122,9 +132,9 @@ export class RepoScanner {
       files,
       warnings,
     };
-    
+
     this.scanCache.set(cacheKey, snapshot);
-    
+
     return snapshot;
   }
 

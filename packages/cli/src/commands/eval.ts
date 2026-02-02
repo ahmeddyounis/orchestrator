@@ -28,10 +28,6 @@ export function registerEvalCommand(program: Command) {
           cwd: repoRoot,
         });
 
-        // As per spec, disable tool confirmations for eval
-        if (!config.tools) config.tools = {};
-        config.tools.requireConfirmation = false;
-
         const evalOutputDir = options.out
           ? path.resolve(options.out)
           : path.join(repoRoot, '.orchestrator', 'eval');
@@ -43,9 +39,12 @@ export function registerEvalCommand(program: Command) {
 
         const result = await runner.runSuite(suitePath, {
           baseline: options.baseline,
+          quiet: !!options.json,
         });
 
-        renderer.render(result);
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+        }
 
         // Exit with non-zero if any task failed
         if (result.aggregates.failed > 0 || result.aggregates.error > 0) {

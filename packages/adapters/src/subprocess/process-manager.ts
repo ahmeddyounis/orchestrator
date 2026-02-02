@@ -68,6 +68,12 @@ export class ProcessManager extends EventEmitter {
     // Create a new environment for the subprocess, isolating it from the main process.
     const finalEnv: Record<string, string> = { ...env };
 
+    // Always pass through PATH so the subprocess can resolve binaries like `node`.
+    const processPath = process.env.PATH ?? process.env.Path;
+    if (processPath && finalEnv.PATH === undefined && finalEnv.Path === undefined) {
+      finalEnv.PATH = processPath;
+    }
+
     // Explicitly add whitelisted environment variables from the current process.
     if (this.options.envAllowlist) {
       for (const key of this.options.envAllowlist) {
@@ -246,6 +252,7 @@ export class ProcessManager extends EventEmitter {
 
       const onOutput = () => {
         resetSilenceTimer();
+        check();
       };
 
       const onExit = () => {

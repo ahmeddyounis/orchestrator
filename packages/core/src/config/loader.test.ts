@@ -28,12 +28,14 @@ describe('ConfigLoader', () => {
   describe('load', () => {
     it('should load default config when no files exist', () => {
       const memory = ConfigSchema.parse({}).memory;
+      const security = ConfigSchema.parse({}).security;
       const config = ConfigLoader.load({ cwd: mockCwd });
       expect(config).toEqual({
         configVersion: 1,
         thinkLevel: 'L1',
         budget: DEFAULT_BUDGET,
         memory,
+        security,
         verification: {
           enabled: true,
           mode: 'auto',
@@ -170,7 +172,8 @@ describe('ConfigLoader', () => {
           },
         });
 
-        expect(config.memory.retrieval.topK).toBe(3);
+        expect(config.memory.retrieval.topKLexical).toBe(3);
+        expect(config.memory.retrieval.topKVector).toBe(3);
         expect(config.memory.maxChars).toBe(1000);
         expect(config.memory.writePolicy.storeEpisodes).toBe(false);
       });
@@ -183,7 +186,8 @@ describe('ConfigLoader', () => {
           },
         });
 
-        expect(config.memory.retrieval.topK).toBe(5);
+        expect(config.memory.retrieval.topKLexical).toBe(5);
+        expect(config.memory.retrieval.topKVector).toBe(5);
         expect(config.memory.maxChars).toBe(1500);
         expect(config.memory.writePolicy.storeEpisodes).toBe(true);
       });
@@ -196,7 +200,8 @@ describe('ConfigLoader', () => {
           },
         });
 
-        expect(config.memory.retrieval.topK).toBe(8);
+        expect(config.memory.retrieval.topKLexical).toBe(8);
+        expect(config.memory.retrieval.topKVector).toBe(8);
         expect(config.memory.maxChars).toBe(2500);
         expect(config.memory.writePolicy.storeEpisodes).toBe(true);
       });
@@ -207,14 +212,15 @@ describe('ConfigLoader', () => {
             thinkLevel: 'L0',
             memory: {
               enabled: true,
-              retrieval: { topK: 10 },
+              retrieval: { topKLexical: 10, topKVector: 10 },
               maxChars: 5000,
               writePolicy: { storeEpisodes: true },
             },
           },
         });
 
-        expect(config.memory.retrieval.topK).toBe(10);
+        expect(config.memory.retrieval.topKLexical).toBe(10);
+        expect(config.memory.retrieval.topKVector).toBe(10);
         expect(config.memory.maxChars).toBe(5000);
         expect(config.memory.writePolicy.storeEpisodes).toBe(true);
       });

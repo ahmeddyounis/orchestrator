@@ -85,7 +85,7 @@ export interface EvalTaskResult {
 
 export interface Criterion {
   name: 'verification_pass' | 'file_contains' | 'script_exit';
-  details?: any;
+  details?: unknown;
 }
 
 export interface CriterionResult {

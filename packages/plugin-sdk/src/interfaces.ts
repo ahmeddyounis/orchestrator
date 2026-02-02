@@ -131,10 +131,7 @@ export interface EmbedderPlugin extends PluginLifecycle {
   /**
    * Generate embeddings for the given texts
    */
-  embedTexts(
-    texts: string[],
-    ctx: PluginContext,
-  ): Promise<number[][]>;
+  embedTexts(texts: string[], ctx: PluginContext): Promise<number[][]>;
 }
 
 // ============================================================================
@@ -238,11 +235,7 @@ export interface ToolExecutorPlugin extends PluginLifecycle {
   /**
    * Execute a tool/command request
    */
-  execute(
-    request: ToolRunRequest,
-    policy: ToolPolicy,
-    ctx: PluginContext,
-  ): Promise<ToolRunResult>;
+  execute(request: ToolRunRequest, policy: ToolPolicy, ctx: PluginContext): Promise<ToolRunResult>;
 
   /**
    * Check if a command is allowed by the policy (optional pre-check)

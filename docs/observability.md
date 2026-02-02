@@ -13,9 +13,11 @@ Each `run_id` is a unique timestamp. This directory is your single source of tru
 ### What's Inside?
 
 - **`summary.json`**: A high-level summary of the run, including the final status, duration, and how much it cost (in tokens and dollars).
-- **`diff.patch`**: A standard `.patch` file showing all the code changes that were made. You can use this to easily review the changes.
+- **`patches/final.diff.patch`**: A unified diff of the final code changes that were made. You can use this to easily review (or apply) the changes.
 - **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging.
 - **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
+- **`manifest.json`**: A machine-readable index of key artifact paths for the run.
+- **`effective-config.json`**: The fully resolved configuration used for the run.
 
 ## The `report` Command
 
@@ -65,7 +67,7 @@ Let's say the orchestrator runs and tells you that verification failed. Here's h
     Navigate to the tool logs directory for that run:
     `.orchestrator/runs/171234567890/tool_logs/`
 
-    Inside, you'll find files like `pnpm-test-stdout.log` and `pnpm-test-stderr.log`.
+    Inside, you'll find files like `<toolRunId>_stdout.log` and `<toolRunId>_stderr.log`.
 
 4.  **Examine the logs**:
     Open the `pnpm-test-stderr.log` file. It will contain the exact error message from the test runner, showing you which test failed and why.

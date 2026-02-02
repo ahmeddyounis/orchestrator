@@ -1,17 +1,11 @@
 import { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
-import {
-  EventBus,
-  Logger,
-  Config,
-  ModelRequest,
-  ModelResponse,
-  CandidateGenerated,
-} from '@orchestrator/shared';
+import { EventBus, Logger, Config, ModelRequest, ModelResponse } from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Reviewer, ReviewerContext } from './reviewer';
+import { PatchStore } from '../../exec/patch_store';
 
 // Budget type derived from Config
 type Budget = NonNullable<Config['budget']>;
@@ -96,7 +90,7 @@ export class CandidateGenerator {
     return { filesChanged, linesAdded, linesDeleted };
   }
 
-  private async generateCandidates(stepContext: StepContext, n: number): Promise<Candidate[]> {
+  async generateCandidates(stepContext: StepContext, n: number): Promise<Candidate[]> {
     const candidates: Candidate[] = [];
     const {
       runId,
@@ -110,6 +104,9 @@ export class CandidateGenerator {
       budget,
       costTracker,
     } = stepContext;
+
+    const manifestPath = path.join(artifactsRoot, 'manifest.json');
+    const patchStore = new PatchStore(path.join(artifactsRoot, 'patches'), manifestPath);
 
     const systemPrompt = `You are an expert software engineer.
 Your task is to implement the current step: "${step}"
@@ -178,8 +175,7 @@ INSTRUCTIONS:
 
       let patchStats;
       if (valid && patch) {
-        const patchArtifactPath = path.join(patchesDir, `iter_${stepIndex}_candidate_${i}.patch`);
-        await fs.writeFile(patchArtifactPath, patch);
+        await patchStore.saveCandidate(stepIndex, i, patch);
         patchStats = this.calculatePatchStats(patch);
       }
 
@@ -211,6 +207,37 @@ INSTRUCTIONS:
     }
 
     return candidates;
+  }
+
+  async reviewCandidates(
+    stepContext: StepContext,
+    candidates: Candidate[],
+  ): Promise<ReviewRanking[]> {
+    const validCandidates = candidates.filter((c) => c.valid && c.patch);
+    if (validCandidates.length <= 1) {
+      return [];
+    }
+
+    const reviewerContext: ReviewerContext = {
+      runId: stepContext.runId,
+      eventBus: stepContext.eventBus,
+      costTracker: stepContext.costTracker,
+      reviewer: stepContext.reviewer,
+      artifactsRoot: stepContext.artifactsRoot,
+      logger: stepContext.logger,
+    };
+
+    const review = await this.reviewer.review(
+      {
+        goal: stepContext.goal,
+        step: stepContext.step,
+        fusedContext: stepContext.fusedContext,
+        candidates: validCandidates,
+      },
+      reviewerContext,
+    );
+
+    return review.rankings;
   }
 
   async generateAndSelectCandidate(stepContext: StepContext, n: number): Promise<Candidate | null> {
@@ -254,25 +281,7 @@ INSTRUCTIONS:
       return { candidates: validCandidates, reviews: [] };
     }
 
-    const reviewerContext: ReviewerContext = {
-      runId: stepContext.runId,
-      eventBus: stepContext.eventBus,
-      costTracker: stepContext.costTracker,
-      reviewer: stepContext.reviewer,
-      artifactsRoot: stepContext.artifactsRoot,
-      logger: stepContext.logger,
-    };
-
-    const review = await this.reviewer.review(
-      {
-        goal: stepContext.goal,
-        step: stepContext.step,
-        fusedContext: stepContext.fusedContext,
-        candidates: validCandidates,
-      },
-      reviewerContext,
-    );
-
-    return { candidates: validCandidates, reviews: review.rankings };
+    const rankings = await this.reviewCandidates(stepContext, validCandidates);
+    return { candidates: validCandidates, reviews: rankings };
   }
 }

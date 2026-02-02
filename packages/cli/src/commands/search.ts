@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { findRepoRoot, SemanticIndexStore, SemanticSearchService } from '@orchestrator/repo';
-import { ConfigLoader } from '@orchestrator/core';
-import { SemanticIndexingConfig } from '@orchestrator/shared';
+import { ConfigLoader, type DeepPartial } from '@orchestrator/core';
+import type { Config, EventBus } from '@orchestrator/shared';
 import { GlobalOptions } from '../types';
 import { createEmbedder } from '@orchestrator/adapters';
 import path from 'node:path';
@@ -17,13 +17,14 @@ export function registerSearchCommand(program: Command) {
 
       const repoRoot = await findRepoRoot();
 
-      const flags: Record<string, unknown> = {};
+      const flags: DeepPartial<Config> = {};
       if (options.semantic) {
         flags.indexing = { semantic: { enabled: true } };
       }
 
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
+        cwd: repoRoot,
         flags,
       });
 
@@ -33,7 +34,7 @@ export function registerSearchCommand(program: Command) {
         process.exit(1);
       }
 
-      const semanticConfig = config.indexing?.semantic as SemanticIndexingConfig;
+      const semanticConfig = config.indexing?.semantic;
       if (!semanticConfig?.enabled) {
         console.error(
           'Semantic indexing is not enabled. Please enable it in your config or run `index build --semantic`.',
@@ -42,13 +43,17 @@ export function registerSearchCommand(program: Command) {
       }
 
       const store = new SemanticIndexStore();
-      const dbPath = path.resolve(repoRoot, semanticConfig.path);
+      const dbPath = path.isAbsolute(semanticConfig.storage.path)
+        ? semanticConfig.storage.path
+        : path.join(repoRoot, semanticConfig.storage.path);
       store.init(dbPath);
 
       const embedder = createEmbedder(semanticConfig.embeddings);
+      const eventBus: EventBus = { emit: async () => {} };
       const searchService = new SemanticSearchService({
         store,
         embedder,
+        eventBus,
       });
 
       const topK = parseInt(options.topk, 10);

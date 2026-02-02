@@ -141,7 +141,7 @@ describe('ToolchainDetector', () => {
     expect(profile.packageManager).toBe('npm');
     expect(profile.usesTurbo).toBe(false);
     // Based on implementation, we map what exists
-    expect(profile.commands.testCmd).toBe('npm run test');
+    expect(profile.commands.testCmd).toBe('npm test');
     expect(profile.commands.lintCmd).toBeUndefined();
   });
 });

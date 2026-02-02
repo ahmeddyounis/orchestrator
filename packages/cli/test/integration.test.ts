@@ -17,9 +17,8 @@ async function setupFixture(fixtureName: string, testDir: string): Promise<strin
   const orchestratorConfig = `
 providers:
   openai:
-    type: openai
-    model: gpt-4o-mini
-    apiKey: ${process.env.OPENAI_API_KEY || 'dummy-key'}
+    type: fake
+    model: fake-model
 `;
   await fs.writeFile(path.join(testRepoPath, '.orchestrator.yaml'), orchestratorConfig);
 
@@ -69,20 +68,47 @@ describe('CLI Integration Tests', () => {
   it('L1 flow: should generate a patch for a simple request', async () => {
     const objective = "add a new function to package-a's index.ts that returns 'hello world'";
 
-    // Use a real model for this test, but with a very low budget.
-    // This requires the user to have OPENAI_API_KEY set.
-    // We should consider mocking the API in the future.
-    const { all } = await execa('node', [cliPath, 'run', objective, '--non-interactive'], { 
+    const { stdout } = await execa(
+      'node',
+      [cliPath, '--json', 'run', objective, '--non-interactive'],
+      {
         cwd: testRepoPath,
-        all: true,
-    });
+      },
+    );
 
-    // Check for patch file
-    const files = await fs.readdir(testRepoPath);
-    const patchFiles = files.filter(f => f.endsWith('.patch'));
-    expect(patchFiles.length).toBe(1);
+    const result = JSON.parse(stdout);
 
-    const patchContent = await fs.readFile(path.join(testRepoPath, patchFiles[0]), 'utf-8');
+    expect(result.status).toBe('SUCCESS');
+    expect(typeof result.runId).toBe('string');
+    expect(typeof result.artifactsDir).toBe('string');
+
+    // Check for patch file in run artifacts
+    const patchesDir = path.join(result.artifactsDir, 'patches');
+    const patchFiles = (await fs.readdir(patchesDir)).filter((f) => f.endsWith('.patch'));
+    expect(patchFiles.length).toBeGreaterThan(0);
+
+    const patchContent = await fs.readFile(path.join(patchesDir, patchFiles[0]), 'utf-8');
     expect(patchContent).toMatch(/export const \w+ = \(\) => 'hello world';/);
+
+    // Report should load summary/manifest for this run
+    const { stdout: reportJson } = await execa(
+      'node',
+      [cliPath, '--json', 'report', result.runId],
+      {
+        cwd: testRepoPath,
+      },
+    );
+    const report = JSON.parse(reportJson);
+    expect(report.runId).toBe(result.runId);
+    expect(typeof report.runDir).toBe('string');
+    expect(report.manifest).toBeTruthy();
+    expect(report.summary).toBeTruthy();
+
+    // "Most recent" report should match when no runId is provided
+    const { stdout: reportLatestJson } = await execa('node', [cliPath, '--json', 'report'], {
+      cwd: testRepoPath,
+    });
+    const reportLatest = JSON.parse(reportLatestJson);
+    expect(reportLatest.runId).toBe(result.runId);
   }, 120000);
 });

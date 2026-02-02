@@ -11,7 +11,7 @@ describe('TraceWriter', () => {
   const runId = 'test-run-123';
 
   beforeEach(() => {
-        tempDir = fs.mkdtempSync(join(os.tmpdir(), 'test-'));
+    tempDir = fs.mkdtempSync(join(os.tmpdir(), 'test-'));
     traceWriter = new TraceWriter(runId, tempDir);
   });
 

@@ -15,7 +15,6 @@ vi.mock('@anthropic-ai/sdk', () => {
   };
 
   // Attach static error classes to the mock class
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (MockAnthropic as any).APIError = class extends Error {
     status: number;
     constructor(status?: number, message?: string) {
@@ -23,7 +22,6 @@ vi.mock('@anthropic-ai/sdk', () => {
       this.status = status || 500;
     }
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (MockAnthropic as any).APIConnectionTimeoutError = class extends Error {};
 
   return {
@@ -138,7 +136,6 @@ describe('AnthropicAdapter', () => {
   });
 
   it('maps RateLimitError', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const APIError = (Anthropic as any).APIError;
     const error = new APIError(429, 'Rate limit');
 
@@ -149,7 +146,6 @@ describe('AnthropicAdapter', () => {
   });
 
   it('maps TimeoutError', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const APIConnectionTimeoutError = (Anthropic as any).APIConnectionTimeoutError;
     const error = new APIConnectionTimeoutError('Timeout');
     mockCreate.mockRejectedValue(error);

@@ -2,6 +2,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import path from 'path';
 import fs from 'fs/promises';
 import { execSync } from 'child_process';
+import { tmpdir } from 'node:os';
 
 import { Orchestrator } from './orchestrator';
 import { type ProviderAdapter, ProviderCapabilities } from '@orchestrator/adapters';
@@ -64,21 +65,25 @@ END_DIFF`,
     );
   }
 
-  get name(): string {
-    return 'fake-multi-candidate-executor';
+  id(): string {
+    return 'fake-multi';
   }
 
   capabilities(): ProviderCapabilities {
     return {
       supportsStreaming: false,
       supportsToolCalling: false,
-      supportsJsonMode: false,
+      supportsJsonMode: true,
       modality: 'text',
       latencyClass: 'fast',
     };
   }
 
   async generate(task: AgentTask, context: AgentContext): Promise<AgentResponse> {
+    if ((task as any).jsonMode) {
+      return { text: '{"steps":["Fix the failing test in package-a"]}' };
+    }
+
     if (this.callCount >= this.responses.length) {
       // Best-of-N will stop requesting when it hits the budget cap,
       // but if it requests more, we throw.
@@ -101,7 +106,7 @@ class FakeReviewer implements ProviderAdapter {
     this.review = review;
   }
 
-  get name(): string {
+  id(): string {
     return 'fake-reviewer';
   }
 
@@ -127,10 +132,11 @@ describe('Orchestrator L3 Deterministic Tests', () => {
   let git: GitService;
 
   beforeEach(async () => {
-    const testSessionDir = path.resolve(process.cwd(), '.tmp/l3-tests');
-    await fs.mkdir(testSessionDir, { recursive: true });
-    workDir = await fs.mkdtemp(path.join(testSessionDir, 'orchestrator-l3-determ-test-'));
-    await fs.cp(FIXTURE_REPO_DIR, workDir, { recursive: true });
+    workDir = await fs.mkdtemp(path.join(tmpdir(), 'orchestrator-l3-determ-test-'));
+    await fs.cp(FIXTURE_REPO_DIR, workDir, {
+      recursive: true,
+      filter: (src) => !src.split(path.sep).includes('.git'),
+    });
 
     execSync('git init', { cwd: workDir });
     execSync('git config user.email "test@example.com"', { cwd: workDir });
@@ -242,7 +248,7 @@ describe('Orchestrator L3 Deterministic Tests', () => {
       const result = await orchestrator.run(goal, { thinkLevel: 'L3', runId });
 
       expect(result.status).toBe('success');
-      expect(result.summary).toContain('L3 verification passed');
+      expect(result.summary).toContain('L3 Plan Executed Successfully');
       expect(multiExecutor['callCount']).toBe(3); // All 3 candidates were tried
       expect(reviewer.callCount).toBe(0); // Reviewer should not be called
     },

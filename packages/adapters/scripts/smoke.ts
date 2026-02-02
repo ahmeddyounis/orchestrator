@@ -4,7 +4,6 @@ import { AdapterContext } from '../src/types';
 
 // Simple logger mock
 const logger = {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   log: async (_msg: string, _meta?: unknown) => {
     // Only log essential info or errors to keep output clean as per spec
     // Spec: "print only truncated text and usage"

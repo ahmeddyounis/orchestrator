@@ -7,7 +7,7 @@ import {
   ProceduralMemoryEntry,
   ProceduralMemoryQuery,
 } from '@orchestrator/memory';
-import { ToolPolicy } from '@orchestrator/shared';
+import { ToolPolicy, updateManifest } from '@orchestrator/shared';
 import {
   ToolchainDetector,
   TargetingManager,
@@ -94,20 +94,28 @@ export class VerificationRunner {
         let command: string | undefined;
         let sourceInfo: CommandSourceInfo | undefined;
 
-        const memCmd = memoryCommands[task.name];
-        if (memCmd) {
-          const { isAllowed } = this.runner.checkPolicy(
-            { command: memCmd, classification: 'test' },
-            this.toolPolicy,
-          );
-          if (isAllowed) {
-            command = memCmd;
-            sourceInfo = { source: 'memory' };
-          } else {
+        const memEntry = memoryCommands[task.name];
+        if (memEntry) {
+          if (memEntry.stale) {
             sourceInfo = {
               source: 'memory',
-              fallbackReason: 'Command from memory was blocked by tool policy.',
+              fallbackReason: 'Command from memory was stale.',
             };
+          } else {
+            const memCmd = memEntry.content;
+            const { isAllowed } = this.runner.checkPolicy(
+              { command: memCmd, classification: 'test' },
+              this.toolPolicy,
+            );
+            if (isAllowed) {
+              command = memCmd;
+              sourceInfo = { source: 'memory' };
+            } else {
+              sourceInfo = {
+                source: 'memory',
+                fallbackReason: 'Command from memory was blocked by tool policy.',
+              };
+            }
           }
         }
 
@@ -239,7 +247,9 @@ export class VerificationRunner {
     };
   }
 
-  private async getCommandsFromMemory(): Promise<Partial<Record<CommandTask, string>>> {
+  private async getCommandsFromMemory(): Promise<
+    Partial<Record<CommandTask, ProceduralMemoryEntry>>
+  > {
     const queries: ProceduralMemoryQuery[] = [
       { titleContains: 'How to run tests' },
       { titleContains: 'How to run lint' },
@@ -247,7 +257,7 @@ export class VerificationRunner {
     ];
 
     const results = await this.memory.find(queries, 1);
-    const commands: Partial<Record<CommandTask, string>> = {};
+    const commands: Partial<Record<CommandTask, ProceduralMemoryEntry>> = {};
 
     const findBest = (
       entries: ProceduralMemoryEntry[] | undefined,
@@ -260,13 +270,13 @@ export class VerificationRunner {
     };
 
     const testEntry = findBest(results[0]);
-    if (testEntry && !testEntry.stale) commands.test = testEntry.content;
+    if (testEntry) commands.test = testEntry;
 
     const lintEntry = findBest(results[1]);
-    if (lintEntry && !lintEntry.stale) commands.lint = lintEntry.content;
+    if (lintEntry) commands.lint = lintEntry;
 
     const typecheckEntry = findBest(results[2]);
-    if (typecheckEntry && !typecheckEntry.stale) commands.typecheck = typecheckEntry.content;
+    if (typecheckEntry) commands.typecheck = typecheckEntry;
 
     return commands;
   }
@@ -286,6 +296,13 @@ export class VerificationRunner {
 
       const jsonPath = path.join(runsDir, 'verification_command_source.json');
       await fs.promises.writeFile(jsonPath, JSON.stringify(sources, null, 2));
+      try {
+        await updateManifest(path.join(runsDir, 'manifest.json'), (manifest) => {
+          manifest.verificationPaths = [...(manifest.verificationPaths ?? []), jsonPath];
+        });
+      } catch {
+        // ignore
+      }
     } catch {
       // ignore
     }
@@ -330,6 +347,13 @@ export class VerificationRunner {
           .join('\n');
 
       await fs.promises.writeFile(txtPath, txtContent);
+      try {
+        await updateManifest(path.join(runsDir, 'manifest.json'), (manifest) => {
+          manifest.verificationPaths = [...(manifest.verificationPaths ?? []), jsonPath, txtPath];
+        });
+      } catch {
+        // ignore
+      }
     } catch {
       // Ignore errors saving summary, don't fail verification
     }

@@ -56,7 +56,6 @@ describe('ToolManager', () => {
   beforeEach(() => {
     mockEventBus = { emit: vi.fn() };
     mockUi = { confirm: vi.fn().mockResolvedValue(true) };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toolManager = new ToolManager(mockEventBus as any, manifestPath);
 
     vi.clearAllMocks();
@@ -87,7 +86,6 @@ describe('ToolManager', () => {
     const ctx = { runId: 'run-1' };
 
     // Mock Child Process
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mockChild = new EventEmitter() as any;
     mockChild.stdout = new EventEmitter();
     mockChild.stderr = new EventEmitter();
@@ -98,7 +96,6 @@ describe('ToolManager', () => {
       mockChild.emit('close', 0);
     }, 10);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await toolManager.runTool(req, policy, mockUi as any, ctx);
 
     // Verify events
@@ -117,7 +114,7 @@ describe('ToolManager', () => {
     expect(writeManifest).toHaveBeenCalled();
   });
 
-  it('should emit ToolRunDenied when policy denied', async () => {
+  it('should emit ToolRunBlocked when policy denied', async () => {
     const req: ToolRunRequest = { command: 'rm -rf /', reason: 'test', cwd: '/tmp' };
     const policy: ToolPolicy = {
       enabled: true,
@@ -130,7 +127,6 @@ describe('ToolManager', () => {
     };
     const ctx = { runId: 'run-1' };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
 
     expect(mockEventBus.emit).toHaveBeenCalledWith(
@@ -140,7 +136,7 @@ describe('ToolManager', () => {
     );
     expect(mockEventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'ToolRunDenied',
+        type: 'ToolRunBlocked',
       }),
     );
     expect(mockEventBus.emit).not.toHaveBeenCalledWith(

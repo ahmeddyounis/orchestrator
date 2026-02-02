@@ -18,7 +18,9 @@ export interface CompatibilityProfile {
 }
 
 export const DefaultCompatibilityProfile: CompatibilityProfile = {
-  promptDetectionPattern: /.*(>|\$|#|%).*$/s,
+  // Detect a typical shell/REPL prompt at the end of the transcript.
+  // Keep it strict to avoid matching things like "<END_DIFF>".
+  promptDetectionPattern: /(?:^|\n)[^<>\n]*(?:>|\$|#|%)\s*$/,
   initialPromptTimeoutMs: 1500,
   promptInactivityTimeoutMs: 800,
 };

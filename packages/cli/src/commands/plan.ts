@@ -12,6 +12,7 @@ import {
   writeManifest,
   JsonlLogger,
   OrchestratorEvent,
+  MANIFEST_VERSION,
   type Config,
   ConfigError,
   UsageError,
@@ -185,6 +186,7 @@ export function registerPlanCommand(program: Command) {
 
       // Write manifest
       await writeManifest(artifacts.manifest, {
+        schemaVersion: MANIFEST_VERSION,
         runId,
         startedAt: new Date().toISOString(),
         command: `plan ${goal}`,
@@ -195,6 +197,7 @@ export function registerPlanCommand(program: Command) {
         effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
         patchPaths: [],
         toolLogPaths: [],
+        verificationPaths: [],
       });
 
       const costSummary = costTracker.getSummary();

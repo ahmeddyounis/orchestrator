@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const SecretFindingSchema = z.object({
+export const SecretFindingSchema = z.object({
   kind: z.string(),
   match: z.string(),
   start: z.number(),
@@ -26,6 +26,18 @@ const SECRET_PATTERNS: SecretPattern[] = [
       /-----BEGIN ((RSA|OPENSSH|EC|PGP) )?PRIVATE KEY-----[\s\S]*?-----END \1?PRIVATE KEY-----/g,
     confidence: 'high',
   },
+  // OpenAI API keys (e.g. sk-..., sk-proj-...)
+  {
+    kind: 'openai-api-key',
+    pattern: /sk-(?:proj-)?[a-zA-Z0-9]{20,}/g,
+    confidence: 'high',
+  },
+  // Google API keys (e.g. AIza...)
+  {
+    kind: 'google-api-key',
+    pattern: /AIza[0-9A-Za-z\-_]{35}/g,
+    confidence: 'high',
+  },
   // AWS Keys
   {
     kind: 'aws-access-key-id',
@@ -46,13 +58,13 @@ const SECRET_PATTERNS: SecretPattern[] = [
   // Generic API Key
   {
     kind: 'api-key',
-    pattern: /([a-zA-Z0-9_]+_)?(key|token|secret|password|auth)[\s"':=]+([a-zA-Z0-9_.-]{16,})/gi,
+    pattern: /([a-zA-Z0-9_]+_)?(key|token|secret|auth)[\s"':=]+([a-zA-Z0-9_.-]{16,})/gi,
     confidence: 'medium',
   },
   // Env assignments
   {
     kind: 'env-assignment',
-    pattern: /(TOKEN|SECRET|PASSWORD|API_KEY)\s*=\s*['"]?([a-zA-Z0-9_.-]+)['"]?/gi,
+    pattern: /(TOKEN|SECRET|API_KEY)\s*=\s*['"]?([a-zA-Z0-9_.-]+)['"]?/gi,
     confidence: 'medium',
   },
 ];
@@ -110,7 +122,7 @@ export function redact(text: string, findings: SecretFinding[]): string {
 
 const SENSITIVE_KEY_NAMES = new Set(['token', 'secret', 'apikey', 'api_key', 'auth', 'password']);
 
-export function redactObject(obj: any): any {
+export function redactObject(obj: unknown): unknown {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
@@ -120,7 +132,7 @@ export function redactObject(obj: any): any {
   }
 
   return Object.fromEntries(
-    Object.entries(obj).map(([key, value]) => {
+    Object.entries(obj as Record<string, unknown>).map(([key, value]) => {
       if (typeof value === 'string' && SENSITIVE_KEY_NAMES.has(key.toLowerCase())) {
         return [key, `[REDACTED:${key}]`];
       }

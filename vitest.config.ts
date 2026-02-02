@@ -7,6 +7,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
+      '**/.tmp/**',
       '**/.t2/**',
       '**/.plans/**',
       '**/__fixtures__/**',

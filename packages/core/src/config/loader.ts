@@ -5,10 +5,11 @@ import { Config, ConfigSchema, OrchestratorConfig, ConfigError } from '@orchestr
 import os from 'os';
 import { DEFAULT_BUDGET } from './budget';
 import { findRepoRoot } from '@orchestrator/repo';
+import type { DeepPartial } from '../types';
 
 export interface ConfigOptions {
   configPath?: string; // CLI override
-  flags?: Partial<Config>; // CLI flags
+  flags?: DeepPartial<Config>; // CLI flags
   cwd?: string; // Current working directory (for repo config)
   env?: NodeJS.ProcessEnv; // Environment variables
 }
@@ -20,7 +21,7 @@ export type LoadedConfig = OrchestratorConfig & {
 
 export async function getOrchestratorConfig(
   configPath?: string,
-  flags?: Partial<Config>,
+  flags?: DeepPartial<Config>,
 ): Promise<LoadedConfig> {
   const repoRoot = await findRepoRoot();
   const config = ConfigLoader.load({
@@ -115,22 +116,26 @@ export class ConfigLoader {
 
     switch (thinkLevel) {
       case 'L0':
-        memory.retrieval.topK ??= 3;
+        memory.retrieval.topKLexical ??= 3;
+        memory.retrieval.topKVector ??= 3;
         memory.maxChars ??= 1000;
         memory.writePolicy.storeEpisodes ??= false;
         break;
       case 'L1':
-        memory.retrieval.topK ??= 5;
+        memory.retrieval.topKLexical ??= 5;
+        memory.retrieval.topKVector ??= 5;
         memory.maxChars ??= 1500;
         memory.writePolicy.storeEpisodes ??= true;
         break;
       case 'L2':
-        memory.retrieval.topK ??= 8;
+        memory.retrieval.topKLexical ??= 8;
+        memory.retrieval.topKVector ??= 8;
         memory.maxChars ??= 2500;
         memory.writePolicy.storeEpisodes ??= true;
         break;
       case 'L3':
-        memory.retrieval.topK ??= 10;
+        memory.retrieval.topKLexical ??= 10;
+        memory.retrieval.topKVector ??= 10;
         memory.maxChars ??= 4000;
         memory.writePolicy.storeEpisodes ??= true;
         break;

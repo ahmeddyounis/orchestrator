@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -21,6 +21,7 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "@orchestrator/core": "workspace:*",
+    "@orchestrator/exec": "workspace:*",
     "@orchestrator/shared": "workspace:*",
     "@orchestrator/repo": "workspace:*"
   }

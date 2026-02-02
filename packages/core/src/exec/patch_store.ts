@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { Manifest, writeManifest, PatchOpError } from '@orchestrator/shared';
+import { MANIFEST_VERSION, Manifest, writeManifest, PatchOpError } from '@orchestrator/shared';
 
 export class PatchStore {
   constructor(
@@ -34,6 +34,9 @@ export class PatchStore {
     try {
       const content = await fs.readFile(this.manifestPath, 'utf-8');
       const manifest: Manifest = JSON.parse(content);
+
+      // Backfill in case we are updating an older manifest.
+      manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
 
       if (!manifest.patchPaths.includes(patchPath)) {
         manifest.patchPaths.push(patchPath);

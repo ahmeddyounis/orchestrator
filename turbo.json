@@ -13,7 +13,9 @@
     },
     "lint": {},
     "lint:fix": {},
-    "typecheck": {},
+    "typecheck": {
+      "dependsOn": ["build"]
+    },
     "format": {},
     "format:check": {}
   }

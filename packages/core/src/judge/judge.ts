@@ -76,7 +76,7 @@ export class Judge {
         { role: 'user', content },
       ],
       temperature: 0.1,
-      schema: judgeOutputSchema,
+      jsonMode: true,
     };
 
     const adapterCtx: AdapterContext = { runId, logger };
@@ -97,7 +97,7 @@ export class Judge {
       const response = await this.llm.generate(request, adapterCtx);
       const durationMs = Date.now() - startTime;
 
-      const output = response.result as JudgeOutput;
+      const output = this.parseOutput(response.text);
 
       // Validate winnerCandidateId is one of the candidates
       if (!candidates.some((c) => c.id === output.winnerCandidateId)) {
@@ -157,6 +157,26 @@ export class Judge {
 
       return fallbackOutput;
     }
+  }
+
+  private parseOutput(text: string | undefined): JudgeOutput {
+    const raw = (text ?? '').trim();
+    if (!raw) {
+      throw new Error('Judge returned empty response.');
+    }
+
+    const json = this.extractJson(raw);
+    return judgeOutputSchema.parse(json) as JudgeOutput;
+  }
+
+  private extractJson(text: string): unknown {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      throw new Error('No JSON object found in judge response.');
+    }
+    const jsonText = text.slice(firstBrace, lastBrace + 1);
+    return JSON.parse(jsonText) as unknown;
   }
 
   private buildPrompt(

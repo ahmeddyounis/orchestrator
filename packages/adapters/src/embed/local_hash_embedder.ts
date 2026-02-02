@@ -20,12 +20,13 @@ export class LocalHashEmbedder implements Embedder {
   private embedText(text: string): number[] {
     const hash = createHash('sha256').update(text).digest();
     const vector: number[] = [];
+    const scale = 1 / Math.sqrt(this.dimensions);
     for (let i = 0; i < this.dimensions; i++) {
       const byteIndex = i % hash.length;
       const bitIndex = Math.floor(i / hash.length) % 8;
       const byte = hash[byteIndex];
       const bit = (byte >> bitIndex) & 1;
-      vector.push(bit);
+      vector.push((bit ? 1 : -1) * scale);
     }
     return vector;
   }

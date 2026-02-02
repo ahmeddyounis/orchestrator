@@ -7,7 +7,10 @@ import * as path from 'path';
 describe('Security Regression Tests', () => {
   describe('Prompt Injection', () => {
     it('should neutralize prompt injection attempts from files', () => {
-      const fixturePath = path.join(__dirname, '../../__fixtures__/security/prompt-injection-attempt.txt');
+      const fixturePath = path.join(
+        __dirname,
+        '../../__fixtures__/security/prompt-injection-attempt.txt',
+      );
       const maliciousContent = fs.readFileSync(fixturePath, 'utf-8');
 
       const wrappedContent = wrapUntrustedContent(maliciousContent);
@@ -29,9 +32,11 @@ describe('Security Regression Tests', () => {
 
       const redactedContent = redact(contentWithSecrets, findings);
 
-      expect(redactedContent).not.toContain('sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
+      expect(redactedContent).not.toContain(
+        'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+      );
       expect(redactedContent).toContain('[REDACTED:openai-api-key]');
-      
+
       expect(redactedContent).not.toContain('ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx');
       expect(redactedContent).toContain('[REDACTED:github-token]');
 

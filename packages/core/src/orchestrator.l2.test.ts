@@ -26,6 +26,7 @@ vi.mock('@orchestrator/shared', async (importOriginal) => {
     ...actual,
     createRunDir: vi.fn(),
     writeManifest: vi.fn(),
+    updateManifest: vi.fn(),
     JsonlLogger: MockJsonlLogger,
   };
 });
@@ -91,7 +92,10 @@ vi.mock('./verify/runner', () => {
 
 describe('Orchestrator L2', () => {
   let orchestrator: Orchestrator;
-  const mockGit = {};
+  const mockGit = {
+    getHeadSha: vi.fn().mockResolvedValue('HEAD'),
+    diff: vi.fn().mockResolvedValue(''),
+  };
   const mockRegistry = {
     getAdapter: vi.fn(),
     resolveRoleProviders: vi.fn(),

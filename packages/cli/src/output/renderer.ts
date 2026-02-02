@@ -35,7 +35,6 @@ export interface OutputResult {
   changedFiles?: string[];
   stopReason?: string;
   lastFailureSignature?: string;
-  [key: string]: unknown;
 }
 
 export class OutputRenderer {
@@ -89,17 +88,32 @@ export class OutputRenderer {
       console.log(`  Run ID: ${data.runId}`);
     }
     if (data.artifactsDir) {
-      console.log(`  Diff: ${data.artifactsDir}/run.diff`);
-      console.log(`  Report: ${data.artifactsDir}/report.json`);
+      console.log(`  Dir: ${data.artifactsDir}`);
+      console.log(`  - Summary: ${data.artifactsDir}/summary.json`);
+      console.log(`  - Trace: ${data.artifactsDir}/trace.jsonl`);
+      console.log(`  - Manifest: ${data.artifactsDir}/manifest.json`);
+      console.log(
+        `  - Patches: ${data.artifactsDir}/patches/ (final diff: patches/final.diff.patch)`,
+      );
+      console.log(`  - Tool logs: ${data.artifactsDir}/tool_logs/`);
+      console.log(`  - Verification: ${data.artifactsDir}/verification/`);
     }
 
     console.log(pc.bold('\nNext steps:'));
+    if (data.nextSteps && data.nextSteps.length > 0) {
+      data.nextSteps.forEach((step) => console.log(`  - ${step}`));
+      return;
+    }
+
     if (data.runId) {
+      console.log(`  - Review the run report: ${pc.cyan(`orchestrator report ${data.runId}`)}`);
+    }
+    if (data.artifactsDir) {
       console.log(
-        `  - To review the full report, run: ${pc.cyan(`orchestrator report ${data.runId}`)}`,
+        `  - Review the final diff: ${pc.cyan(`${data.artifactsDir}/patches/final.diff.patch`)}`,
       );
     }
-    console.log(`  - To apply changes, commit them to your repository.`);
+    console.log(`  - Commit changes to your repository.`);
   }
 
   private renderFailure(data: OutputResult): void {
@@ -114,11 +128,21 @@ export class OutputRenderer {
 
     if (data.artifactsDir) {
       console.log(pc.bold('\nDiagnostics:'));
-      console.log(`  - Logs: ${data.artifactsDir}/logs/`);
-      console.log(`  - Verification reports: ${data.artifactsDir}/verification/`);
+      console.log(`  - Summary: ${data.artifactsDir}/summary.json`);
+      console.log(`  - Trace: ${data.artifactsDir}/trace.jsonl`);
+      console.log(`  - Tool logs: ${data.artifactsDir}/tool_logs/`);
+      console.log(`  - Verification artifacts: ${data.artifactsDir}/verification/`);
     }
 
     console.log(pc.bold('\nNext steps:'));
+    if (data.nextSteps && data.nextSteps.length > 0) {
+      data.nextSteps.forEach((step) => console.log(`  - ${step}`));
+      return;
+    }
+
+    if (data.runId) {
+      console.log(`  - Review the run report: ${pc.cyan(`orchestrator report ${data.runId}`)}`);
+    }
     console.log(`  - Try increasing the budget with the ${pc.cyan('--max-total-cost')} flag.`);
     console.log(`  - Try a different executor with the ${pc.cyan('--executor')} flag.`);
     console.log(`  - Run full tests with ${pc.cyan('--verify')}.`);

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { SearchEngine, SearchOptions, SearchResult, SearchMatch } from './types';
 import { RipgrepSearch } from './ripgrep';
 import { JsFallbackSearch } from './simple';
-import { objectHash } from 'ohash';
+import { hash } from 'ohash';
 import rfdc from 'rfdc';
 
 const deepClone = rfdc();
@@ -19,7 +19,7 @@ export class SearchService extends EventEmitter {
   }
 
   async search(options: SearchOptions): Promise<SearchResult> {
-    const cacheKey = objectHash(options);
+    const cacheKey = hash(options);
     if (this.searchCache.has(cacheKey)) {
       return deepClone(this.searchCache.get(cacheKey)!);
     }
@@ -45,9 +45,9 @@ export class SearchService extends EventEmitter {
     result.matches = this.processMatches(result.matches, options);
 
     this.emit('RepoSearchFinished', { stats: result.stats });
-    
+
     this.searchCache.set(cacheKey, deepClone(result));
-    
+
     return result;
   }
 

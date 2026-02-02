@@ -1,5 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
+import { readFileSync } from 'node:fs';
 
 /**
  * Normalizes a path to use forward slashes, which is the standard for Orchestrator.
@@ -74,7 +75,7 @@ export function isWSL(): boolean {
     if (os.platform() !== 'linux') {
       return false;
     }
-    const version = require('node:fs').readFileSync('/proc/version', 'utf8');
+    const version = readFileSync('/proc/version', 'utf8');
     return /microsoft/i.test(version);
   } catch {
     return false;

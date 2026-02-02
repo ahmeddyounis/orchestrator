@@ -82,5 +82,8 @@ const INJECTION_REGEX = new RegExp(INJECTION_PHRASES.map((p) => `\\b${p}\\b`).jo
  * @returns The filtered content with injection phrases removed.
  */
 export function filterInjectionPhrases(content: string): string {
-  return content.replace(INJECTION_REGEX, '[PROMPT INJECTION ATTEMPT DETECTED]');
+  let filtered = content.replace(INJECTION_REGEX, '[PROMPT INJECTION ATTEMPT DETECTED]');
+  // Also neutralize a small set of high-risk destructive command patterns.
+  filtered = filtered.replace(/rm\s+-rf\s+\/\s*/gi, '[PROMPT INJECTION ATTEMPT DETECTED]');
+  return filtered;
 }

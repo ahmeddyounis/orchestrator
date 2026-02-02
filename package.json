@@ -19,6 +19,8 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "guard:repo": "tsx scripts/guard_tracked_artifacts.ts",
+    "check": "pnpm guard:repo && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "release:check": "tsx scripts/release_check.ts"
   },
   "devDependencies": {

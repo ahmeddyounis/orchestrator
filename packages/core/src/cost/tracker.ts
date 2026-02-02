@@ -4,7 +4,7 @@ export interface ProviderUsageStats {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
-  estimatedCostUsd?: number | null;
+  estimatedCostUsd: number | null;
 }
 
 export interface CostSummary {
@@ -47,7 +47,7 @@ export class CostTracker {
       }
 
       if (hasPricing) {
-        stats.estimatedCostUsd = (stats.estimatedCostUsd || 0) + cost;
+        stats.estimatedCostUsd = (stats.estimatedCostUsd ?? 0) + cost;
       }
     }
   }

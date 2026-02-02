@@ -1,9 +1,5 @@
 import { Embedder } from '@orchestrator/adapters';
-import { SemanticIndexStore } from '../store';
-import { SemanticHit } from './types';
-
-import { Embedder } from '@orchestrator/adapters';
-import { EventBus } from '@orchestrator/shared';
+import type { EventBus } from '@orchestrator/shared';
 import { SemanticIndexStore } from '../store';
 import { SemanticHit } from './types';
 
@@ -49,15 +45,9 @@ export class SemanticSearchService {
   async search(query: string, topK: number, runId: string): Promise<SemanticHit[]> {
     const startTime = Date.now();
 
-    const queryEmbeddingResult = await this.embedder.embed({
-      texts: [query],
-      normalize: true,
-    });
-
-    if (!queryEmbeddingResult.embeddings || queryEmbeddingResult.embeddings.length === 0) {
-      return [];
-    }
-    const queryVector = queryEmbeddingResult.embeddings[0];
+    const queryVectors = await this.embedder.embedTexts([query], { normalize: true });
+    if (queryVectors.length === 0) return [];
+    const queryVector = new Float32Array(queryVectors[0]);
 
     const candidates = this.store.getAllChunksWithEmbeddings();
     const candidateCount = candidates.length;

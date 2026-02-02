@@ -138,7 +138,8 @@ describe('RepoScanner', () => {
     it('caches scan results', async () => {
       await createFiles({ 'a.txt': 'a' });
 
-      const readdirSpy = vi.spyOn(fs, 'readdir');
+      const readdirSpy = vi.fn(fs.readdir.bind(fs));
+      scanner = new RepoScanner({ ...fs, readdir: readdirSpy } as any);
 
       const snapshot1 = await scanner.scan(tmpDir);
       expect(snapshot1.files.map((f) => f.path)).toEqual(['a.txt']);
@@ -152,7 +153,8 @@ describe('RepoScanner', () => {
 
     it('busts cache if options change', async () => {
       await createFiles({ 'a.txt': 'a', 'b.log': 'log' });
-      const readdirSpy = vi.spyOn(fs, 'readdir');
+      const readdirSpy = vi.fn(fs.readdir.bind(fs));
+      scanner = new RepoScanner({ ...fs, readdir: readdirSpy } as any);
 
       await scanner.scan(tmpDir);
       expect(readdirSpy).toHaveBeenCalledTimes(1);

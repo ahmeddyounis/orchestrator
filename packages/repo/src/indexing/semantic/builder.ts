@@ -1,12 +1,12 @@
-import { stat } from 'fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'path';
 
 import { Embedder } from '@orchestrator/adapters';
-import { RepoScanner, RepoFileMeta } from '../../scanner';
+import { RepoScanner } from '../../scanner';
 import { hashFile } from '../hasher';
 import { SemanticChunker } from './chunker';
 import { SemanticIndexStore } from './store';
-import { SemanticChunk, FileInput } from './types';
+import { FileInput } from './types';
 import { getLanguageForFile } from '../../tree-sitter';
 import { emitter } from '../../events';
 
@@ -63,7 +63,7 @@ export class SemanticIndexBuilder {
         sizeBytes: fileStat.size,
       });
 
-      const content = await this.scanner.fs.readFile(filePath, 'utf-8');
+      const content = await readFile(filePath, 'utf-8');
       const fileInput: FileInput = {
         path: file.path,
         content,
@@ -81,11 +81,11 @@ export class SemanticIndexBuilder {
       this.store.replaceChunksForFile(file.path, chunks);
 
       const contentsToEmbed = chunks.map((c) => c.content);
-      const embeddings = await config.embedder.embed(contentsToEmbed);
+      const embeddings = await config.embedder.embedTexts(contentsToEmbed);
 
       const embeddingMap = new Map<string, Float32Array>();
       for (let i = 0; i < chunks.length; i++) {
-        embeddingMap.set(chunks[i].chunkId, embeddings[i]);
+        embeddingMap.set(chunks[i].chunkId, new Float32Array(embeddings[i]));
       }
       this.store.upsertEmbeddings(embeddingMap);
       chunksEmbedded += chunks.length;
@@ -95,7 +95,8 @@ export class SemanticIndexBuilder {
       }
     }
 
-    const { id: embedderId, dimensions: dims } = config.embedder.spec();
+    const embedderId = config.embedder.id();
+    const dims = config.embedder.dims();
     const now = Date.now();
     this.store.setMeta({
       repoId: config.repoId,

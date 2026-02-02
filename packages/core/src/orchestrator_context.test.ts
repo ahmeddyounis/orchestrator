@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Orchestrator } from './orchestrator';
 import { ProviderRegistry } from './registry';
 import { Config, ConfigSchema } from '@orchestrator/shared';
-import { createRunDir, writeManifest } from '@orchestrator/shared';
+import { createRunDir, writeManifest, updateManifest } from '@orchestrator/shared';
 import { GitService, SnippetExtractor, SimpleContextPacker } from '@orchestrator/repo';
 import fs from 'fs/promises';
 import path from 'path';
@@ -22,6 +22,16 @@ vi.mock('@orchestrator/shared', async (importOriginal) => {
     ...actual,
     createRunDir: vi.fn(),
     writeManifest: vi.fn(),
+    updateManifest: vi.fn(async (_manifestPath: string, updater: (manifest: any) => void) => {
+      const manifest: any = {
+        patchPaths: [],
+        contextPaths: [],
+        toolLogPaths: [],
+        verificationPaths: [],
+      };
+      updater(manifest);
+      return manifest;
+    }),
     JsonlLogger: MockJsonlLogger,
   };
 });
@@ -91,7 +101,10 @@ vi.mock('./exec/service', () => {
 
 describe('Orchestrator Context Integration', () => {
   let orchestrator: Orchestrator;
-  const mockGit = {};
+  const mockGit = {
+    getHeadSha: vi.fn().mockResolvedValue('HEAD'),
+    diff: vi.fn().mockResolvedValue(''),
+  };
   const mockRegistry = {
     getAdapter: vi.fn(),
     resolveRoleProviders: vi.fn(),
@@ -191,11 +204,10 @@ describe('Orchestrator Context Integration', () => {
     expect(systemPrompt).toContain(writtenPrompt);
 
     // 4. Verify Manifest includes context paths
-    const manifestCalls = (writeManifest as ReturnType<typeof vi.fn>).mock.calls;
-    const lastManifestCall = manifestCalls[manifestCalls.length - 1];
-
-    expect(lastManifestCall).toBeDefined();
-    expect(lastManifestCall[1].contextPaths).toEqual(
+    const updateResults = (updateManifest as unknown as ReturnType<typeof vi.fn>).mock.results;
+    expect(updateResults.length).toBeGreaterThan(0);
+    const updatedManifest = await updateResults[updateResults.length - 1].value;
+    expect(updatedManifest.contextPaths).toEqual(
       expect.arrayContaining([expectedJsonPath, expectedTxtPath]),
     );
   });

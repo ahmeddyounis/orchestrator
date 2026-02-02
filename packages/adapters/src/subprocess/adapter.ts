@@ -122,6 +122,11 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
 
       // Only clear outputText if pm.isRunning after initial read
       // Non-interactive processes exit and their output is the response
+      // Some non-interactive commands may print a "prompt-looking" marker right before exiting;
+      // give them a brief window to exit before treating them as interactive.
+      if (pm.isRunning) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
       if (pm.isRunning) {
         outputText = '';
       }
@@ -150,14 +155,22 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
         throw new TimeoutError('Process timed out');
       }
 
-      // Strip trailing prompt marker. Let's do this more robustly.
-      // The `isPrompt` check can be stateful (e.g. on newline boundaries).
-      // A simple trim might be insufficient. The pattern should handle this.
-      // For now, we assume the prompt is at the end.
-      outputText = outputText.trim();
-      const match = outputText.match(this.compatibilityProfile.promptDetectionPattern);
-      if (match && outputText.endsWith(match[0])) {
-        outputText = outputText.slice(0, outputText.length - match[0].length).trim();
+      // Strip trailing prompt marker (if present) from the transcript.
+      outputText = outputText.trimEnd();
+      const lines = outputText.split('\n');
+      while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+        lines.pop();
+      }
+
+      const lastLine = lines.length > 0 ? lines[lines.length - 1] : '';
+      if (lastLine && this.isPrompt(lastLine)) {
+        lines.pop();
+        while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+          lines.pop();
+        }
+        outputText = lines.join('\n').trimEnd();
+      } else {
+        outputText = outputText.trim();
       }
     } catch (e) {
       const err = e as Error;

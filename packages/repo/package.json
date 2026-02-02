@@ -10,12 +10,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
   },
   "devDependencies": {
     "@orchestrator/memory": "workspace:*",
-    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^25.1.0",
     "memfs": "^4.56.10",
     "tree-sitter": "^0.22.4",
@@ -27,8 +26,8 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@orchestrator/adapters": "workspace:*",
     "@orchestrator/shared": "workspace:*",
-    "better-sqlite3": "^11.1.2",
     "ignore": "^7.0.5",
     "is-binary-path": "^3.0.0",
     "ohash": "^2.0.11",

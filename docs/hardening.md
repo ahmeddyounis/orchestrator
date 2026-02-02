@@ -9,6 +9,7 @@ Each step links to the corresponding section in the [Threat Model & Safety Basel
 Apply these settings in your `.orchestrator/config.yaml` to establish a strong security baseline.
 
 - [ ] **Disable Automatic Tool Execution:** Ensure all tool executions require manual confirmation. This is the single most important control to prevent unintended actions.
+
   ```yaml
   # .orchestrator/config.yaml
   tools:
@@ -20,6 +21,7 @@ Apply these settings in your `.orchestrator/config.yaml` to establish a strong s
   ```
 
 - [ ] **Deny Network Access:** Block the agent from making any network requests by default. If specific domains are required for a task, create a temporary, scoped configuration file.
+
   ```yaml
   # .orchestrator/config.yaml
   security:
@@ -27,6 +29,7 @@ Apply these settings in your `.orchestrator/config.yaml` to establish a strong s
   ```
 
 - [ ] **Disable Long-Term Memory:** Prevent the agent from persisting embeddings of your code and conversations, which could be a data exfiltration risk if the memory store is compromised.
+
   ```yaml
   # .orchestrator/config.yaml
   memory:
@@ -34,6 +37,7 @@ Apply these settings in your `.orchestrator/config.yaml` to establish a strong s
   ```
 
 - [ ] **Restrict Environment Variable Access:** Do not allow the agent to access any environment variables unless absolutely necessary. Maintain an explicit, minimal allowlist.
+
   ```yaml
   # .orchestrator/config.yaml
   security:
@@ -93,15 +97,15 @@ security:
 # By default, .gitignore is respected. You can add more here.
 context:
   ignore:
-    - "**/node_modules/**"
-    - "**/dist/**"
-    - "**/.turbo/**"
+    - '**/node_modules/**'
+    - '**/dist/**'
+    - '**/.turbo/**'
 
 # Recommended for monorepos to improve context quality.
 providers:
   # Use a model with a large context window.
   # Ensure your adapter configuration is secure.
   default:
-    adapter: "gemini" # or another trusted adapter
-    model: "gemini-1.5-pro-latest"
+    adapter: 'gemini' # or another trusted adapter
+    model: 'gemini-1.5-pro-latest'
 ```

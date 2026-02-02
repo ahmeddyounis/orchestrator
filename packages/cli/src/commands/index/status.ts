@@ -2,9 +2,10 @@ import { Command } from 'commander';
 import { getIndexStatus, findRepoRoot, SemanticIndexStore } from '@orchestrator/repo';
 import { GlobalOptions } from '../../types';
 import { printTable } from '../../output';
-import { ConfigLoader } from '@orchestrator/core';
+import { ConfigLoader, type DeepPartial } from '@orchestrator/core';
 import path from 'node:path';
 import { statSync } from 'node:fs';
+import type { Config } from '@orchestrator/shared';
 
 export function registerIndexStatusCommand(parent: Command) {
   parent
@@ -18,7 +19,7 @@ export function registerIndexStatusCommand(parent: Command) {
       }
       const globalOpts = program!.opts() as GlobalOptions;
 
-      const flags: Record<string, unknown> = {};
+      const flags: DeepPartial<Config> = {};
       if (options.semantic) {
         flags.indexing = { semantic: { enabled: true } };
       }
@@ -26,7 +27,7 @@ export function registerIndexStatusCommand(parent: Command) {
       const repoRoot = await findRepoRoot();
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
-        repoRoot,
+        cwd: repoRoot,
         flags,
       });
 
@@ -37,7 +38,9 @@ export function registerIndexStatusCommand(parent: Command) {
           process.exit(1);
         }
 
-        const dbPath = path.resolve(repoRoot, semanticConfig.path);
+        const dbPath = path.isAbsolute(semanticConfig.storage.path)
+          ? semanticConfig.storage.path
+          : path.join(repoRoot, semanticConfig.storage.path);
         try {
           statSync(dbPath);
         } catch {
@@ -80,7 +83,11 @@ export function registerIndexStatusCommand(parent: Command) {
       }
 
       // Procedural index status
-      const status = await getIndexStatus({ repoRoot, config });
+      const status = await getIndexStatus({
+        ...config,
+        rootDir: repoRoot,
+        orchestratorDir: path.join(repoRoot, '.orchestrator'),
+      });
 
       if (globalOpts.json) {
         console.log(JSON.stringify(status, null, 2));

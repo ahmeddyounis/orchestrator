@@ -61,6 +61,12 @@ export function createMemoryStore(): MemoryStore {
   let crypto: Crypto | null = null;
   let isEncrypted = false;
 
+  const toSafeFtsQuery = (raw: string): string => {
+    const tokens = raw.match(/[a-zA-Z0-9_]+/g);
+    if (!tokens || tokens.length === 0) return '';
+    return tokens.map((t) => `"${t}"`).join(' AND ');
+  };
+
   const init = (options: MemoryStoreOptions): void => {
     if (options.encryption?.encryptAtRest) {
       if (!options.encryption.key) {
@@ -314,6 +320,11 @@ export function createMemoryStore(): MemoryStore {
   const search = (repoId: string, query: string, options: LexicalSearchOptions): LexicalHit[] => {
     if (!db) throw new MemoryError('Database not initialized');
 
+    const safeQuery = toSafeFtsQuery(query);
+    if (!safeQuery) {
+      return [];
+    }
+
     const topK = options.topK ?? 10;
     const stmt = db.prepare(
       `
@@ -327,7 +338,7 @@ export function createMemoryStore(): MemoryStore {
     `,
     );
 
-    const rows = stmt.all(query, repoId, topK) as unknown as (MemoryEntryDbRow & {
+    const rows = stmt.all(safeQuery, repoId, topK) as unknown as (MemoryEntryDbRow & {
       score: number;
     })[];
     const entries = rows.map(rowToLexicalHit);

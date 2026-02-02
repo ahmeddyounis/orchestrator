@@ -1,15 +1,11 @@
 import { Command } from 'commander';
-import { IndexBuilder, findRepoRoot, SemanticIndexBuilder } from '@orchestrator/repo';
-import { ConfigLoader, reconcileMemoryStaleness, emitter } from '@orchestrator/core';
+import path from 'node:path';
+import { IndexBuilder, findRepoRoot, SemanticIndexBuilder, emitter } from '@orchestrator/repo';
+import { ConfigLoader, reconcileMemoryStaleness, type DeepPartial } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
-import {
-  OrchestratorEvent,
-  SemanticIndexBuildFinishedEvent,
-  SemanticIndexingConfig,
-} from '@orchestrator/shared';
+import type { Config } from '@orchestrator/shared';
 import { GlobalOptions } from '../../types';
 import { statSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { createEmbedder } from '@orchestrator/adapters';
 
 export function registerIndexBuildCommand(parent: Command) {
@@ -25,15 +21,10 @@ export function registerIndexBuildCommand(parent: Command) {
       }
       const globalOpts = program!.opts() as GlobalOptions;
 
-      const events: OrchestratorEvent[] = [];
-      emitter.on('*', (type, event) => {
-        events.push(event as OrchestratorEvent);
-      });
-
       const repoRoot = await findRepoRoot();
-      const repoId = createHash('sha256').update(repoRoot).digest('hex');
+      const repoId = repoRoot;
 
-      const flags: Record<string, unknown> = {};
+      const flags: DeepPartial<Config> = {};
       if (options.semantic) {
         flags.indexing = { semantic: { enabled: true } };
       }
@@ -41,8 +32,7 @@ export function registerIndexBuildCommand(parent: Command) {
         flags.indexing = {
           ...flags.indexing,
           semantic: {
-            // @ts-expect-error - flags is a dynamic object
-            ...flags.indexing?.semantic,
+            ...(flags.indexing?.semantic ?? {}),
             embeddings: {
               provider: options.semanticEmbedder,
             },
@@ -52,6 +42,7 @@ export function registerIndexBuildCommand(parent: Command) {
 
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
+        cwd: repoRoot,
         flags,
       });
 
@@ -60,7 +51,6 @@ export function registerIndexBuildCommand(parent: Command) {
       });
 
       const startTime = Date.now();
-      const runId = startTime.toString();
       const index = await builder.build(repoRoot);
       const durationMs = Date.now() - startTime;
 
@@ -68,11 +58,21 @@ export function registerIndexBuildCommand(parent: Command) {
       let clearedStaleCount = 0;
 
       if (config.memory.enabled) {
-        const dbPath = config.memory.storage.path;
+        const dbPath = path.isAbsolute(config.memory.storage.path)
+          ? config.memory.storage.path
+          : path.join(repoRoot, config.memory.storage.path);
         try {
           statSync(dbPath);
           const memoryStore = createMemoryStore();
-          memoryStore.init(dbPath);
+          const keyEnvVar = config.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
+          const key = process.env[keyEnvVar] ?? '';
+          memoryStore.init({
+            dbPath,
+            encryption: {
+              encryptAtRest: config.memory.storage.encryptAtRest ?? false,
+              key,
+            },
+          });
           const stalenessResult = await reconcileMemoryStaleness(repoId, index, memoryStore);
           markedStaleCount = stalenessResult.markedStaleCount;
           clearedStaleCount = stalenessResult.clearedStaleCount;
@@ -82,26 +82,33 @@ export function registerIndexBuildCommand(parent: Command) {
         }
       }
 
-      let semanticResult: SemanticIndexBuildFinishedEvent['payload'] | undefined;
-      if (options.semantic || config.indexing?.semantic?.enabled) {
-        if (!config.indexing?.semantic?.embeddings) {
-          throw new Error('Semantic indexing is enabled, but no embedder is configured.');
+      type SemanticBuildResult = {
+        repoId: string;
+        filesProcessed: number;
+        chunksEmbedded: number;
+        durationMs: number;
+      };
+
+      let semanticResult: SemanticBuildResult | undefined;
+      const semanticConfig = config.indexing?.semantic;
+      if (options.semantic || semanticConfig?.enabled) {
+        if (!semanticConfig) {
+          throw new Error('Semantic indexing is enabled, but no semantic config is present.');
         }
 
-        const finishPromise = new Promise<SemanticIndexBuildFinishedEvent['payload']>((resolve) => {
+        const finishPromise = new Promise<SemanticBuildResult>((resolve) => {
           emitter.once('semanticIndexBuildFinished', (event) => {
-            resolve(event.payload);
+            resolve(event);
           });
         });
 
-        const semanticConfig = config.indexing.semantic as SemanticIndexingConfig;
         const embedder = createEmbedder(semanticConfig.embeddings);
         const semanticBuilder = new SemanticIndexBuilder();
         await semanticBuilder.build({
           repoId,
           repoRoot,
           embedder,
-          runId,
+          maxFileSizeBytes: config.indexing?.maxFileSizeBytes,
         });
         semanticResult = await finishPromise;
       }
@@ -113,7 +120,6 @@ export function registerIndexBuildCommand(parent: Command) {
             markedStale: markedStaleCount,
             clearedStale: clearedStaleCount,
           },
-          events,
         };
         if (semanticResult) {
           output.semanticResult = semanticResult;
@@ -131,10 +137,9 @@ export function registerIndexBuildCommand(parent: Command) {
         }
         if (semanticResult) {
           console.log(`\nSemantic index built successfully.`);
-          console.log(`  - Scanned ${semanticResult.filesScanned} files`);
-          console.log(`  - Affected ${semanticResult.filesAffected} files`);
-          console.log(`  - Created ${semanticResult.chunksCreated} chunks`);
-          console.log(`  - Computed ${semanticResult.embeddingsComputed} embeddings`);
+          console.log(`  - Processed ${semanticResult.filesProcessed} files`);
+          console.log(`  - Embedded ${semanticResult.chunksEmbedded} chunks`);
+          console.log(`  - Took ${semanticResult.durationMs}ms`);
         }
       }
     });

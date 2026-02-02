@@ -138,9 +138,7 @@ describe('OpenAIAdapter', () => {
   });
 
   it('maps RateLimitError', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const error = new (APIError as any)('Rate limit', 429);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (error as any).status = 429;
 
     mockCreate.mockRejectedValue(error);
@@ -150,7 +148,6 @@ describe('OpenAIAdapter', () => {
   });
 
   it('maps TimeoutError', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const error = new (APIConnectionTimeoutError as any)('Timeout');
     mockCreate.mockRejectedValue(error);
     await expect(
