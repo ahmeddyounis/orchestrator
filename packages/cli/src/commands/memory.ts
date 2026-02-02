@@ -25,14 +25,14 @@ function getRepoId(repoRoot: string): string {
   return repoRoot;
 }
 
-async function openStore(): Promise<{
+async function openStore(configPath?: string): Promise<{
   store: MemoryStore;
   config: Config;
   repoRoot: string;
   repoId: string;
 }> {
   const repoRoot = await findRepoRoot();
-  const config = ConfigLoader.load({ cwd: repoRoot });
+  const config = ConfigLoader.load({ cwd: repoRoot, configPath });
 
   if (!config.memory.enabled) {
     console.error('Memory is not enabled in the configuration.');
@@ -89,8 +89,8 @@ function createVectorBackend(config: Config, repoRoot: string): VectorMemoryBack
   return VectorBackendFactory.fromConfig({ backend: v.backend }, v.remoteOptIn);
 }
 
-async function status(options: { json?: boolean }) {
-  const { store, config, repoRoot, repoId } = await openStore();
+async function status(options: { json?: boolean }, configPath?: string) {
+  const { store, config, repoRoot, repoId } = await openStore(configPath);
   try {
     const status = store.status(repoId);
     const retrievalMode = config.memory.retrieval.mode;
@@ -181,13 +181,16 @@ async function status(options: { json?: boolean }) {
   }
 }
 
-async function list(options: {
-  type?: MemoryEntryType;
-  limit?: number;
-  json?: boolean;
-  staleOnly?: boolean;
-}) {
-  const { store, repoId } = await openStore();
+async function list(
+  options: {
+    type?: MemoryEntryType;
+    limit?: number;
+    json?: boolean;
+    staleOnly?: boolean;
+  },
+  configPath?: string,
+) {
+  const { store, repoId } = await openStore(configPath);
   try {
     let entries = store.list(repoId, options.type, options.limit);
 
@@ -214,8 +217,8 @@ async function list(options: {
   }
 }
 
-async function show(id: string, options: { json?: boolean }) {
-  const { store } = await openStore();
+async function show(id: string, options: { json?: boolean }, configPath?: string) {
+  const { store } = await openStore(configPath);
   try {
     const entry = store.get(id);
 
@@ -254,8 +257,8 @@ async function show(id: string, options: { json?: boolean }) {
   }
 }
 
-async function wipe(options: { yes?: boolean }) {
-  const { store, config, repoRoot, repoId } = await openStore();
+async function wipe(options: { yes?: boolean }, configPath?: string) {
+  const { store, config, repoRoot, repoId } = await openStore(configPath);
   try {
     if (!options.yes) {
       const inquirer = await import('inquirer');
@@ -291,13 +294,16 @@ async function wipe(options: { yes?: boolean }) {
   }
 }
 
-async function reembed(options: {
-  limit?: number;
-  type?: MemoryEntryType | 'all';
-  forceAll?: boolean;
-  dryRun?: boolean;
-}) {
-  const { store, config, repoRoot, repoId } = await openStore();
+async function reembed(
+  options: {
+    limit?: number;
+    type?: MemoryEntryType | 'all';
+    forceAll?: boolean;
+    dryRun?: boolean;
+  },
+  configPath?: string,
+) {
+  const { store, config, repoRoot, repoId } = await openStore(configPath);
   try {
     if (!config.memory.vector.enabled) {
       console.error('Vector memory is not enabled in the configuration.');
@@ -379,8 +385,9 @@ async function search(
     topk?: number;
     json?: boolean;
   },
+  configPath?: string,
 ) {
-  const { store, config, repoRoot, repoId } = await openStore();
+  const { store, config, repoRoot, repoId } = await openStore(configPath);
   try {
     const mode = options.mode ?? config.memory.retrieval.mode ?? 'lexical';
     const topKFinal = options.topk ?? 5;
@@ -447,7 +454,7 @@ export function registerMemoryCommand(program: Command) {
     .command('status')
     .description('Show memory status.')
     .option('--json', 'Output as JSON.')
-    .action(status);
+    .action((options) => status(options, program.opts().config));
 
   memoryCommand
     .command('list')
@@ -456,19 +463,19 @@ export function registerMemoryCommand(program: Command) {
     .option('--limit <n>', 'Limit number of results.', parseInt)
     .option('--stale-only', 'Only show stale entries.')
     .option('--json', 'Output as JSON.')
-    .action(list);
+    .action((options) => list(options, program.opts().config));
 
   memoryCommand
     .command('show <id>')
     .description('Show a specific memory entry.')
     .option('--json', 'Output as JSON.')
-    .action(show);
+    .action((id, options) => show(id, options, program.opts().config));
 
   memoryCommand
     .command('wipe')
     .description('Wipe all memory for the current repository.')
     .option('--yes', 'Skip confirmation prompt.')
-    .action(wipe);
+    .action((options) => wipe(options, program.opts().config));
 
   memoryCommand
     .command('reembed')
@@ -481,7 +488,7 @@ export function registerMemoryCommand(program: Command) {
     )
     .option('--force-all', 'Re-embed all entries, even those with existing vectors.')
     .option('--dry-run', 'Show how many entries would be re-embedded without actually doing it.')
-    .action(reembed);
+    .action((options) => reembed(options, program.opts().config));
 
   memoryCommand
     .command('search <query>')
@@ -489,5 +496,5 @@ export function registerMemoryCommand(program: Command) {
     .option('--mode <mode>', 'Search mode (lexical, vector, hybrid).')
     .option('--topk <n>', 'Limit number of results.', parseInt)
     .option('--json', 'Output as JSON.')
-    .action(search);
+    .action((query, options) => search(query, options, program.opts().config));
 }

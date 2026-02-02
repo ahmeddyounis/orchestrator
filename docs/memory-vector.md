@@ -16,11 +16,13 @@ If vector search fails in `hybrid` mode (e.g., the vector database is unavailabl
 
 ## Embeddings
 
-Vector search relies on "embeddings," which are numerical representations (vectors) of your code and queries. The orchestrator can generate these embeddings in two ways, configured via `memory.embeddings.provider`:
+Vector search relies on "embeddings," which are numerical representations (vectors) of your code and queries.
+
+Embeddings are configured via `memory.vector.embedder` (for example: `memory.vector.embedder.provider`).
 
 1.  **`local-hash` (Default):** A simple, fast, and entirely local method that generates a hash-based representation. This does not require any external services or API keys. It provides basic semantic capabilities but is less sophisticated than provider-based embeddings.
 
-2.  **Provider-based (e.g., `openai`, `anthropic`):** Uses an external embedding model from a provider like OpenAI. This produces much higher-quality embeddings, leading to better search results. However, it requires sending content to a third-party API and may incur costs.
+2.  **Provider-based (`openai`):** Uses an external embedding model from OpenAI. This produces higher-quality embeddings, leading to better search results. However, it requires sending content to a third-party API and may incur costs.
 
 ### Privacy and Data Storage
 
@@ -49,19 +51,18 @@ The orchestrator supports different backends for storing vectors, configured via
 
 This is the default backend. It's self-contained and stores all vectors in a single file on your local disk (`.orchestrator/memory_vectors.sqlite`). It's the simplest way to get started with vector memory.
 
-**Configuration (`.orchestrator.jsonc`):**
+**Configuration (`.orchestrator.yaml`):**
 
-```jsonc
-{
-  "memory": {
-    "retrieval": {
-      "mode": "hybrid",
-    },
-    "vector": {
-      "backend": "sqlite",
-    },
-  },
-}
+```yaml
+memory:
+  enabled: true
+  retrieval:
+    mode: hybrid
+  vector:
+    enabled: true
+    backend: sqlite
+    embedder:
+      provider: local-hash
 ```
 
 ### `qdrant`
@@ -70,31 +71,28 @@ This is the default backend. It's self-contained and stores all vectors in a sin
 
 **WARNING:** Using a remote Qdrant instance requires your explicit consent, as vector data will be sent over the network.
 
-**Configuration (`.orchestrator.jsonc`):**
+**Configuration (`.orchestrator.yaml`):**
 
-```jsonc
-{
-  "memory": {
-    "retrieval": {
-      "mode": "hybrid",
-    },
-    "vector": {
-      "backend": "qdrant",
-      // Required for remote backends
-      "remoteOptIn": true,
-      "qdrant": {
-        "url": "http://localhost:6333", // Your Qdrant instance URL
-        "collectionName": "my-project-repo",
-      },
-    },
-  },
-}
+```yaml
+memory:
+  enabled: true
+  retrieval:
+    mode: hybrid
+  vector:
+    enabled: true
+    backend: qdrant
+    remoteOptIn: true
+    embedder:
+      provider: local-hash
+    qdrant:
+      url: http://localhost:6333
+      collection: my-project-repo
 ```
 
 You can enable this from the CLI:
 
 ```sh
-gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-opt-in ...
+orchestrator run "…" --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-opt-in
 ```
 
 ### `chroma`
@@ -103,25 +101,22 @@ gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-o
 
 **WARNING:** Using a remote Chroma instance requires your explicit consent, as vector data will be sent over the network.
 
-**Configuration (`.orchestrator.jsonc`):**
+**Configuration (`.orchestrator.yaml`):**
 
-```jsonc
-{
-  "memory": {
-    "retrieval": {
-      "mode": "hybrid",
-    },
-    "vector": {
-      "backend": "chroma",
-      // Required for remote backends
-      "remoteOptIn": true,
-      "chroma": {
-        "url": "http://localhost:8000", // Your Chroma instance URL
-        "collectionName": "my-project-repo",
-      },
-    },
-  },
-}
+```yaml
+memory:
+  enabled: true
+  retrieval:
+    mode: hybrid
+  vector:
+    enabled: true
+    backend: chroma
+    remoteOptIn: true
+    embedder:
+      provider: local-hash
+    chroma:
+      url: http://localhost:8000
+      collection: my-project-repo
 ```
 
 ### `pgvector`
@@ -130,24 +125,21 @@ gemini run --memory-mode hybrid --memory-vector-backend qdrant --memory-remote-o
 
 **WARNING:** Using a remote PostgreSQL instance requires your explicit consent, as vector data will be sent over the network.
 
-**Configuration (`.orchestrator.jsonc`):**
+**Configuration (`.orchestrator.yaml`):**
 
-```jsonc
-{
-  "memory": {
-    "retrieval": {
-      "mode": "hybrid",
-    },
-    "vector": {
-      "backend": "pgvector",
-      // Required for remote backends
-      "remoteOptIn": true,
-      "pgvector": {
-        "connectionStringEnv": "DATABASE_URL", // Environment variable with the connection string
-      },
-    },
-  },
-}
+```yaml
+memory:
+  enabled: true
+  retrieval:
+    mode: hybrid
+  vector:
+    enabled: true
+    backend: pgvector
+    remoteOptIn: true
+    embedder:
+      provider: local-hash
+    pgvector:
+      connectionStringEnv: DATABASE_URL
 ```
 
 ## Backfilling and Wiping
@@ -156,23 +148,22 @@ When you first enable vector memory, the database is empty. You need to populate
 
 ### Backfilling
 
-The `memory embed` command processes your repository, generates embeddings, and stores them in the configured vector backend.
+The `memory reembed` command generates embeddings and backfills missing vectors into the configured vector backend.
 
 ```sh
-# Embed all files that don't have embeddings yet
-gemini memory embed
+# Embed entries that don't have vectors yet
+orchestrator memory reembed
 
 # Force re-embedding for all files
-gemini memory embed --force-all
+orchestrator memory reembed --force-all
 ```
 
 ### Wiping
 
-The `memory wipe` command can be used to clear memory entries. By default, it clears the lexical memory index. To clear the vector memory, you must provide the `--vector` flag.
+The `memory wipe` command clears memory entries for the current repository. If vector memory is enabled, it also wipes the vector backend entries for the repo.
 
 ```sh
-# Wipe both lexical and vector memory for the current repo
-gemini memory wipe --vector
+orchestrator memory wipe
 ```
 
 ## Troubleshooting

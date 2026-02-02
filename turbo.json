@@ -1,6 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["tsconfig.base.json"],
+  "globalDependencies": [
+    "pnpm-lock.yaml",
+    "tsconfig.base.json",
+    "eslint.config.mjs",
+    "vitest.config.ts",
+    ".prettierrc",
+    ".prettierignore"
+  ],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
@@ -9,7 +16,14 @@
     "test": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
-      "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts", "test/**/*.tsx"]
+      "inputs": [
+        "package.json",
+        "tsconfig.json",
+        "src/**/*.tsx",
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "test/**/*.tsx"
+      ]
     },
     "lint": {},
     "lint:fix": {},

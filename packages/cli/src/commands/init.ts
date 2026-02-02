@@ -9,7 +9,7 @@ const defaultConfig = `
 # Orchestrator Configuration File
 # For more information, see: https://github.com/moonrise-inc/orchestrator/blob/main/docs/config.md
 
-version: 1
+configVersion: 1
 
 # Default providers to use for different agentic steps.
 # Must match a key in the 'providers' section below.
@@ -23,14 +23,14 @@ providers:
   openai:
     type: openai
     # We recommend using environment variables for API keys.
-    # apiKey: "sk-..."
-    apiKeyFromEnv: OPENAI_API_KEY
+    # api_key: "sk-..."
+    api_key_env: OPENAI_API_KEY
     # You can specify a default model for each provider.
     model: gpt-4-turbo
 
   # anthropic:
   #   type: anthropic
-  #   apiKeyFromEnv: ANTHROPIC_API_KEY
+  #   api_key_env: ANTHROPIC_API_KEY
   #   model: claude-3-opus-20240229
 
 # Settings for the agent execution environment.

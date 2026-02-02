@@ -7,7 +7,7 @@ The Orchestrator includes a powerful evaluation harness that lets you test its p
 To run an evaluation, use the `eval` command and point it to a "suite" file.
 
 ```bash
-orchestrator eval --suite <path-to-your-suite.json>
+orchestrator eval <path-to-your-suite.json>
 ```
 
 The orchestrator comes with a default suite to get you started.
@@ -38,14 +38,25 @@ A suite is a JSON file with a `name` and a list of `tasks`.
 
 ```json
 {
+  "schemaVersion": 1,
   "name": "My Custom Suite",
   "tasks": [
     {
       "id": "my-first-task",
+      "title": "My first task",
       "repo": {
         "fixturePath": "path/to/my/fixture"
       },
       "goal": "Add a function to add two numbers",
+      "command": "run",
+      "verification": {
+        "enabled": false,
+        "mode": "auto"
+      },
+      "tools": {
+        "enabled": true,
+        "requireConfirmation": false
+      },
       "successCriteria": [
         {
           "name": "file_contains",
@@ -65,6 +76,7 @@ A suite is a JSON file with a `name` and a list of `tasks`.
 - `"id"`: A unique name for your task.
 - `"fixturePath"`: The path to the directory containing the starting code for the task.
 - `"goal"`: The prompt to give the orchestrator.
+- `"command"`: Currently only `"run"` is supported.
 - `"successCriteria"`: The conditions for success.
 
 ### Success Criteria
@@ -76,7 +88,7 @@ You can use several types of criteria to check for success:
   - `"substring"`: The string to look for.
 - `"script_exit"`: Runs a command and checks its exit code.
   - `"command"`: The command to run (e.g., `pnpm test`).
-  - `"expectedCode"`: The expected exit code (usually `0`).
+  - `"expectedExitCode"`: The expected exit code (usually `0`).
 - `"verification_pass"`: Checks if the orchestrator's built-in verification step passed.
 
 ## Interpreting Results

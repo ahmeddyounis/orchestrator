@@ -20,7 +20,7 @@ export const SemanticIndexingConfigSchema = z
       }),
     embeddings: z
       .object({
-        provider: z.enum(['openai', 'anthropic', 'google', 'local-hash']).default('local-hash'),
+        provider: z.enum(['openai', 'local-hash']).default('local-hash'),
         model: z.string().optional(),
         dims: z.number().default(384),
         batchSize: z.number().default(32),

@@ -19,31 +19,44 @@ npm install -g @orchestrator/cli
 
 Before you can run the orchestrator, you need to configure your API provider and other settings.
 
-1.  Create a configuration file at `~/.orchestrator/config.json`:
+### Option A: Create a repo config (recommended)
 
-    ```bash
-    mkdir -p ~/.orchestrator
-    touch ~/.orchestrator/config.json
-    ```
+From the root of your repository:
 
-2.  Add your provider configuration. For example, to use Gemini, you would add:
+```bash
+orchestrator init
+```
 
-    ```json
-    {
-      "providers": {
-        "gemini": {
-          "apiKey": "YOUR_API_KEY"
-        }
-      },
-      "defaults": {
-        "model": "gemini-1.5-pro-latest"
-      }
-    }
-    ```
+This creates `.orchestrator.yaml` and guides you through next steps.
 
-    Replace `"YOUR_API_KEY"` with your actual API key.
+### Option B: Create a user config
 
-For more details on configuration, see the [Configuration Reference](config.md).
+Create `~/.orchestrator/config.yaml`:
+
+```bash
+mkdir -p ~/.orchestrator
+cat > ~/.orchestrator/config.yaml <<'YAML'
+configVersion: 1
+
+defaults:
+  planner: openai
+  executor: openai
+
+providers:
+  openai:
+    type: openai
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY
+YAML
+```
+
+Then set your API key:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+For more details, see the [Configuration Reference](config.md).
 
 ## 3. Indexing your Project
 
@@ -52,7 +65,7 @@ The orchestrator needs to build an index of your codebase to understand it.
 Run the following command in the root of your project:
 
 ```bash
-orchestrator index
+orchestrator index build
 ```
 
 This command may take a few minutes, depending on the size of your project. It will analyze your files and create an index in the `.orchestrator/` directory of your project.

@@ -11,7 +11,7 @@ const EvalTaskSchema = z.object({
     ref: z.string().optional(),
   }),
   goal: z.string(),
-  command: z.enum(['run', 'fix']),
+  command: z.literal('run'),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'auto']).optional(),
   budgets: z
     .object({

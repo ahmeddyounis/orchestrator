@@ -19,7 +19,7 @@ A good bug report is detailed and reproducible. Please include the following inf
 
 Logs are essential for debugging. Please include the relevant logs from your run.
 
-- **Run Log**: The main log file for a specific run is located in `.orchestrator/logs/`. Find the log file corresponding to the timestamp of your run and attach it to the issue.
+- **Run Artifacts**: Each run writes artifacts under `.orchestrator/runs/<runId>/` (including `trace.jsonl`, `summary.json`, and `manifest.json`).
 - **Sanitize Logs**: Before posting logs, please review them and remove any sensitive information, such as API keys, file paths, or proprietary code.
 
 ### 3. Create an Export Bundle
@@ -47,8 +47,8 @@ If possible, create a small, self-contained example that reproduces the issue. T
 
 Before filing a report, check if your issue is covered here.
 
-- **"Invalid API Key" errors**: Double-check that your API key is correct and that it has been added to your `~/.orchestrator/config.json` or project-level config.
+- **"Invalid API Key" errors**: Double-check that your API key is correct and that it has been added to your `~/.orchestrator/config.yaml` or `.orchestrator.yaml`.
 - **"Command not found" for tools**: Ensure that any required command-line tools are installed and available in your system's `PATH`.
-- **"Index not found"**: Run `orchestrator index` in the root of your project.
+- **"Index not found"**: Run `orchestrator index build` in the root of your project.
 
 If you have a question or need help with configuration, you can also start a discussion on our [GitHub Discussions page](https://github.com/example/orchestrator/discussions).

@@ -9,32 +9,32 @@ For GA, the orchestrator should ship with conservative and safe default settings
 - **Plugins**: Disabled by default.
 - **Memory**: Disabled by default.
 - **Network Access**: Denied by default for tool execution.
-- **Execution Confirmation**: Enabled by default (`exec.confirm: true`).
-- **Safe Mode**: Enabled by default (`exec.safeMode: true`).
+- **Execution Confirmation**: Enabled by default when tools are enabled (`execution.tools.requireConfirmation: true`).
 
-Here is a recommended baseline `~/.orchestrator/config.json` for new users:
+Here is a recommended baseline `~/.orchestrator/config.yaml` for new users:
 
-```json
-{
-  "providers": {
-    "gemini": {
-      "apiKey": "YOUR_GEMINI_API_KEY"
-    }
-  },
-  "defaults": {
-    "model": "gemini-1.5-pro-latest"
-  },
-  "exec": {
-    "confirm": true,
-    "safeMode": true
-  },
-  "log": {
-    "level": "info"
-  },
-  "memory": {
-    "enabled": false
-  }
-}
+```yaml
+configVersion: 1
+
+defaults:
+  planner: openai
+  executor: openai
+
+providers:
+  openai:
+    type: openai
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY
+
+execution:
+  tools:
+    enabled: true
+    requireConfirmation: true
+    autoApprove: false
+    networkPolicy: deny
+
+memory:
+  enabled: false
 ```
 
 ## Enabling Plugins Safely
@@ -42,18 +42,17 @@ Here is a recommended baseline `~/.orchestrator/config.json` for new users:
 Plugins extend the orchestrator's capabilities but should be enabled with care.
 
 1.  **Review the Plugin**: Before enabling a plugin, understand what it does. Review its documentation and, if possible, its source code.
-2.  **Project-Level Configuration**: Enable plugins in the project-level `.orchestrator/config.json` rather than the global user config. This scopes the plugin's functionality to a single, trusted project.
+2.  **Project-Level Configuration**: Enable plugins in the project-level `.orchestrator.yaml` rather than the global user config. This scopes the plugin's functionality to a single, trusted project.
 3.  **Restrict Permissions**: If the plugin requires access to external services or tools, ensure its permissions are as restrictive as possible.
 
 Example of enabling a specific plugin for a project:
 
-```json
-// .orchestrator/config.json
-{
-  "plugins": {
-    "enabled": ["@orchestrator/plugin-docs"]
-  }
-}
+```yaml
+# .orchestrator.yaml
+plugins:
+  enabled: true
+  allowlistIds:
+    - '@orchestrator/plugin-docs'
 ```
 
 See the [Plugins documentation](plugins.md) for more details.
@@ -75,7 +74,7 @@ When encountering an issue, follow this decision tree to diagnose the problem.
     - Verify your API keys are correct and have the necessary permissions.
 
 2.  **Is the index up to date?**
-    - If you've made significant code changes, re-run `orchestrator index`.
+    - If you've made significant code changes, re-run `orchestrator index build`.
     - Check the `.orchestrator/index` directory to see when the index was last updated.
 
 3.  **Is the issue with a specific tool or plugin?**

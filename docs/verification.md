@@ -12,43 +12,54 @@ Verification is enabled by default. After the orchestrator has applied a code ch
 
 ## Disabling Verification
 
-While it's highly recommended to keep verification enabled, you can disable it for a specific run using the `--no-verify` flag:
+While it's highly recommended to keep verification enabled, you can disable it for a specific run using `--verify off`:
 
 ```bash
-orchestrator run "Update the README" --no-verify
+orchestrator run "Update the README" --verify off
 ```
 
 This is useful for tasks that don't affect the code, like updating documentation.
 
 ## Configuration
 
-For most JavaScript/TypeScript projects, the automatic detection will work out of the box. However, you can customize the verification commands in your `.orchestrator/config.json` file if needed.
-
-```json
-{
-  "verification": {
-    "commands": {
-      "test": "pnpm test:unit",
-      "lint": "pnpm lint:ci",
-      "typecheck": "pnpm typecheck"
-    }
-  }
-}
-```
-
-If you have a non-standard setup, you can specify the exact commands to run for testing, linting, and type-checking.
+For most JavaScript/TypeScript projects, automatic detection works out of the box. You can tune verification in your `.orchestrator.yaml` or `~/.orchestrator/config.yaml`.
 
 ### Verification Scope
 
 - **Targeted (default)**: The orchestrator only runs verification in the workspace packages that were directly affected by the changes. This is the default behavior in a monorepo and is much faster.
 - **Full**: You can force the orchestrator to run verification across all packages, even if they weren't changed.
 
-To force a full verification run, you can set the scope in your configuration:
+To force a full verification run for a single command:
 
-```json
-{
-  "verification": {
-    "scope": "full"
-  }
-}
+```bash
+orchestrator run "…" --verify-scope full
+```
+
+To configure defaults:
+
+```yaml
+verification:
+  enabled: true
+  mode: auto # auto | custom
+  auto:
+    enableLint: true
+    enableTypecheck: true
+    enableTests: true
+    testScope: targeted # targeted | full
+```
+
+For a fully custom verification pipeline:
+
+```yaml
+verification:
+  enabled: true
+  mode: custom
+  steps:
+    - name: lint
+      command: pnpm lint
+      required: true
+      timeoutMs: 600000
+    - name: test
+      command: pnpm test
+      required: true
 ```

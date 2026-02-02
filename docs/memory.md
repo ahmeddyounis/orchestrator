@@ -19,14 +19,11 @@ On subsequent runs, the orchestrator can query this memory to retrieve relevant 
 
 You can enable long-term memory in your configuration file by setting `memory.enabled` to `true`.
 
-**`.orchestrator.jsonc`:**
+**`.orchestrator.yaml` (repo) or `~/.orchestrator/config.yaml` (user):**
 
-```jsonc
-{
-  "memory": {
-    "enabled": true,
-  },
-}
+```yaml
+memory:
+  enabled: true
 ```
 
 ## Retrieval Modes: Lexical, Vector, and Hybrid
@@ -49,20 +46,15 @@ If you configure a [remote vector backend](./memory-vector.md#backends), only nu
 
 For sensitive projects, you can enable encryption-at-rest for the memory database content:
 
-```jsonc
-{
-  "memory": {
-    "enabled": true,
-    "storage": {
-      "encryptAtRest": true,
-    },
-  },
-  "security": {
-    "encryption": {
-      "keyEnv": "ORCHESTRATOR_ENC_KEY", // defaults to ORCHESTRATOR_ENC_KEY
-    },
-  },
-}
+```yaml
+memory:
+  enabled: true
+  storage:
+    encryptAtRest: true
+
+security:
+  encryption:
+    keyEnv: ORCHESTRATOR_ENC_KEY # defaults to ORCHESTRATOR_ENC_KEY
 ```
 
 Then set the encryption key as an environment variable:
@@ -84,12 +76,8 @@ See [Security](./security.md#4-encryption-at-rest-for-memory) for more details.
 To clear the memory for a project, use the `memory wipe` command.
 
 ```sh
-# Wipe the lexical memory index
-gemini memory wipe
+orchestrator memory wipe
 
-# Wipe the vector memory index
-gemini memory wipe --vector
-
-# Wipe both
-gemini memory wipe --all
+# Skip the confirmation prompt
+orchestrator memory wipe --yes
 ```

@@ -9,6 +9,9 @@ These options can be used with any command:
 - `--help`: Show help for a command.
 - `--config <path>`: Specify a path to a config file.
 - `--verbose`: Enable verbose logging.
+- `--json`: Output machine-readable JSON (where supported).
+- `--yes`: Auto-approve confirmations (subject to denylist).
+- `--non-interactive`: Deny by default if confirmation is required.
 
 ## Main Commands
 
@@ -28,10 +31,14 @@ orchestrator run "<your task description>" [options]
 
 **Options:**
 
-- `--think <level>`: (Optional) Set the orchestration level (e.g., `L1`, `L2`, `L3`). Higher levels enable more complex reasoning and problem-solving strategies. Defaults to `L2`.
-- `--best-of <N>`: (Optional, L3 only) Generate `N` candidate solutions and select the best one. See the [L3 Documentation](l3.md) for details.
-- `--no-verify`: (Optional) Disable automatic verification (running tests and linting) after making changes.
-- `--memory`: (Optional) Enable memory to allow the orchestrator to remember context from previous runs.
+- `--think <level>`: Think level: `L0`, `L1`, `L2`, `L3`, or `auto` (default: `auto`).
+- `--budget <limits>`: Budget limits (e.g. `cost=5,iter=6,tool=10,time=20m`).
+- `--planner/--executor/--reviewer <providerId>`: Override provider IDs.
+- `--best-of <N>`: (L3) Generate `N` candidates and pick the best.
+- `--verify <mode>`: `on`, `off`, or `auto`.
+- `--verify-scope <scope>`: `targeted` or `full`.
+- `--no-lint`, `--no-typecheck`, `--no-tests`: Disable parts of auto-verification.
+- `--memory <mode>`: `on|off` plus advanced flags (`--memory-mode`, `--memory-vector-backend`, etc.).
 
 ---
 
@@ -78,7 +85,7 @@ Use `--think L3` for the most complex problems, such as debugging a persistent f
 **Initial Prompt:**
 
 ```bash
-orchestrator run --think L3 --best-of 3 --prompt "The 'calculateTotal' test is failing due to a floating point precision error. Investigate and fix it."
+orchestrator run --think L3 --best-of 3 "The 'calculateTotal' test is failing due to a floating point precision error. Investigate and fix it."
 ```
 
 **How L3 Works:**
@@ -94,12 +101,14 @@ For a complete explanation of the process and the artifacts it produces, see the
 
 ### `index`
 
-This command creates or updates the orchestrator's index of your codebase. The index is used to provide context for the `run` command.
+This command manages the orchestrator's index of your codebase. The index is used to provide context for the `run` command.
 
 **Usage:**
 
 ```bash
-orchestrator index
+orchestrator index build
+orchestrator index status
+orchestrator index update
 ```
 
 You should run this command whenever you make significant changes to your project.
@@ -125,7 +134,18 @@ Run an evaluation suite to measure the orchestrator's performance on a set of pr
 **Usage:**
 
 ```bash
-orchestrator eval --suite <path_to_suite_file>
+orchestrator eval <path_to_suite_file>
 ```
 
 For more details, see the [Evaluation Guide](eval.md).
+
+### `export-bundle`
+
+Create a zip bundle with debugging information (config, index, and selected runs).
+
+**Usage:**
+
+```bash
+orchestrator export-bundle --runs 3 --output orchestrator-bundle.zip
+orchestrator export-bundle --run <runId> --output orchestrator-bundle.zip
+```

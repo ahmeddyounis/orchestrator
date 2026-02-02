@@ -14,7 +14,6 @@ import {
   type CriterionResult,
   type Config,
   type ProviderConfig,
-  type ProviderCapabilities,
   ConfigError,
   UsageError,
   VerificationError,
@@ -27,6 +26,13 @@ import {
   allowAllToolPolicy,
   CostTracker,
 } from '@orchestrator/core';
+import {
+  OpenAIAdapter,
+  AnthropicAdapter,
+  ClaudeCodeAdapter,
+  FakeAdapter,
+  SubprocessProviderAdapter,
+} from '@orchestrator/adapters';
 import { file_contains, script_exit, verification_pass } from './criteria';
 import { SimpleRenderer } from './renderer';
 
@@ -236,6 +242,8 @@ export class EvalRunner {
     // Ensure commits work in ephemeral temp directories regardless of global git config.
     await this.runCommand('git', ['config', 'user.email', 'eval@orchestrator.local'], repoRoot);
     await this.runCommand('git', ['config', 'user.name', 'Orchestrator Eval Runner'], repoRoot);
+    await this.runCommand('git', ['config', 'commit.gpgsign', 'false'], repoRoot);
+    await this.runCommand('git', ['config', 'core.hooksPath', '.git/hooks'], repoRoot);
   }
 
   private async runTask(task: EvalTask): Promise<EvalTaskResult> {
@@ -300,6 +308,9 @@ export class EvalRunner {
 
     const fixturePath = path.resolve(repoRoot, task.repo.fixturePath);
     await fs.copy(fixturePath, workDir);
+    // Fixtures may include .git/.orchestrator from prior runs. Ensure we start from a clean repo.
+    await fs.remove(path.join(workDir, '.git'));
+    await fs.remove(path.join(workDir, '.orchestrator'));
 
     await this.initGitRepo(workDir);
 
@@ -402,23 +413,20 @@ export class EvalRunner {
     const costTracker = new CostTracker(config);
     const registry = new ProviderRegistry(config, costTracker);
 
-    const stubFactory = (cfg: ProviderConfig) => ({
-      id: () => cfg.type,
-      capabilities: () =>
-        ({
-          supportsStreaming: false,
-          supportsToolCalling: false,
-          supportsJsonMode: false,
-          modality: 'text' as const,
-          latencyClass: 'medium' as const,
-        }) as ProviderCapabilities,
-      generate: async () => ({ text: 'Stub response' }),
+    registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
+    registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
+    registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
+    registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
+    registry.registerFactory('subprocess', (cfg: ProviderConfig) => {
+      if (!cfg.command) {
+        throw new ConfigError(`Provider type 'subprocess' requires 'command' in config.`);
+      }
+      return new SubprocessProviderAdapter({
+        command: [cfg.command, ...(cfg.args ?? [])],
+        cwdMode: cfg.cwdMode,
+        envAllowlist: cfg.env,
+      });
     });
-
-    const providers = config.providers ?? {};
-    for (const providerCfg of Object.values(providers)) {
-      registry.registerFactory(providerCfg.type, stubFactory);
-    }
 
     const git = new GitService({ repoRoot: workDir });
 

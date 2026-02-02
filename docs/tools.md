@@ -1,10 +1,12 @@
 # Tools & Execution Safety
 
-The Orchestrator can execute shell commands (tools) to perform tasks like running tests, linting code, or installing dependencies. To keep your system safe, it operates under a strict execution policy.
+The Orchestrator can execute shell commands (tools) during a run (for example: `pnpm test`, `pnpm lint`, or `pnpm typecheck`). To keep your system safe, it operates under a strict execution policy that is **deny-by-default** and **confirmation-first**.
 
 ## The Confirmation Prompt
 
-By default, the Orchestrator will always ask for your permission before running any shell command. When a command is about to be executed, you will see a prompt like this:
+When tool execution is enabled, Orchestrator will ask for your permission before running commands (unless you explicitly opt into auto-approval).
+
+When a command is about to be executed, you will see a prompt like this:
 
 ```
 ? Execute the following command?
@@ -18,35 +20,44 @@ This confirmation step is a critical safety feature to prevent the orchestrator 
 
 ## Configuration
 
-You can configure the execution policy in your `.orchestrator/config.json` file.
+Configuration is YAML and can be provided in:
 
-```json
-{
-  "exec": {
-    "confirm": true,
-    "safeMode": true
-  }
-}
+- Repo config: `.orchestrator.yaml`
+- User config: `~/.orchestrator/config.yaml`
+
+Tool execution is controlled by `execution.tools`:
+
+```yaml
+configVersion: 1
+
+execution:
+  tools:
+    enabled: true
+    requireConfirmation: true
+    autoApprove: false
+
+    # Additional safety rails
+    allowShell: false
+    networkPolicy: deny
+    envAllowlist: []
 ```
 
-### `exec.confirm`
+### `execution.tools.requireConfirmation`
 
 - **Type**: `boolean`
-- **Default**: `true`
+- **Default**: `true` (when tools are enabled)
 
 This setting controls the confirmation prompt. When `true`, you will be prompted before every command.
 
-If you set this to `false`, the orchestrator will execute commands without asking for confirmation. **This is not recommended unless you fully trust the orchestrator's actions.**
+If you set this to `false`, the orchestrator may execute commands without asking for confirmation. This is **not recommended** unless you fully trust your configuration and environment.
 
-### `exec.safeMode`
+### `execution.tools.networkPolicy`
 
-- **Type**: `boolean`
-- **Default**: `true`
+- **Type**: `'deny' | 'allow'`
+- **Default**: `'deny'`
 
-Safe mode provides an additional layer of protection by preventing the execution of commands that are deemed potentially risky or destructive. This includes:
+Controls whether tools are allowed to access the network while executing. Keep this as `deny` unless you have a specific need.
 
-- Commands that could delete files (e.g., `rm -rf`).
-- Commands that could modify system settings.
-- Commands that attempt to access files outside of the project directory.
+### `execution.tools.allowlistPrefixes` / `denylistPatterns`
 
-Even with `confirm` set to `false`, `safeMode` will still block these commands. It is strongly recommended to keep `safeMode` enabled.
+These provide coarse-grained allow/deny rules for tool commands. The defaults are conservative; expand only as needed.

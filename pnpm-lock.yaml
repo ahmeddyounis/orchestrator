@@ -222,6 +222,9 @@ importers:
 
   packages/eval:
     dependencies:
+      '@orchestrator/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@orchestrator/core':
         specifier: workspace:*
         version: link:../core
@@ -284,11 +287,10 @@ importers:
         version: 5.9.3
 
   packages/plugin-sdk:
-    dependencies:
+    devDependencies:
       '@orchestrator/shared':
         specifier: workspace:*
         version: link:../shared
-    devDependencies:
       '@types/node':
         specifier: ^25.1.0
         version: 25.1.0

@@ -48,11 +48,11 @@ async function checkProviderConfig(config: Config): Promise<[string, string]> {
       return [CHECKS.WARN, `Provider '${name}' is missing an api_key or api_key_env.`];
     }
   }
-  const defaultModel = config.defaults?.planner || 'not set';
+  const defaultPlanner = config.defaults?.planner || 'not set';
 
   return [
     CHECKS.OK,
-    `Providers configured: ${providerNames.join(', ')}. Default model: ${defaultModel}`,
+    `Providers configured: ${providerNames.join(', ')}. Default planner: ${defaultPlanner}`,
   ];
 }
 
@@ -99,14 +99,16 @@ function checkToolExecPolicy(config: Config): [string, string][] {
   return results;
 }
 
-async function checkIndexingStatus(): Promise<[string, string]> {
+async function checkIndexingStatus(repoRoot: string, config?: Config): Promise<[string, string]> {
   try {
-    const repoRoot = await findRepoRoot();
-    const indexPath = path.join(repoRoot, '.orchestrator', 'index', 'index.json');
+    const indexRelPath = config?.indexing?.path ?? '.orchestrator/index/index.json';
+    const indexPath = path.isAbsolute(indexRelPath)
+      ? indexRelPath
+      : path.join(repoRoot, indexRelPath);
     const stats = await fs.stat(indexPath);
     return [CHECKS.OK, `Index found. Last modified: ${stats.mtime.toLocaleDateString()}`];
   } catch {
-    return [CHECKS.WARN, 'Project index not found. Run `orchestrator index`.'];
+    return [CHECKS.WARN, 'Project index not found. Run `orchestrator index build`.'];
   }
 }
 
@@ -125,8 +127,9 @@ export const registerDoctorCommand = (program: Command) => {
     results.push(await checkExecutable('rg'));
 
     try {
+      const globalOpts = program.opts();
       const repoRoot = await findRepoRoot();
-      const config = ConfigLoader.load({ cwd: repoRoot });
+      const config = ConfigLoader.load({ cwd: repoRoot, configPath: globalOpts.config });
 
       console.log('\n' + chalk.bold('Configuration Checks (`.orchestrator.yaml`)'));
       results.push(await checkProviderConfig(config));
@@ -134,7 +137,7 @@ export const registerDoctorCommand = (program: Command) => {
       results.push(...checkToolExecPolicy(config));
 
       console.log('\n' + chalk.bold('Project Status'));
-      results.push(await checkIndexingStatus());
+      results.push(await checkIndexingStatus(repoRoot, config));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       results.push([CHECKS.FAIL, `Failed to load configuration: ${message}`]);

@@ -12,11 +12,10 @@ export function registerEvalCommand(program: Command) {
     .argument('<suitePath>', 'Path to the evaluation suite')
     .option('--baseline <name>', 'Name of the baseline to run against')
     .option('--out <dir>', 'Directory to store evaluation results')
-    .option('--json', 'Output results as JSON')
     .description('Run an evaluation suite')
     .action(async (suitePath, options) => {
       const globalOpts = program.opts();
-      const renderer = new OutputRenderer(!!options.json);
+      const renderer = new OutputRenderer(!!globalOpts.json);
 
       renderer.log(`Evaluating suite: "${suitePath}"`);
       if (globalOpts.verbose) renderer.log('Verbose mode enabled');
@@ -39,10 +38,10 @@ export function registerEvalCommand(program: Command) {
 
         const result = await runner.runSuite(suitePath, {
           baseline: options.baseline,
-          quiet: !!options.json,
+          quiet: !!globalOpts.json,
         });
 
-        if (options.json) {
+        if (globalOpts.json) {
           console.log(JSON.stringify(result, null, 2));
         }
 

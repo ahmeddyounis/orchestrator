@@ -4,10 +4,10 @@ To understand your project, the Orchestrator creates an "index" of your code. Th
 
 ## Creating the Index
 
-To create the index for your project, run the `index` command in your project's root directory:
+To create the index for your project, run this in your repository root:
 
 ```bash
-orchestrator index
+orchestrator index build
 ```
 
 This will scan your project and create the index in the `.orchestrator/` directory. You only need to do this once for each project.
@@ -26,11 +26,17 @@ You don't need to manually re-index every time you change a file. The orchestrat
 
 ## When to Manually Re-index
 
-You should only need to manually run `orchestrator index` in a few situations:
+You should only need to manually run indexing commands in a few situations:
 
 - When you first set up a project.
 - If you've made massive changes to your project (e.g., upgrading a framework or refactoring the entire codebase).
 - If the orchestrator seems to be confused or working with outdated information.
+
+For incremental updates, prefer:
+
+```bash
+orchestrator index update
+```
 
 ## Indexing Status
 

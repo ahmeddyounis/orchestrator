@@ -102,8 +102,9 @@ export const registerExportBundleCommand = (program: Command) => {
     .action(async (options: { run?: string; runs: string; output: string }) => {
       console.log(chalk.bold('Creating debug bundle...'));
 
+      const globalOpts = program.opts();
       const repoRoot = await findRepoRoot();
-      const config = ConfigLoader.load({ cwd: repoRoot });
+      const config = ConfigLoader.load({ cwd: repoRoot, configPath: globalOpts.config });
       const redactedConfig = redactObject(config);
 
       const runsDir = path.join(repoRoot, '.orchestrator', 'runs');

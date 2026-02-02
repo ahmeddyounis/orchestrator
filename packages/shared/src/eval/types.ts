@@ -17,7 +17,7 @@ export interface EvalTask {
     ref?: string;
   };
   goal: string;
-  command: 'run' | 'fix';
+  command: 'run';
   thinkLevel?: 'L0' | 'L1' | 'L2' | 'auto';
   budgets?: {
     iter?: number;

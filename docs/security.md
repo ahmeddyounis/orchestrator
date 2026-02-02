@@ -52,14 +52,14 @@ The primary threats involve the agent being manipulated into performing unintend
 
 ### 1. Tool Confirmation & Policy
 
-- **Confirmation by Default:** All high-risk tools (`shell`, `file`) require user confirmation before execution. This is controlled by the `confirm` flag in `.orchestrator/config.yaml`.
-- **Network Policy:** All outbound network access is **denied by default**. Users must create an explicit `allow` list for trusted domains in the configuration.
-- **Environment Variable Gating:** Access to environment variables is **denied by default**. An explicit `allow` list is required.
+- **Confirmation by Default:** Tool execution can require confirmation before running commands (`execution.tools.requireConfirmation`).
+- **Network Policy:** Tool network access is **denied by default** (`execution.tools.networkPolicy: deny`).
+- **Environment Variable Gating:** Access to environment variables is gated via an allowlist (`execution.tools.envAllowlist`).
 
 ### 2. Secrets Handling
 
 - **Redaction:** A redaction layer scans logs and LLM outputs to mask patterns that look like API keys or other credentials.
-- **File Ignoring:** The agent respects `.gitignore` and `.geminiignore` to avoid reading sensitive files.
+- **File Ignoring:** The agent respects `.gitignore` and `.orchestratorignore` to avoid reading sensitive files.
 
 ### 3. Memory & Privacy
 
@@ -71,26 +71,23 @@ The primary threats involve the agent being manipulated into performing unintend
 For most projects, especially TypeScript monorepos, we recommend a "safe-by-default" configuration. This configuration should be the starting point and only relaxed for specific, trusted tasks.
 
 ```yaml
-# .orchestrator/config.yaml
+# .orchestrator.yaml
+
+configVersion: 1
 
 # Disable long-term memory to prevent code/conversation persistence.
 memory:
   enabled: false
 
 # Enforce confirmation for all high-risk tool operations.
-tools:
-  l2:
-    shell:
-      confirm: true
-    file:
-      confirm: true
-
-# Default to denying all network access and environment variable access.
-security:
-  networkPolicy: 'deny'
-  env:
-    allow: [] # Explicitly empty
-
+execution:
+  tools:
+    enabled: true
+    requireConfirmation: true
+    autoApprove: false
+    networkPolicy: deny
+    envAllowlist: [] # Explicitly empty
+    allowShell: false
 
 # Optional: Encrypt memory if you choose to enable it.
 # The key must be set in the ORCHESTRATOR_ENC_KEY environment variable.
