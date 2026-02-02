@@ -22,6 +22,11 @@ export interface SubprocessConfig {
   envAllowlist?: string[]; // Allowlist of env vars to pass through
   maxTranscriptSize?: number;
   compatibilityProfile?: keyof typeof SubprocessCompatibilityProfiles;
+  /**
+   * If true, spawn the subprocess inside a pseudo-terminal (PTY).
+   * Some interactive CLIs (e.g. Claude Code) require a TTY to function correctly.
+   */
+  pty?: boolean;
 }
 
 export class SubprocessProviderAdapter implements ProviderAdapter {
@@ -65,7 +70,8 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       envAllowlist: this.config.envAllowlist,
     });
 
-    const cwd = process.cwd(); // Default to process.cwd() for 'repoRoot' and 'runDir' for MVP
+    const repoRoot = ctx.repoRoot ?? process.cwd();
+    const cwd = this.config.cwdMode === 'repoRoot' ? repoRoot : process.cwd(); // Default to process.cwd() for MVP
 
     // Env construction is now handled by ProcessManager based on envAllowlist
     const env: Record<string, string> = {};
@@ -74,7 +80,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     // Ensure we don't crash if artifacts dir setup fails or isn't there (though it should be)
     let logPath: string | undefined;
     try {
-      const artifacts = getRunArtifactPaths(process.cwd(), ctx.runId);
+      const artifacts = getRunArtifactPaths(repoRoot, ctx.runId);
       logPath = path.join(artifacts.toolLogsDir, `subprocess_${this.id()}.log`);
     } catch {
       // Ignore if can't resolve paths
@@ -89,6 +95,10 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
         }
       }
     };
+
+    // Ensure the transcript file exists even if the subprocess produces no output
+    // (helps debugging startup hangs/timeouts).
+    await logTranscript('');
 
     // Capture output
     let outputText = '';
@@ -115,7 +125,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     const isPrompt = (text: string) => this.isPrompt(text);
 
     try {
-      await pm.spawn(this.config.command, cwd, env, false);
+      await pm.spawn(this.config.command, cwd, env, this.config.pty ?? false);
 
       // Consume initial prompt
       await pm.readUntilHeuristic(this.compatibilityProfile.initialPromptTimeoutMs, isPrompt);

@@ -79,7 +79,11 @@ export class Judge {
       jsonMode: true,
     };
 
-    const adapterCtx: AdapterContext = { runId, logger };
+    const adapterCtx: AdapterContext = {
+      runId,
+      logger,
+      repoRoot: path.resolve(artifactsRoot, '../../..'),
+    };
 
     await eventBus.emit({
       type: 'JudgeInvoked',

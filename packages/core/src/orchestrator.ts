@@ -682,7 +682,7 @@ END_DIFF
           { role: 'user', content: 'Implement the goal.' },
         ],
       },
-      { runId, logger },
+      { runId, logger, repoRoot: this.repoRoot },
     );
 
     const outputText = response.text;
@@ -1397,7 +1397,7 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
               { role: 'user', content: 'Implement the step.' },
             ],
           },
-          { runId, logger },
+          { runId, logger, repoRoot: this.repoRoot },
         );
 
         const outputText = response.text;
@@ -1992,7 +1992,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             { role: 'user', content: repairPrompt },
           ],
         },
-        { runId, logger },
+        { runId, logger, repoRoot: this.repoRoot },
       );
 
       const outputText = response.text;

@@ -2,6 +2,7 @@
 /.plans
 /.logs
 .orchestrator
+.claude
 .tmp
 node_modules
 dist

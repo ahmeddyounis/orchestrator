@@ -157,6 +157,7 @@ INSTRUCTIONS:
       const ctx: AdapterContext = {
         runId,
         logger: stepContext.logger,
+        repoRoot: path.resolve(artifactsRoot, '../../..'),
       };
 
       const response: ModelResponse = await executor.generate(request, ctx);

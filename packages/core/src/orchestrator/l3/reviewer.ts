@@ -62,7 +62,11 @@ export class Reviewer {
       jsonMode: true,
     };
 
-    const response = await reviewer.generate(request, { runId, logger });
+    const response = await reviewer.generate(request, {
+      runId,
+      logger,
+      repoRoot: path.resolve(artifactsRoot, '../../..'),
+    });
     const output = this.parseResponse(response.text);
 
     const reviewArtifactPath = path.join(

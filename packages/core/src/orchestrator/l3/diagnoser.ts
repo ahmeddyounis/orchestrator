@@ -61,7 +61,11 @@ export class Diagnoser {
       jsonMode: true,
     };
 
-    const response = await reasoner.generate(request, { runId, logger });
+    const response = await reasoner.generate(request, {
+      runId,
+      logger,
+      repoRoot: path.resolve(artifactsRoot, '../../..'),
+    });
     const diagnosis = this.parseResponse(response.text);
 
     if (!diagnosis || !diagnosis.hypotheses || diagnosis.hypotheses.length === 0) {

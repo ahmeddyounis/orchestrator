@@ -11,6 +11,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
+    const pty = (config as unknown as { pty?: boolean }).pty ?? true;
 
     if (!command.length) {
       throw new ConfigError(`Missing command for ClaudeCode provider. Checked config.command`);
@@ -20,6 +21,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
       command: [...command, ...args],
       cwdMode: 'repoRoot', // Enforce repoRoot
       envAllowlist: config.env,
+      pty,
     });
   }
 
