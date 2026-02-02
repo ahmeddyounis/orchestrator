@@ -11,6 +11,7 @@ coverage
 *.log.orchestrator
 *.tsbuildinfo
 *.tgz
+.orchestrator.yaml
 
 # Guard against accidentally committing TS build output into source trees.
 packages/**/src/**/*.d.ts
