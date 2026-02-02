@@ -1,6 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { MANIFEST_VERSION, Manifest, writeManifest, PatchOpError } from '@orchestrator/shared';
+import {
+  MANIFEST_VERSION,
+  PatchOpError,
+  dirname,
+  normalizePath,
+  relative,
+  updateManifest,
+} from '@orchestrator/shared';
 
 export class PatchStore {
   constructor(
@@ -31,17 +38,15 @@ export class PatchStore {
   }
 
   private async updateManifest(patchPath: string): Promise<void> {
+    const runDir = dirname(this.manifestPath);
+    const storedPath = relative(runDir, normalizePath(patchPath));
+
     try {
-      const content = await fs.readFile(this.manifestPath, 'utf-8');
-      const manifest: Manifest = JSON.parse(content);
-
-      // Backfill in case we are updating an older manifest.
-      manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
-
-      if (!manifest.patchPaths.includes(patchPath)) {
-        manifest.patchPaths.push(patchPath);
-        await writeManifest(this.manifestPath, manifest);
-      }
+      await updateManifest(this.manifestPath, (manifest) => {
+        // Backfill in case we are updating an older manifest.
+        manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
+        manifest.patchPaths = [...(manifest.patchPaths ?? []), storedPath];
+      });
     } catch (err) {
       // If manifest doesn't exist or is invalid, we should probably fail
       // as it violates the integrity of the run artifacts.

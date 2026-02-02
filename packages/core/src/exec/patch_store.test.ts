@@ -54,7 +54,8 @@ describe('PatchStore', () => {
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
-    expect(manifest.patchPaths).toContain(filePath);
+    const storedPath = path.relative(tmpDir, filePath).replace(/\\/g, '/');
+    expect(manifest.patchPaths).toContain(storedPath);
   });
 
   it('saves selected patch and updates manifest', async () => {
@@ -68,7 +69,8 @@ describe('PatchStore', () => {
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
-    expect(manifest.patchPaths).toContain(filePath);
+    const storedPath = path.relative(tmpDir, filePath).replace(/\\/g, '/');
+    expect(manifest.patchPaths).toContain(storedPath);
   });
 
   it('saves final diff and updates manifest', async () => {
@@ -82,7 +84,8 @@ describe('PatchStore', () => {
 
     const manifestContent = await fs.readFile(manifestPath, 'utf-8');
     const manifest: Manifest = JSON.parse(manifestContent);
-    expect(manifest.patchPaths).toContain(filePath);
+    const storedPath = path.relative(tmpDir, filePath).replace(/\\/g, '/');
+    expect(manifest.patchPaths).toContain(storedPath);
   });
 
   it('does not duplicate paths in manifest', async () => {
@@ -97,7 +100,8 @@ describe('PatchStore', () => {
     const manifest: Manifest = JSON.parse(manifestContent);
 
     // Should only contain it once
-    const matches = manifest.patchPaths.filter((p) => p === path1);
+    const storedPath = path.relative(tmpDir, path1).replace(/\\/g, '/');
+    const matches = manifest.patchPaths.filter((p) => p === storedPath);
     expect(matches.length).toBe(1);
   });
 });

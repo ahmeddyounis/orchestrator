@@ -110,5 +110,19 @@ describe('CLI Integration Tests', () => {
     });
     const reportLatest = JSON.parse(reportLatestJson);
     expect(reportLatest.runId).toBe(result.runId);
+
+    // Export bundle should include this run
+    const bundlePath = path.join(testRepoPath, 'orchestrator-bundle.zip');
+    await execa('node', [cliPath, 'export-bundle', '--run', result.runId, '--output', bundlePath], {
+      cwd: testRepoPath,
+    });
+    const bundleInfoRaw = await execa('unzip', ['-p', bundlePath, 'bundle-info.json'], {
+      cwd: testRepoPath,
+    });
+    const bundleInfo = JSON.parse(bundleInfoRaw.stdout);
+    expect(bundleInfo.includedRuns).toContain(result.runId);
+
+    const bundleList = await execa('unzip', ['-l', bundlePath], { cwd: testRepoPath });
+    expect(bundleList.stdout).toContain(`runs/${result.runId}/manifest.json`);
   }, 120000);
 });

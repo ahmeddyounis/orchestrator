@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ToolManager } from './tool_manager';
-import { ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
+import { MANIFEST_VERSION, ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
@@ -43,6 +43,7 @@ vi.mock('@orchestrator/shared', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@orchestrator/shared')>();
   return {
     ...actual,
+    updateManifest: vi.fn(),
     writeManifest: vi.fn(),
   };
 });
@@ -63,6 +64,16 @@ describe('ToolManager', () => {
     // Mock fs.readFile for manifest
     vi.mocked(fs.readFile).mockResolvedValue(
       JSON.stringify({
+        schemaVersion: MANIFEST_VERSION,
+        runId: 'run-1',
+        startedAt: new Date().toISOString(),
+        command: 'test',
+        repoRoot: '/tmp',
+        artifactsDir: '/tmp',
+        tracePath: '/tmp/trace.jsonl',
+        summaryPath: '/tmp/summary.json',
+        effectiveConfigPath: '/tmp/effective-config.json',
+        patchPaths: [],
         toolLogPaths: [],
       }),
     );
@@ -107,11 +118,9 @@ describe('ToolManager', () => {
     expect(calls[2][0].type).toBe('ToolRunStarted');
     expect(calls[3][0].type).toBe('ToolRunFinished');
 
-    // Verify Manifest Update
-    // We mocked fs.readFile to return empty log paths
-    // We expect writeManifest to be called
-    const { writeManifest } = await import('@orchestrator/shared');
-    expect(writeManifest).toHaveBeenCalled();
+    // Verify manifest update was attempted
+    const { updateManifest } = await import('@orchestrator/shared');
+    expect(updateManifest).toHaveBeenCalledWith(manifestPath, expect.any(Function));
   });
 
   it('should emit ToolRunBlocked when policy denied', async () => {

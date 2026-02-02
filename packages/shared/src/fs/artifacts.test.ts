@@ -75,7 +75,9 @@ describe('artifacts', () => {
       summaryPath: 'summary.json',
       effectiveConfigPath: 'effective-config.json',
       patchPaths: [],
+      contextPaths: [],
       toolLogPaths: [],
+      verificationPaths: [],
     };
 
     await writeManifest(paths.manifest, manifest);

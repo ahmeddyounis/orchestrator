@@ -10,14 +10,14 @@ import {
   ToolPolicy,
   ToolRunResult,
   MANIFEST_VERSION,
-  Manifest,
-  writeManifest,
   AppError,
   UsageError,
   ToolError,
+  dirname,
+  normalizePath,
+  relative,
+  updateManifest,
 } from '@orchestrator/shared';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { EventBus } from '../registry';
 
@@ -174,42 +174,13 @@ export class ToolManager {
 
   private async updateManifest(newLogPaths: string[]): Promise<void> {
     try {
-      const content = await fs.readFile(this.manifestPath, 'utf-8');
-      const manifest: Manifest = JSON.parse(content);
+      const runDir = dirname(this.manifestPath);
+      const storedPaths = newLogPaths.map((p) => relative(runDir, normalizePath(p)));
 
-      // Backfill in case we are updating an older manifest.
-      manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
-
-      let changed = false;
-      if (!manifest.toolLogPaths) {
-        manifest.toolLogPaths = [];
-        changed = true;
-      }
-
-      for (const p of newLogPaths) {
-        // Try to make relative to artifacts root (where manifest is)
-        // Assuming manifestPath is in artifacts root.
-        // But SafeCommandRunner writes to absolute paths.
-        // Manifest expects paths.
-        // The spec says: "Ensure paths stored as relative-to-runDir when possible."
-
-        // manifestPath is usually .../manifest.json
-        // runDir is path.dirname(manifestPath)
-        const runDir = path.dirname(this.manifestPath);
-        let storedPath = p;
-        if (p.startsWith(runDir)) {
-          storedPath = path.relative(runDir, p);
-        }
-
-        if (!manifest.toolLogPaths.includes(storedPath)) {
-          manifest.toolLogPaths.push(storedPath);
-          changed = true;
-        }
-      }
-
-      if (changed) {
-        await writeManifest(this.manifestPath, manifest);
-      }
+      await updateManifest(this.manifestPath, (manifest) => {
+        manifest.schemaVersion = manifest.schemaVersion ?? MANIFEST_VERSION;
+        manifest.toolLogPaths = [...(manifest.toolLogPaths ?? []), ...storedPaths];
+      });
     } catch (err) {
       console.error(`Failed to update manifest at ${this.manifestPath}:`, err);
       // Non-fatal, but logged

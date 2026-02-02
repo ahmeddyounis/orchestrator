@@ -1,4 +1,4 @@
-import { join } from './path';
+import { join, normalizePath } from './path';
 import * as fs from 'fs/promises';
 
 export const ORCHESTRATOR_DIR = '.orchestrator';
@@ -36,14 +36,39 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+function toRunRelativePath(runDir: string, p: string): string {
+  const normalizedRunDir = normalizePath(runDir).replace(/\/+$/, '');
+  const normalizedPath = normalizePath(p);
+
+  // If already relative, keep it as-is (but normalized).
+  if (!normalizedPath.includes(':') && !normalizedPath.startsWith('/')) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.startsWith(`${normalizedRunDir}/`)) {
+    return normalizedPath.slice(normalizedRunDir.length + 1);
+  }
+
+  return normalizedPath;
+}
+
 function normalizeManifest(manifest: Manifest): Manifest {
+  const artifactsDir = normalizePath(manifest.artifactsDir);
+  const normalizePaths = (values: string[] | undefined): string[] =>
+    uniqueStrings((values ?? []).map((p) => toRunRelativePath(artifactsDir, p)));
+
   return {
     ...manifest,
     schemaVersion: manifest.schemaVersion ?? MANIFEST_VERSION,
-    patchPaths: uniqueStrings(manifest.patchPaths ?? []),
-    toolLogPaths: uniqueStrings(manifest.toolLogPaths ?? []),
-    contextPaths: uniqueStrings(manifest.contextPaths ?? []),
-    verificationPaths: uniqueStrings(manifest.verificationPaths ?? []),
+    repoRoot: normalizePath(manifest.repoRoot),
+    artifactsDir,
+    tracePath: normalizePath(manifest.tracePath),
+    summaryPath: normalizePath(manifest.summaryPath),
+    effectiveConfigPath: normalizePath(manifest.effectiveConfigPath),
+    patchPaths: normalizePaths(manifest.patchPaths),
+    toolLogPaths: normalizePaths(manifest.toolLogPaths),
+    contextPaths: normalizePaths(manifest.contextPaths),
+    verificationPaths: normalizePaths(manifest.verificationPaths),
   };
 }
 
@@ -86,7 +111,8 @@ export function getRunArtifactPaths(baseDir: string, runId: string): RunArtifact
 }
 
 export async function writeManifest(manifestPath: string, manifest: Manifest): Promise<void> {
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  const normalized = normalizeManifest(manifest);
+  await fs.writeFile(manifestPath, JSON.stringify(normalized, null, 2), 'utf-8');
 }
 
 export async function readManifest(manifestPath: string): Promise<Manifest> {

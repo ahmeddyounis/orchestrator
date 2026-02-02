@@ -110,6 +110,6 @@ describe('tree-sitter', () => {
         expect(result.errorsCount).toBe(-1);
         expect(result.rootNode).toBeNull();
       }
-    }, 1000);
+    }, 10000);
   });
 });

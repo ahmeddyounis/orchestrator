@@ -5,6 +5,7 @@ import pc from 'picocolors';
 import { findRepoRoot } from '@orchestrator/repo';
 import {
   normalizePath,
+  readManifest,
   RUN_SUMMARY_SCHEMA_VERSION,
   type Manifest,
   type RunSummary,
@@ -51,6 +52,19 @@ function parseChangedFilesFromPatch(patchText: string): string[] {
     files.add(match[2]);
   }
   return [...files];
+}
+
+function isAbsolutePath(p: string): boolean {
+  const normalized = normalizePath(p);
+  if (normalized.startsWith('/')) return true;
+  if (normalized.startsWith('//')) return true;
+  return /^[a-zA-Z]:\//.test(normalized);
+}
+
+function resolveRunPath(runDir: string, maybePath: string | undefined): string | undefined {
+  if (!maybePath) return undefined;
+  if (isAbsolutePath(maybePath)) return normalizePath(maybePath);
+  return normalizePath(path.join(runDir, maybePath));
 }
 
 async function resolveLatestRunId(runsDir: string): Promise<string | undefined> {
@@ -117,7 +131,14 @@ export function registerReportCommand(program: Command) {
       const manifestPath = path.join(runDir, 'manifest.json');
       const summaryPath = path.join(runDir, 'summary.json');
 
-      const manifest = await tryReadJson<Manifest>(manifestPath);
+      const manifest =
+        (await (async () => {
+          try {
+            return await readManifest(manifestPath);
+          } catch {
+            return undefined;
+          }
+        })()) ?? (await tryReadJson<Manifest>(manifestPath));
       const summaryJson = await tryReadJson<unknown>(summaryPath);
 
       if (opts.json) {
@@ -199,13 +220,16 @@ export function registerReportCommand(program: Command) {
 
       if (finalDiffPath) {
         try {
-          const patchText = await fs.readFile(finalDiffPath, 'utf-8');
-          const changedFiles = parseChangedFilesFromPatch(patchText);
-          if (changedFiles.length > 0) {
-            console.log(`\n  ${pc.bold('Changed files:')}`);
-            changedFiles.slice(0, 20).forEach((f) => console.log(`    - ${f}`));
-            if (changedFiles.length > 20)
-              console.log(`    ... and ${changedFiles.length - 20} more.`);
+          const resolvedFinal = resolveRunPath(runDir, finalDiffPath);
+          if (resolvedFinal) {
+            const patchText = await fs.readFile(resolvedFinal, 'utf-8');
+            const changedFiles = parseChangedFilesFromPatch(patchText);
+            if (changedFiles.length > 0) {
+              console.log(`\n  ${pc.bold('Changed files:')}`);
+              changedFiles.slice(0, 20).forEach((f) => console.log(`    - ${f}`));
+              if (changedFiles.length > 20)
+                console.log(`    ... and ${changedFiles.length - 20} more.`);
+            }
           }
         } catch {
           // ignore
@@ -214,15 +238,30 @@ export function registerReportCommand(program: Command) {
 
       if (manifest) {
         console.log(`\n  ${pc.bold('Artifacts:')}`);
-        console.log(`    - Summary: ${normalizePath(manifest.summaryPath)}`);
-        console.log(`    - Trace: ${normalizePath(manifest.tracePath)}`);
+        const resolvedSummary = resolveRunPath(runDir, manifest.summaryPath);
+        const resolvedTrace = resolveRunPath(runDir, manifest.tracePath);
+        const resolvedConfig = resolveRunPath(runDir, manifest.effectiveConfigPath);
+        if (resolvedSummary) console.log(`    - Summary: ${resolvedSummary}`);
+        if (resolvedTrace) console.log(`    - Trace: ${resolvedTrace}`);
+        if (resolvedConfig) console.log(`    - Effective config: ${resolvedConfig}`);
         if (manifest.patchPaths?.length) {
           const last = manifest.patchPaths[manifest.patchPaths.length - 1];
-          console.log(`    - Final patch: ${normalizePath(last)}`);
+          const resolvedLastPatch = resolveRunPath(runDir, last);
+          console.log(`    - Final patch: ${resolvedLastPatch ?? normalizePath(last)}`);
         } else if (finalDiffPath) {
-          console.log(`    - Final patch: ${normalizePath(finalDiffPath)}`);
+          const resolvedFinal = resolveRunPath(runDir, finalDiffPath);
+          console.log(`    - Final patch: ${resolvedFinal ?? normalizePath(finalDiffPath)}`);
         }
-        console.log(`    - Tool logs: ${normalizePath(path.join(runDir, 'tool_logs'))}`);
+        const toolLogsDir = normalizePath(path.join(runDir, 'tool_logs'));
+        const toolLogsCount = manifest.toolLogPaths?.length ?? 0;
+        console.log(`    - Tool logs: ${toolLogsDir}${toolLogsCount ? ` (${toolLogsCount})` : ''}`);
+
+        const verificationCount = manifest.verificationPaths?.length ?? 0;
+        if (verificationCount > 0) {
+          console.log(
+            `    - Verification artifacts: ${verificationCount} (see manifest.verificationPaths)`,
+          );
+        }
       }
     });
 }
