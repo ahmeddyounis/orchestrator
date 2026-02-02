@@ -3,7 +3,7 @@ import {
   parseUnifiedDiffFromText,
   parsePlanFromText,
 } from '../subprocess';
-import { ProviderConfig, ModelRequest, ModelResponse, ChatMessage } from '@orchestrator/shared';
+import { ProviderConfig, ModelRequest, ModelResponse } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
@@ -11,16 +11,21 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
-    const pty = (config as unknown as { pty?: boolean }).pty ?? true;
+    const pty = (config as unknown as { pty?: boolean }).pty ?? false;
+
+    // Prefer non-interactive mode for programmatic use (works well with pipes).
+    // Claude Code reads the prompt from stdin when `--print` is enabled.
+    const printArgs = args.includes('-p') || args.includes('--print') ? args : ['--print', ...args];
 
     if (!command.length) {
       throw new ConfigError(`Missing command for ClaudeCode provider. Checked config.command`);
     }
 
     super({
-      command: [...command, ...args],
+      command: [...command, ...printArgs],
       cwdMode: 'repoRoot', // Enforce repoRoot
       envAllowlist: config.env,
+      endInputAfterWrite: true,
       pty,
     });
   }
@@ -34,10 +39,18 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    // Inject prompt wrapper
-    const systemMessage: ChatMessage = {
-      role: 'system',
-      content: `IMPORTANT: When providing code changes, you MUST output a unified diff enclosed in the tag 'BEGIN_DIFF' and 'END_DIFF' (wrapped in angle brackets).
+    // Only enforce diff output when we're not explicitly requesting JSON.
+    // Planning/review/diagnose steps use `jsonMode` and should not be forced into diff formatting.
+    const shouldEnforceDiffOutput = !req.jsonMode;
+
+    const wrappedReq = shouldEnforceDiffOutput
+      ? {
+          ...req,
+          messages: [
+            ...req.messages,
+            {
+              role: 'system' as const,
+              content: `IMPORTANT: When providing code changes, you MUST output a unified diff enclosed in the tag 'BEGIN_DIFF' and 'END_DIFF' (wrapped in angle brackets).
 Example:
 <BEGIN_DIFF>
 diff --git a/file.ts b/file.ts
@@ -49,12 +62,10 @@ index 1234567..89abcdef 100644
 +const x = 2;
 <END_DIFF>
 `,
-    };
-
-    const wrappedReq = {
-      ...req,
-      messages: [...req.messages, systemMessage],
-    };
+            },
+          ],
+        }
+      : req;
 
     const response = await super.generate(wrappedReq, ctx);
 

@@ -35,6 +35,7 @@ providers:
 | `command` | The executable to run.                                   | `claude` |
 | `args`    | List of arguments to pass to the command.                | `[]`     |
 | `env`     | List of environment variables to pass to the subprocess. | `[]`     |
+| `pty`     | Spawn Claude Code in a PTY.                              | `false`  |
 
 ## Validation
 
@@ -50,14 +51,23 @@ If successful, Orchestrator should initialize Claude Code, send the prompt, and 
 
 ### Non-Interactive Mode vs PTY
 
-Claude Code is designed primarily as an interactive CLI tool. Orchestrator interacts with it programmatically. Issues may arise if Claude Code expects a TTY (terminal) but doesn't detect one.
+Claude Code is designed primarily as an interactive CLI tool. Orchestrator interacts with it programmatically and runs Claude Code in non-interactive `--print` mode by default (suitable for piping prompts via stdin).
 
 **Symptom:** The process hangs or exits immediately without output.
-**Fix:** Ensure your environment allows subprocesses. Orchestrator attempts to manage PTY allocation, but system-specific limitations (especially on Windows or restricted container environments) may interfere.
+**Fix:** Ensure you can run `claude --print` from your terminal, and that you are authenticated (`claude login` or `/login`, depending on your Claude Code version).
+
+If you suspect Claude Code needs a TTY in your environment, you can try enabling a PTY:
+
+```yaml
+providers:
+  my-claude:
+    type: 'claude_code'
+    pty: true
+```
 
 ### Prompt Detection
 
-Orchestrator relies on detecting specific prompts from Claude Code to know when it's ready for input or has finished outputting.
+Orchestrator captures raw stdin/stdout/stderr transcripts for debugging.
 
 **Symptom:** Orchestrator waits indefinitely even after Claude Code seems to have finished.
 **Fix:** This is usually an internal handling issue. Check the logs in `.orchestrator/runs/<run-id>/tool_logs/` for raw output.
@@ -67,4 +77,10 @@ Orchestrator relies on detecting specific prompts from Claude Code to know when 
 Large requests or slow network connections might cause timeouts.
 
 **Symptom:** "Timeout waiting for response" errors.
-**Fix:** Currently, timeouts are hardcoded. If you experience frequent timeouts, please file an issue.
+**Fix:** Increase the run timeout (or file an issue with your run ID and tool logs).
+
+### `posix_spawnp failed` (PTY)
+
+If you see `posix_spawnp failed` when `pty: true`, it usually indicates a `node-pty` compatibility issue with your Node.js version.
+
+**Fix:** Set `pty: false` (recommended) or switch to a Node LTS release (Node 20/22).

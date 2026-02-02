@@ -50,6 +50,19 @@ export class ProcessManager extends EventEmitter {
     return !this.killed;
   }
 
+  clearBuffer(): void {
+    this.buffer = '';
+  }
+
+  endInput(): void {
+    if (this.killed) return;
+    if (this.isPty) return;
+
+    if (this.childProcess?.stdin) {
+      this.childProcess.stdin.end();
+    }
+  }
+
   async spawn(
     command: string[],
     cwd: string,
@@ -93,13 +106,21 @@ export class ProcessManager extends EventEmitter {
     }
 
     if (this.isPty) {
-      this.ptyProcess = pty.spawn(cmd, args, {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 30,
-        cwd,
-        env: sanitizedEnv,
-      });
+      try {
+        this.ptyProcess = pty.spawn(cmd, args, {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 30,
+          cwd,
+          env: sanitizedEnv,
+        });
+      } catch (e) {
+        const err = e as Error;
+        const hint =
+          `PTY spawn failed (${err.message}). ` +
+          `Try setting pty=false, or use a Node LTS release (Node ${process.version} may be incompatible with node-pty).`;
+        throw new ProviderError(hint);
+      }
       this.pid = this.ptyProcess.pid;
 
       this.ptyProcess.onData((data) => this.handleOutput(data, 'stdout'));

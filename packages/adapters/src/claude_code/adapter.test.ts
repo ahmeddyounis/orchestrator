@@ -9,6 +9,8 @@ vi.mock('../subprocess/process-manager', () => {
   const ProcessManager = vi.fn();
   ProcessManager.prototype.spawn = vi.fn();
   ProcessManager.prototype.write = vi.fn();
+  ProcessManager.prototype.clearBuffer = vi.fn();
+  ProcessManager.prototype.endInput = vi.fn();
   ProcessManager.prototype.kill = vi.fn();
   ProcessManager.prototype.on = vi.fn();
   ProcessManager.prototype.readUntilHeuristic = vi.fn();
@@ -65,10 +67,8 @@ index 1234567..89abcdef 100644
     });
 
     pm.readUntilHeuristic.mockImplementation(async () => {
-      // The second time this is called is after the prompt is sent
-      if (pm.readUntilHeuristic.mock.calls.length === 2) {
-        outputCallback(expectedDiff);
-      }
+      // Called after the prompt is sent; stream expected output.
+      outputCallback(expectedDiff);
       return '';
     });
 

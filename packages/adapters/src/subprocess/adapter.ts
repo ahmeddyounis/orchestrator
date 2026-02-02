@@ -23,6 +23,11 @@ export interface SubprocessConfig {
   maxTranscriptSize?: number;
   compatibilityProfile?: keyof typeof SubprocessCompatibilityProfiles;
   /**
+   * If true, close stdin after writing the prompt.
+   * Useful for one-shot CLIs that read until EOF (e.g. `claude --print`).
+   */
+  endInputAfterWrite?: boolean;
+  /**
    * If true, spawn the subprocess inside a pseudo-terminal (PTY).
    * Some interactive CLIs (e.g. Claude Code) require a TTY to function correctly.
    */
@@ -123,12 +128,10 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     });
 
     const isPrompt = (text: string) => this.isPrompt(text);
+    const heuristicTimeoutMs = (ctx.timeoutMs ?? 30000) + 500;
 
     try {
       await pm.spawn(this.config.command, cwd, env, this.config.pty ?? false);
-
-      // Consume initial prompt
-      await pm.readUntilHeuristic(this.compatibilityProfile.initialPromptTimeoutMs, isPrompt);
 
       // Render prompt
       const prompt = req.messages
@@ -145,6 +148,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
         await new Promise((r) => setTimeout(r, 100));
         if (pm.isRunning) {
           outputText = '';
+          pm.clearBuffer();
         }
       }
 
@@ -155,14 +159,27 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
         // Log stdin for "raw transcripts".
         await logTranscript(input);
         pm.write(input);
+        if (this.config.endInputAfterWrite) {
+          pm.endInput();
+        }
 
         // Wait for termination.
         if (pm.isRunning) {
           await pm.readUntilHeuristic(
             this.compatibilityProfile.promptInactivityTimeoutMs,
             isPrompt,
+            heuristicTimeoutMs,
           );
         }
+      }
+
+      // If we didn't send input, this is a one-shot command: wait for the process to exit or timeout.
+      if (!shouldSendInput && pm.isRunning) {
+        await pm.readUntilHeuristic(
+          this.compatibilityProfile.promptInactivityTimeoutMs,
+          () => false,
+          heuristicTimeoutMs,
+        );
       }
 
       if (timedOut) {
