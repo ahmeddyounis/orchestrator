@@ -19,8 +19,12 @@
       "inputs": [
         "package.json",
         "tsconfig.json",
+        "src/**/*.json",
+        "src/**/*.yaml",
+        "src/**/*.yml",
         "src/**/*.tsx",
         "src/**/*.ts",
+        "test/**/*.json",
         "test/**/*.ts",
         "test/**/*.tsx"
       ]

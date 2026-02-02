@@ -10,6 +10,7 @@ coverage
 .DS_Store
 *.log.orchestrator
 *.tsbuildinfo
+*.tgz
 
 # Guard against accidentally committing TS build output into source trees.
 packages/**/src/**/*.d.ts
