@@ -42,7 +42,7 @@ describe('AnthropicAdapter', () => {
 
     adapter = new AnthropicAdapter({
       type: 'anthropic',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-3-5-sonnet-20240620',
       api_key: 'test-key',
     });
   });
@@ -64,7 +64,7 @@ describe('AnthropicAdapter', () => {
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 });
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'claude-3-opus-20240229',
+        model: 'claude-3-5-sonnet-20240620',
         messages: [{ role: 'user', content: 'Hi' }],
         max_tokens: 1024,
       }),

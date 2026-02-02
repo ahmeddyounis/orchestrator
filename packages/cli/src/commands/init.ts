@@ -31,7 +31,7 @@ providers:
   # anthropic:
   #   type: anthropic
   #   api_key_env: ANTHROPIC_API_KEY
-  #   model: claude-3-opus-20240229
+  #   model: claude-3-5-sonnet-20240620
 
 # Settings for the agent execution environment.
 execution:

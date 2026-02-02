@@ -17,7 +17,7 @@ describe('AnthropicAdapter Contract', () => {
     nock.disableNetConnect(); // Ensure no real requests
     adapter = new AnthropicAdapter({
       type: 'anthropic',
-      model: 'claude-3-opus-20240229',
+      model: 'claude-3-5-sonnet-20240620',
       api_key: 'sk-ant-test-key',
     });
   });
@@ -31,7 +31,7 @@ describe('AnthropicAdapter Contract', () => {
     const scope = nock('https://api.anthropic.com')
       .post('/v1/messages', (body) => {
         return (
-          body.model === 'claude-3-opus-20240229' &&
+          body.model === 'claude-3-5-sonnet-20240620' &&
           body.messages[0].content === 'Hi' &&
           body.max_tokens === 1024
         );
