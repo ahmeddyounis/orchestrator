@@ -1498,51 +1498,37 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     const errors = (details as { errors?: unknown }).errors;
     if (!Array.isArray(errors)) return '';
 
-    const first = errors.find((e): e is { file: string; line: number } => {
-      if (!e || typeof e !== 'object') return false;
-      const file = (e as { file?: unknown }).file;
-      const line = (e as { line?: unknown }).line;
-      return typeof file === 'string' && typeof line === 'number' && Number.isFinite(line);
-    });
+    const hunkFailures = collectHunkFailures(errors);
+    if (hunkFailures.length === 0) return '';
 
-    if (!first) return '';
-
-    const filePath = normalizeGitApplyPath(first.file);
-    const absPath = path.resolve(this.repoRoot, filePath);
-    const absRoot = path.resolve(this.repoRoot);
-
-    // Safety: avoid reading outside repoRoot.
-    if (absPath !== absRoot && !absPath.startsWith(absRoot + path.sep)) return '';
-
-    let content: string;
-    try {
-      content = fsSync.readFileSync(absPath, 'utf-8');
-    } catch {
-      return '';
-    }
-
-    const lines = content.split('\n');
-    if (lines.length === 0) return '';
-
-    const targetLine = Math.min(Math.max(1, Math.floor(first.line)), lines.length);
+    const maxFiles = 3;
+    const maxTotalChars = 6000;
     const windowSize = 20;
-    const start = Math.max(1, targetLine - windowSize);
-    const end = Math.min(lines.length, targetLine + windowSize);
+    const maxFileContextChars = 2000;
 
-    const excerpt = lines
-      .slice(start - 1, end)
-      .map((line, idx) => {
-        const lineNo = start + idx;
-        const marker = lineNo === targetLine ? '>' : ' ';
-        return `${marker} ${String(lineNo).padStart(4, ' ')} | ${line}`;
-      })
+    const selected = hunkFailures.slice(0, maxFiles);
+    const failureList = selected
+      .map((f) => `- ${f.filePath}:${f.line}${f.kind ? ` (${f.kind})` : ''}`)
       .join('\n');
 
-    const maxChars = 2000;
-    const clipped =
-      excerpt.length > maxChars ? excerpt.slice(0, maxChars) + '\n... (truncated)' : excerpt;
+    const contexts: string[] = [];
+    for (const failure of selected) {
+      const context = readFileContext(
+        this.repoRoot,
+        failure.filePath,
+        failure.line,
+        windowSize,
+        maxFileContextChars,
+      );
+      if (!context) continue;
+      contexts.push(`File: ${failure.filePath}:${failure.line}\n${context}`);
+    }
 
-    return `File: ${filePath}:${targetLine}\n${clipped}`;
+    const joinedContexts = contexts.join('\n\n---\n\n');
+    const full = `Failed hunks:\n${failureList}${joinedContexts ? `\n\n${joinedContexts}` : ''}`;
+    if (full.length <= maxTotalChars) return full;
+
+    return full.slice(0, maxTotalChars) + '\n... (truncated)';
   }
 
   private async searchMemoryHits(
@@ -2971,4 +2957,74 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
 function normalizeGitApplyPath(filePath: string): string {
   return filePath.replace(/^[ab]\//, '');
+}
+
+type HunkFailure = { filePath: string; line: number; kind?: string };
+
+function collectHunkFailures(errors: unknown[]): HunkFailure[] {
+  const byFile = new Map<string, HunkFailure>();
+
+  for (const entry of errors) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const file = (entry as { file?: unknown }).file;
+    const line = (entry as { line?: unknown }).line;
+    if (typeof file !== 'string') continue;
+    if (typeof line !== 'number' || !Number.isFinite(line)) continue;
+
+    const filePath = normalizeGitApplyPath(file);
+    // Prefer the earliest line number per file (usually most informative).
+    const existing = byFile.get(filePath);
+    const normalizedLine = Math.max(1, Math.floor(line));
+    if (!existing || normalizedLine < existing.line) {
+      const kind = (entry as { kind?: unknown }).kind;
+      byFile.set(filePath, {
+        filePath,
+        line: normalizedLine,
+        kind: typeof kind === 'string' ? kind : undefined,
+      });
+    }
+  }
+
+  return Array.from(byFile.values()).sort((a, b) => a.filePath.localeCompare(b.filePath));
+}
+
+function readFileContext(
+  repoRoot: string,
+  filePath: string,
+  line: number,
+  windowSize: number,
+  maxChars: number,
+): string {
+  const absPath = path.resolve(repoRoot, filePath);
+  const absRoot = path.resolve(repoRoot);
+
+  // Safety: avoid reading outside repoRoot.
+  if (absPath !== absRoot && !absPath.startsWith(absRoot + path.sep)) return '';
+
+  let content: string;
+  try {
+    content = fsSync.readFileSync(absPath, 'utf-8');
+  } catch {
+    return '';
+  }
+
+  const lines = content.split('\n');
+  if (lines.length === 0) return '';
+
+  const targetLine = Math.min(Math.max(1, Math.floor(line)), lines.length);
+  const start = Math.max(1, targetLine - windowSize);
+  const end = Math.min(lines.length, targetLine + windowSize);
+
+  const excerpt = lines
+    .slice(start - 1, end)
+    .map((lineText, idx) => {
+      const lineNo = start + idx;
+      const marker = lineNo === targetLine ? '>' : ' ';
+      return `${marker} ${String(lineNo).padStart(4, ' ')} | ${lineText}`;
+    })
+    .join('\n');
+
+  if (excerpt.length <= maxChars) return excerpt;
+  return excerpt.slice(0, maxChars) + '\n... (truncated)';
 }

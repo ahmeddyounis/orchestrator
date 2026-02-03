@@ -318,6 +318,11 @@ describe('Orchestrator', () => {
         ['line 1', 'line 2', 'line 3', 'line 4', 'TARGET_LINE', 'line 6', 'line 7'].join('\n'),
         'utf-8',
       );
+      fsSync.writeFileSync(
+        path.join(tempRepoRoot, 'src', 'bar.ts'),
+        ['bar 1', 'bar 2', 'BAR_TARGET', 'bar 4'].join('\n'),
+        'utf-8',
+      );
 
       const executorGenerate = vi
         .fn()
@@ -338,6 +343,12 @@ describe('Orchestrator', () => {
               file: 'src/foo.ts',
               line: 5,
               message: 'Hunk failed at line 5',
+            },
+            {
+              kind: 'HUNK_FAILED',
+              file: 'src/bar.ts',
+              line: 3,
+              message: 'Hunk failed at line 3',
             },
           ],
         },
@@ -367,6 +378,8 @@ describe('Orchestrator', () => {
       expect(secondSystemPrompt).toContain('CURRENT FILE CONTEXT');
       expect(secondSystemPrompt).toContain('File: src/foo.ts:5');
       expect(secondSystemPrompt).toContain('TARGET_LINE');
+      expect(secondSystemPrompt).toContain('File: src/bar.ts:3');
+      expect(secondSystemPrompt).toContain('BAR_TARGET');
     } finally {
       fsSync.rmSync(tempRepoRoot, { recursive: true, force: true });
     }

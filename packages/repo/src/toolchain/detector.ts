@@ -26,13 +26,20 @@ export class ToolchainDetector {
       }
     }
 
-    const pkg = packageJsonContent ? JSON.parse(packageJsonContent) : {};
-    const scripts = pkg.scripts || {};
+    let pkg: Record<string, unknown> = {};
+    if (packageJsonContent) {
+      try {
+        pkg = JSON.parse(packageJsonContent) as Record<string, unknown>;
+      } catch {
+        // Malformed package.json - use empty object as fallback
+      }
+    }
+    const scripts = isRecord(pkg.scripts) ? pkg.scripts : {};
 
     const scriptAvailability = {
-      test: !!scripts.test,
-      lint: !!scripts.lint,
-      typecheck: !!scripts.typecheck,
+      test: typeof scripts.test === 'string' && scripts.test.trim().length > 0,
+      lint: typeof scripts.lint === 'string' && scripts.lint.trim().length > 0,
+      typecheck: typeof scripts.typecheck === 'string' && scripts.typecheck.trim().length > 0,
     };
 
     const commands: ToolchainCommands = {};
@@ -103,4 +110,8 @@ export class ToolchainDetector {
       return null;
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

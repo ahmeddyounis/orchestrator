@@ -52,7 +52,10 @@ export function assessMemoryIntegrity(entry: MemoryEntry): IntegrityResult {
         status = 'blocked';
       }
       const allowedClassifications = ['test', 'lint', 'typecheck', 'build', 'format'];
-      if (!allowedClassifications.includes(evidence.classification)) {
+      if (!evidence.classification) {
+        reasons.push('Procedural memory is missing evidence classification.');
+        status = 'blocked';
+      } else if (!allowedClassifications.includes(evidence.classification)) {
         // This is already checked in MemoryWriter, but as a safeguard.
         reasons.push(`Procedural memory has unapproved classification: ${evidence.classification}`);
         if (status !== 'blocked') status = 'suspect';
