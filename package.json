@@ -21,7 +21,8 @@
     "format:check": "prettier --check .",
     "guard:repo": "tsx scripts/guard_tracked_artifacts.ts",
     "check": "pnpm guard:repo && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "release:check": "tsx scripts/release_check.ts"
+    "release:check": "tsx scripts/release_check.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -35,6 +36,7 @@
     "globals": "^17.2.0",
     "prettier": "^3.2.4",
     "tsx": "^4.21.0",
+    "husky": "^9.1.7",
     "turbo": "^1.11.3",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.54.0",
