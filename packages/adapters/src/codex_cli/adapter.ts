@@ -18,6 +18,17 @@ interface CodexCliConfig extends ProviderConfig {
 }
 
 /**
+ * Shape of Codex CLI JSON output when using --json flag.
+ * Similar to GeminiCliJson but with Codex-specific fields.
+ */
+type CodexCliJson = {
+  response?: unknown;
+  message?: unknown;
+  usage?: unknown;
+  stats?: unknown;
+};
+
+/**
  * Pattern to detect Codex CLI prompt markers.
  * Matches common interactive prompt styles:
  * - "codex>" or "Codex>" (Codex CLI default)
@@ -113,7 +124,15 @@ index 1234567..89abcdef 100644
       : req;
 
     const response = await super.generate(wrappedReq, ctx);
+    const rawText = response.text ?? '';
 
+    // Try to parse JSON output from Codex CLI
+    const parsed = parseCodexCliJson(rawText);
+    const responseText = extractResponseText(parsed, rawText);
+    const usage = parsed ? extractUsageFromCodexStats(parsed) ?? response.usage : response.usage;
+
+    // Extract diff if present using robust parser
+    if (responseText) {
     // Extract diff if present using robust parser
     if (response.text) {
       const diffParsed = parseUnifiedDiffFromText(response.text);
@@ -129,6 +148,8 @@ index 1234567..89abcdef 100644
         return {
           ...response,
           text: diffParsed.diffText,
+          usage,
+          raw: parsed ?? response.raw,
         };
       }
 
@@ -152,8 +173,88 @@ index 1234567..89abcdef 100644
       }
     }
 
-    return response;
+    return {
+      ...response,
+      text: responseText,
+      usage,
+      raw: parsed ?? response.raw,
+    };
   }
+}
+
+/**
+ * Parses JSON output from Codex CLI.
+ * Extracts the outermost JSON object from the text, handling any
+ * prefix/suffix text that may surround the JSON.
+ *
+ * @param text - Raw output text from Codex CLI
+ * @returns Parsed CodexCliJson object, or null if no valid JSON found
+ */
+function parseCodexCliJson(text: string): CodexCliJson | null {
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text.slice(firstBrace, lastBrace + 1)) as CodexCliJson;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extracts the response text from parsed Codex CLI JSON.
+ * Checks multiple possible field names that Codex CLI might use.
+ */
+function extractResponseText(parsed: CodexCliJson | null, fallback: string): string {
+  if (!parsed) return fallback;
+
+  // Try common response field names
+  if (typeof parsed.response === 'string') return parsed.response;
+  if (typeof parsed.message === 'string') return parsed.message;
+
+  return fallback;
+}
+
+/**
+ * Extracts usage/token statistics from Codex CLI JSON output.
+ * Handles both 'usage' and 'stats' fields with various token count formats.
+ */
+function extractUsageFromCodexStats(
+  parsed: CodexCliJson,
+): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
+  const usage = parsed.usage ?? parsed.stats;
+  if (!usage || typeof usage !== 'object') return undefined;
+
+  const usageObj = usage as Record<string, unknown>;
+
+  // Handle various token field naming conventions
+  const inputTokens =
+    numberOrZero(usageObj.input_tokens) ||
+    numberOrZero(usageObj.inputTokens) ||
+    numberOrZero(usageObj.prompt_tokens);
+  const outputTokens =
+    numberOrZero(usageObj.output_tokens) ||
+    numberOrZero(usageObj.outputTokens) ||
+    numberOrZero(usageObj.completion_tokens);
+  const totalTokens =
+    numberOrZero(usageObj.total_tokens) ||
+    numberOrZero(usageObj.totalTokens) ||
+    inputTokens + outputTokens;
+
+  if (inputTokens === 0 && outputTokens === 0 && totalTokens === 0) return undefined;
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: totalTokens || undefined,
+  };
+}
+
+function numberOrZero(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function assertDoesNotIncludeAnyArg(args: string[], forbidden: string[]): void {
