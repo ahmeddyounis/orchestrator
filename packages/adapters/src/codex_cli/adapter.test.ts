@@ -1,7 +1,7 @@
 import { CodexCliAdapter } from './adapter';
 import { ProcessManager } from '../subprocess/process-manager';
 import { ModelRequest } from '@orchestrator/shared';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 
 vi.mock('../subprocess/process-manager', () => {
   const ProcessManager = vi.fn();
@@ -18,7 +18,16 @@ vi.mock('../subprocess/process-manager', () => {
 
 describe('CodexCliAdapter', () => {
   let adapter: CodexCliAdapter;
-  let pm: any;
+  let pm: {
+    spawn: Mock;
+    write: Mock;
+    clearBuffer: Mock;
+    endInput: Mock;
+    kill: Mock;
+    on: Mock;
+    readUntilHeuristic: Mock;
+    isRunning: boolean;
+  };
 
   beforeEach(() => {
     adapter = new CodexCliAdapter({
@@ -27,24 +36,489 @@ describe('CodexCliAdapter', () => {
       command: 'codex',
       args: [],
     });
-    pm = new (ProcessManager as any)();
+    pm = new (ProcessManager as unknown as new () => typeof pm)();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should send a wrapped prompt to the subprocess and extract diffs', async () => {
-    const req: ModelRequest = {
-      messages: [{ role: 'user', content: 'hello' }],
-    };
-    const ctx = {
-      logger: { log: vi.fn() } as any,
-      runId: 'test-run',
-      timeoutMs: 5000,
-    };
+  describe('constructor', () => {
+    it('should use default command when not specified', () => {
+      const adapterWithDefault = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'o3-mini',
+        args: [],
+      });
+      expect(adapterWithDefault.id()).toBe('codex_cli');
+    });
 
-    const expectedDiff = `
+    it('should use custom command when specified', async () => {
+      const customAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'gpt-4',
+        command: '/usr/local/bin/codex',
+        args: [],
+      });
+      
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+      
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response text');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+      
+      await customAdapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, ctx);
+      
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      expect(spawnCommand[0]).toBe('/usr/local/bin/codex');
+    });
+  });
+
+  describe('OSS mode flag injection', () => {
+    it('should inject --oss and --local-provider flags when ossMode is enabled', async () => {
+      const ossAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'codellama',
+        command: 'codex',
+        args: [],
+        ossMode: true,
+      } as any);
+
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await ossAdapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      expect(spawnCommand).toContain('--oss');
+      expect(spawnCommand).toContain('--local-provider');
+      expect(spawnCommand).toContain('codellama');
+      // Verify order: --oss and --local-provider should come before 'exec'
+      const ossIndex = spawnCommand.indexOf('--oss');
+      const execIndex = spawnCommand.indexOf('exec');
+      expect(ossIndex).toBeLessThan(execIndex);
+    });
+
+    it('should NOT inject OSS flags when ossMode is disabled (default)', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      expect(spawnCommand).not.toContain('--oss');
+      expect(spawnCommand).not.toContain('--local-provider');
+    });
+
+    it('should include model after --local-provider in OSS mode', async () => {
+      const ossAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'deepseek-coder',
+        command: 'codex',
+        args: [],
+        ossMode: true,
+      } as any);
+
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await ossAdapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      const localProviderIndex = spawnCommand.indexOf('--local-provider');
+      expect(spawnCommand[localProviderIndex + 1]).toBe('deepseek-coder');
+    });
+  });
+
+  describe('isPrompt pattern validation', () => {
+    // Access the protected isPrompt method via a test subclass
+    class TestableCodexCliAdapter extends CodexCliAdapter {
+      public testIsPrompt(text: string): boolean {
+        return this['isPrompt'](text);
+      }
+    }
+
+    let testAdapter: TestableCodexCliAdapter;
+
+    beforeEach(() => {
+      testAdapter = new TestableCodexCliAdapter({
+        type: 'codex_cli',
+        model: 'o3-mini',
+        command: 'codex',
+        args: [],
+      });
+    });
+
+    it('should detect "codex>" prompt (lowercase)', () => {
+      expect(testAdapter.testIsPrompt('Some output\ncodex>')).toBe(true);
+      expect(testAdapter.testIsPrompt('codex>')).toBe(true);
+    });
+
+    it('should detect "Codex>" prompt (capitalized)', () => {
+      expect(testAdapter.testIsPrompt('Some output\nCodex>')).toBe(true);
+      expect(testAdapter.testIsPrompt('Codex>')).toBe(true);
+    });
+
+    it('should detect "CODEX>" prompt (uppercase)', () => {
+      expect(testAdapter.testIsPrompt('Some output\nCODEX>')).toBe(true);
+    });
+
+    it('should detect "> " minimal shell prompt at end of line', () => {
+      expect(testAdapter.testIsPrompt('Ready\n> ')).toBe(true);
+      expect(testAdapter.testIsPrompt('>')).toBe(true);
+    });
+
+    it('should detect ">>> " Python REPL style prompt', () => {
+      expect(testAdapter.testIsPrompt('Some output\n>>> ')).toBe(true);
+      expect(testAdapter.testIsPrompt('>>>')).toBe(true);
+    });
+
+    it('should detect "$ " shell style prompt at end of line', () => {
+      expect(testAdapter.testIsPrompt('Output\n$ ')).toBe(true);
+      expect(testAdapter.testIsPrompt('$')).toBe(true);
+    });
+
+    it('should NOT detect prompts in the middle of output', () => {
+      expect(testAdapter.testIsPrompt('Use codex> command to run\nMore text here')).toBe(false);
+    });
+
+    it('should NOT detect regular text as prompts', () => {
+      expect(testAdapter.testIsPrompt('This is regular output')).toBe(false);
+      expect(testAdapter.testIsPrompt('Processing your request...')).toBe(false);
+      expect(testAdapter.testIsPrompt('')).toBe(false);
+    });
+
+    it('should handle whitespace correctly', () => {
+      expect(testAdapter.testIsPrompt('  codex>  ')).toBe(true);
+      expect(testAdapter.testIsPrompt('\n\ncodex>\n')).toBe(true);
+    });
+  });
+
+  describe('token extraction from JSON stats', () => {
+    it('should extract tokens from usage object with input_tokens/output_tokens', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const jsonOutput = JSON.stringify({
+        response: 'Generated code here',
+        usage: {
+          input_tokens: 150,
+          output_tokens: 75,
+          total_tokens: 225,
+        },
+      });
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(jsonOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(150);
+      expect(response.usage?.outputTokens).toBe(75);
+      expect(response.usage?.totalTokens).toBe(225);
+    });
+
+    it('should extract tokens from stats object with camelCase naming', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const jsonOutput = JSON.stringify({
+        message: 'Response message',
+        stats: {
+          inputTokens: 200,
+          outputTokens: 100,
+        },
+      });
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(jsonOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(200);
+      expect(response.usage?.outputTokens).toBe(100);
+    });
+
+    it('should extract tokens from prompt_tokens/completion_tokens (OpenAI style)', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const jsonOutput = JSON.stringify({
+        response: 'Output',
+        usage: {
+          prompt_tokens: 50,
+          completion_tokens: 30,
+        },
+      });
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(jsonOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(50);
+      expect(response.usage?.outputTokens).toBe(30);
+    });
+  });
+
+  describe('text-based token usage parsing', () => {
+    it('should parse "input=X, output=Y" format', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const textOutput = 'Response content\n\nTokens: input=123, output=456';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(textOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(123);
+      expect(response.usage?.outputTokens).toBe(456);
+    });
+
+    it('should parse "X input tokens, Y output tokens" format', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const textOutput = 'Done!\nUsage: 500 input tokens, 250 output tokens';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(textOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(500);
+      expect(response.usage?.outputTokens).toBe(250);
+    });
+
+    it('should parse "X in, Y out" shorthand format', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const textOutput = 'Complete\nTokens used: 100 in, 50 out';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(textOutput);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.usage?.inputTokens).toBe(100);
+      expect(response.usage?.outputTokens).toBe(50);
+    });
+  });
+
+  describe('JSON parsing edge cases', () => {
+    it('should handle JSON with prefix text', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const outputWithPrefix = 'Processing...\n\n{"response": "Hello world", "usage": {"input_tokens": 10, "output_tokens": 5}}';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(outputWithPrefix);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.text).toBe('Hello world');
+      expect(response.usage?.inputTokens).toBe(10);
+    });
+
+    it('should handle JSON with suffix text', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const outputWithSuffix = '{"response": "Result here"}\n\nDone.';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(outputWithSuffix);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.text).toBe('Result here');
+    });
+
+    it('should handle malformed JSON gracefully and return raw text', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const malformedJson = '{"response": "incomplete JSON...';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(malformedJson);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      // Should fall back to raw text when JSON parsing fails
+      expect(response.text).toBe(malformedJson);
+    });
+
+    it('should handle empty JSON object', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const emptyJson = '{}';
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(emptyJson);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      // Should fall back to raw text when no response field
+      expect(response.text).toBe(emptyJson);
+    });
+
+    it('should prefer "response" field over "message" field', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const jsonWithBoth = JSON.stringify({
+        response: 'primary response',
+        message: 'secondary message',
+      });
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(jsonWithBoth);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.text).toBe('primary response');
+    });
+
+    it('should use "message" field when "response" is not present', async () => {
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const jsonWithMessage = JSON.stringify({
+        message: 'the message content',
+      });
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback(jsonWithMessage);
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      expect(response.text).toBe('the message content');
+    });
+  });
+
+  describe('diff extraction', () => {
+    it('should extract and parse unified diffs from response', async () => {
+      const req: ModelRequest = {
+        messages: [{ role: 'user', content: 'hello' }],
+      };
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      const expectedDiff = `
 <BEGIN_DIFF>
 diff --git a/file.ts b/file.ts
 index 1234567..89abcdef 100644
