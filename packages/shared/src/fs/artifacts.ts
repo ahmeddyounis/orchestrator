@@ -1,5 +1,7 @@
 import { join, normalizePath } from './path';
 import * as fs from 'fs/promises';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { existsSync } from 'node:fs';
 
 export const ORCHESTRATOR_DIR = '.orchestrator';
 export const RUNS_DIR = 'runs';
@@ -30,6 +32,125 @@ export interface Manifest {
   contextPaths?: string[];
   toolLogPaths: string[];
   verificationPaths?: string[];
+}
+
+// Encryption constants for artifact encryption
+const ARTIFACT_ALGORITHM = 'aes-256-gcm';
+const ARTIFACT_IV_LENGTH = 12;
+const ARTIFACT_AUTH_TAG_LENGTH = 16;
+const ARTIFACT_KEY_LENGTH = 32;
+const ARTIFACT_SALT = Buffer.from('orchestrator-artifact-salt');
+const ENCRYPTED_EXTENSION = '.enc';
+
+/**
+ * Artifact encryption utilities for securing run artifacts
+ */
+export interface ArtifactCrypto {
+  encrypt(plaintext: string): string;
+  decrypt(ciphertext: string): string;
+  encryptBuffer(data: Buffer): Buffer;
+  decryptBuffer(data: Buffer): Buffer;
+}
+
+/**
+ * Creates an artifact encryption instance using AES-256-GCM
+ * @param key Encryption key (will be derived using scrypt)
+ */
+export function createArtifactCrypto(key: string): ArtifactCrypto {
+  if (!key) {
+    throw new Error('Artifact encryption key is required');
+  }
+
+  const derivedKey = scryptSync(key, ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
+
+  const encryptBuffer = (data: Buffer): Buffer => {
+    const iv = randomBytes(ARTIFACT_IV_LENGTH);
+    const cipher = createCipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    return Buffer.concat([iv, authTag, encrypted]);
+  };
+
+  const decryptBuffer = (data: Buffer): Buffer => {
+    const iv = data.subarray(0, ARTIFACT_IV_LENGTH);
+    const authTag = data.subarray(ARTIFACT_IV_LENGTH, ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+    const encrypted = data.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+    const decipher = createDecipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  };
+
+  return {
+    encrypt(plaintext: string): string {
+      return encryptBuffer(Buffer.from(plaintext, 'utf8')).toString('base64');
+    },
+    decrypt(ciphertext: string): string {
+      return decryptBuffer(Buffer.from(ciphertext, 'base64')).toString('utf8');
+    },
+    encryptBuffer,
+    decryptBuffer,
+  };
+}
+
+/**
+ * Writes an artifact file with optional encryption
+ */
+export async function writeArtifact(
+  filePath: string,
+  content: string | Buffer,
+  crypto?: ArtifactCrypto,
+): Promise<string> {
+  const data = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+  
+  if (crypto) {
+    const encrypted = crypto.encryptBuffer(data);
+    const encryptedPath = filePath + ENCRYPTED_EXTENSION;
+    await fs.writeFile(encryptedPath, encrypted);
+    return encryptedPath;
+  }
+  
+  await fs.writeFile(filePath, data);
+  return filePath;
+}
+
+/**
+ * Reads an artifact file with optional decryption
+ */
+export async function readArtifact(
+  filePath: string,
+  crypto?: ArtifactCrypto,
+): Promise<string> {
+  // Check for encrypted version first
+  const encryptedPath = filePath + ENCRYPTED_EXTENSION;
+  const useEncrypted = existsSync(encryptedPath);
+  
+  if (useEncrypted) {
+    if (!crypto) {
+      throw new Error(`Encrypted artifact found at ${encryptedPath} but no decryption key provided`);
+    }
+    const data = await fs.readFile(encryptedPath);
+    return crypto.decryptBuffer(data).toString('utf8');
+  }
+  
+  const data = await fs.readFile(filePath, 'utf8');
+  return data;
+}
+
+/**
+ * Appends to an artifact file (for JSONL files). Encrypted files must be read, appended, and rewritten.
+ */
+export async function appendArtifact(
+  filePath: string,
+  content: string,
+  crypto?: ArtifactCrypto,
+): Promise<void> {
+  if (crypto) {
+    // For encrypted files, we need to read, append, and rewrite
+    const existing = await readArtifact(filePath, crypto).catch(() => '');
+    await writeArtifact(filePath, existing + content, crypto);
+  } else {
+    await fs.appendFile(filePath, content);
+  }
 }
 
 function uniqueStrings(values: string[]): string[] {

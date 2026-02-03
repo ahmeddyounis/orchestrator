@@ -143,3 +143,60 @@ export function redactObject(obj: unknown): unknown {
     }),
   );
 }
+
+/**
+ * Configuration for vector metadata redaction
+ */
+export interface VectorRedactionOptions {
+  enabled: boolean;
+  redactMetadataFields: string[];
+  customPatterns?: Array<{ kind: string; pattern: RegExp; confidence: 'low' | 'medium' | 'high' }>;
+}
+
+const DEFAULT_VECTOR_REDACTION_OPTIONS: VectorRedactionOptions = {
+  enabled: true,
+  redactMetadataFields: ['content', 'evidence', 'source'],
+};
+
+/**
+ * Redacts sensitive data from vector metadata before storage
+ * This prevents sensitive information from being stored in vector databases
+ */
+export function redactVectorMetadata(
+  metadata: Record<string, unknown>,
+  options: Partial<VectorRedactionOptions> = {},
+): Record<string, unknown> {
+  const opts = { ...DEFAULT_VECTOR_REDACTION_OPTIONS, ...options };
+  
+  if (!opts.enabled) {
+    return metadata;
+  }
+
+  const scanner = new SecretScanner();
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(metadata)) {
+    // Skip null/undefined values
+    if (value === null || value === undefined) {
+      result[key] = value;
+      continue;
+    }
+
+    // Redact string fields that are in the redaction list
+    if (typeof value === 'string' && opts.redactMetadataFields.includes(key)) {
+      const findings = scanner.scan(value);
+      result[key] = findings.length > 0 ? redact(value, findings) : value;
+      continue;
+    }
+
+    // Recursively handle nested objects
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = redactVectorMetadata(value as Record<string, unknown>, opts);
+      continue;
+    }
+
+    result[key] = value;
+  }
+
+  return result;
+}

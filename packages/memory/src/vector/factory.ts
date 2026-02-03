@@ -145,7 +145,7 @@ export class VectorBackendFactory {
         return new MockVectorMemoryBackend();
 
       case 'sqlite': {
-        return new SQLiteVectorBackend(config.path, config.maxCandidates);
+        return new SQLiteVectorBackend(config.path, config.maxCandidates, config.redaction);
       }
 
       case 'qdrant': {

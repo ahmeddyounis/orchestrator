@@ -332,13 +332,44 @@ export const SecurityConfigSchema = z
     encryption: z
       .object({
         keyEnv: z.string().default('ORCHESTRATOR_ENC_KEY'),
+        artifactEncryption: z.boolean().default(false),
       })
-      .default({ keyEnv: 'ORCHESTRATOR_ENC_KEY' }),
+      .default({ keyEnv: 'ORCHESTRATOR_ENC_KEY', artifactEncryption: false }),
+    vectorRedaction: z
+      .object({
+        enabled: z.boolean().default(true),
+        redactMetadataFields: z.array(z.string()).default(['content', 'evidence', 'source']),
+      })
+      .default({ enabled: true, redactMetadataFields: ['content', 'evidence', 'source'] }),
   })
   .default({
     redaction: { enabled: true, maxRedactionsPerFile: 200 },
-    encryption: { keyEnv: 'ORCHESTRATOR_ENC_KEY' },
+    encryption: { keyEnv: 'ORCHESTRATOR_ENC_KEY', artifactEncryption: false },
+    vectorRedaction: { enabled: true, redactMetadataFields: ['content', 'evidence', 'source'] },
   });
+
+export const SandboxConfigSchema = z
+  .object({
+    mode: z.enum(['none', 'docker', 'devcontainer']).default('none'),
+    docker: z
+      .object({
+        image: z.string().default('node:20-slim'),
+        networkMode: z.enum(['none', 'host', 'bridge']).default('none'),
+        readonlyRoot: z.boolean().default(true),
+        tmpfsSize: z.string().default('512m'),
+        memoryLimit: z.string().default('2g'),
+        cpuLimit: z.number().default(2),
+        seccompProfile: z.enum(['default', 'unconfined']).default('default'),
+      })
+      .optional(),
+    devcontainer: z
+      .object({
+        configPath: z.string().default('.devcontainer/devcontainer.json'),
+        workspaceMount: z.string().optional(),
+      })
+      .optional(),
+  })
+  .default({ mode: 'none' });
 
 export const PluginsConfigSchema = z.object({
   enabled: z.boolean().default(false),
@@ -415,11 +446,7 @@ export const ConfigSchema = z.object({
       allowDirtyWorkingTree: z.boolean().default(false),
       noCheckpoints: z.boolean().default(false),
       tools: ToolPolicySchema.default(ToolPolicySchema.parse({})),
-      sandbox: z
-        .object({
-          mode: z.enum(['none', 'docker', 'devcontainer']).default('none'),
-        })
-        .default({ mode: 'none' }),
+      sandbox: SandboxConfigSchema.default(SandboxConfigSchema.parse({})),
     })
     .optional(),
   verification: z
@@ -473,3 +500,6 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
+export type SandboxConfig = z.infer<typeof SandboxConfigSchema>;
+export type VectorRedactionConfig = z.infer<typeof SecurityConfigSchema>['vectorRedaction'];

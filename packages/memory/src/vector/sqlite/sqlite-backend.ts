@@ -9,7 +9,9 @@ import {
   VectorQueryResult,
   VectorQueryFilter,
   VectorBackendInfo,
+  VectorRedactionConfig,
 } from '../backend';
+import { redactVectorMetadata } from '@orchestrator/shared';
 
 const DEFAULT_MAX_CANDIDATES = 20_000;
 
@@ -61,10 +63,16 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
   private db: DatabaseSync | null = null;
   private dbPath: string;
   private maxCandidates: number;
+  private redactionConfig?: VectorRedactionConfig;
 
-  constructor(dbPath?: string, maxCandidates: number = DEFAULT_MAX_CANDIDATES) {
+  constructor(
+    dbPath?: string,
+    maxCandidates: number = DEFAULT_MAX_CANDIDATES,
+    redactionConfig?: VectorRedactionConfig,
+  ) {
     this.dbPath = dbPath ?? '.orchestrator/memory_vectors.sqlite';
     this.maxCandidates = maxCandidates;
+    this.redactionConfig = redactionConfig;
   }
 
   /** Run database migrations */
@@ -106,6 +114,14 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
       throw new Error('SQLiteVectorBackend not initialized. Call init() first.');
     }
 
+    // Apply redaction to metadata if enabled
+    const processedItems = this.redactionConfig?.enabled
+      ? items.map((item) => ({
+          ...item,
+          metadata: redactVectorMetadata(item.metadata as Record<string, unknown>, this.redactionConfig) as typeof item.metadata,
+        }))
+      : items;
+
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO memory_vectors 
       (repoId, entryId, embedderId, dims, updatedAt, stale, type, vectorBlob)
@@ -114,7 +130,7 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
 
     this.db.exec('BEGIN TRANSACTION');
     try {
-      for (const item of items) {
+      for (const item of processedItems) {
         const blob = float32ToBlob(item.vector);
         stmt.run(
           repoId,

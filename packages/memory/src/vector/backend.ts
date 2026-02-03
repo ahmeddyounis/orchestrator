@@ -43,6 +43,14 @@ export interface VectorBackendConfig {
   backend: string;
   path?: string;
   maxCandidates?: number;
+  redaction?: VectorRedactionConfig;
+}
+
+/** Configuration for vector metadata redaction */
+export interface VectorRedactionConfig {
+  enabled: boolean;
+  redactMetadataFields: string[];
+  customPatterns?: Array<{ kind: string; pattern: RegExp; confidence: 'low' | 'medium' | 'high' }>;
 }
 
 /**
