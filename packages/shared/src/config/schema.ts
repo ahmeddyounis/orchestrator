@@ -101,6 +101,28 @@ export const ProviderConfigSchema = z
   })
   .passthrough();
 
+/**
+ * Per-tool timeout configuration schema.
+ * Allows specifying timeout and resource limits for specific tools.
+ */
+export const ToolTimeoutConfigSchema = z.object({
+  timeoutMs: z.number().min(1000).describe('Maximum execution time in milliseconds'),
+  gracePeriodMs: z.number().min(0).optional().describe('Grace period for cleanup after timeout'),
+  maxMemoryBytes: z.number().min(0).optional().describe('Maximum memory usage in bytes'),
+  maxCpuSeconds: z.number().min(0).optional().describe('Maximum CPU time in seconds'),
+});
+
+/**
+ * Map of tool names to their timeout configurations.
+ * Tool names can be exact matches (e.g., "npm") or the base command.
+ */
+export const ToolTimeoutsConfigSchema = z
+  .record(z.string(), ToolTimeoutConfigSchema)
+  .optional()
+  .describe('Per-tool timeout configurations');
+
+export type ToolTimeoutsConfig = z.infer<typeof ToolTimeoutsConfigSchema>;
+
 export const ToolPolicySchema = z.object({
   enabled: z.boolean().default(false),
   requireConfirmation: z.boolean().default(true),
@@ -129,6 +151,7 @@ export const ToolPolicySchema = z.object({
   maxOutputBytes: z.number().default(1_024_1024),
   autoApprove: z.boolean().default(false),
   interactive: z.boolean().default(true),
+  toolTimeouts: ToolTimeoutsConfigSchema,
 });
 
 export const BudgetSchema = z.object({

@@ -8,6 +8,20 @@ export type ToolClassification =
   | 'destructive'
   | 'unknown';
 
+/**
+ * Timeout configuration for a specific tool.
+ */
+export interface ToolTimeoutConfig {
+  /** Maximum execution time in milliseconds */
+  timeoutMs: number;
+  /** Grace period for cleanup after timeout signal (ms) */
+  gracePeriodMs?: number;
+  /** Maximum memory usage in bytes (for resource limiting) */
+  maxMemoryBytes?: number;
+  /** Maximum CPU time in seconds (for resource limiting) */
+  maxCpuSeconds?: number;
+}
+
 export interface ToolPolicy {
   enabled: boolean;
   requireConfirmation: boolean;
@@ -20,6 +34,8 @@ export interface ToolPolicy {
   timeoutMs: number;
   autoApprove?: boolean;
   interactive?: boolean;
+  /** Per-tool timeout configurations (overrides global timeoutMs) */
+  toolTimeouts?: Record<string, ToolTimeoutConfig>;
 }
 
 export interface ToolRunRequest {
