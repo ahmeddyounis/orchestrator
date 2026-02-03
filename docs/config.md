@@ -63,6 +63,8 @@ providers:
     model: claude-code
     command: claude
     args: []
+    # Optional: Increase/decrease the subprocess timeout (ms).
+    # timeoutMs: 600000
     # Allowlisted env vars forwarded to the subprocess (optional).
     env:
       - ANTHROPIC_API_KEY

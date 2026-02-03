@@ -20,6 +20,11 @@ export interface SubprocessConfig {
   command: string[];
   cwdMode?: 'repoRoot' | 'runDir';
   envAllowlist?: string[]; // Allowlist of env vars to pass through
+  /**
+   * Max runtime for the subprocess (ms). If not provided, defaults to a generous
+   * limit suitable for LLM-backed CLIs.
+   */
+  timeoutMs?: number;
   maxTranscriptSize?: number;
   compatibilityProfile?: keyof typeof SubprocessCompatibilityProfiles;
   /**
@@ -68,10 +73,12 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
+    const timeoutMs = ctx.timeoutMs ?? this.config.timeoutMs ?? 600_000;
+
     const pm = new ProcessManager({
       logger: ctx.logger,
       runId: ctx.runId,
-      timeoutMs: ctx.timeoutMs,
+      timeoutMs,
       envAllowlist: this.config.envAllowlist,
     });
 
@@ -128,7 +135,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
     });
 
     const isPrompt = (text: string) => this.isPrompt(text);
-    const heuristicTimeoutMs = (ctx.timeoutMs ?? 30000) + 500;
+    const heuristicTimeoutMs = timeoutMs + 500;
 
     try {
       await pm.spawn(this.config.command, cwd, env, this.config.pty ?? false);
@@ -205,6 +212,9 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       }
     } catch (e) {
       const err = e as Error;
+      if (timedOut || err.message.startsWith('readUntilHeuristic timed out')) {
+        throw new TimeoutError(`Process timed out after ${timeoutMs}ms`);
+      }
       if (err instanceof TimeoutError) {
         throw err;
       }

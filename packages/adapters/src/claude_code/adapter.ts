@@ -12,6 +12,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
     const pty = (config as unknown as { pty?: boolean }).pty ?? false;
+    const timeoutMs = config.timeoutMs;
 
     // Prefer non-interactive mode for programmatic use (works well with pipes).
     // Claude Code reads the prompt from stdin when `--print` is enabled.
@@ -27,6 +28,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
       envAllowlist: config.env,
       endInputAfterWrite: true,
       pty,
+      timeoutMs,
     });
   }
 

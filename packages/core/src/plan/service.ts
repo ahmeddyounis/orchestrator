@@ -201,20 +201,68 @@ Each step should be a concise instruction.`;
 
     let planSteps: string[] = [];
 
-    // Attempt 1: Parse JSON
-    try {
-      // Basic cleanup for markdown code blocks if the model includes them despite jsonMode
-      const cleanedText = rawText.replace(/```json\n|\n```/g, '').trim();
-
-      const parsed = JSON.parse(cleanedText);
-      if (parsed && Array.isArray(parsed.steps)) {
-        planSteps = parsed.steps.map(String);
-      } else if (Array.isArray(parsed)) {
-        // Fallback if model returns just array
-        planSteps = parsed.map(String);
+    // Attempt 1: Parse JSON (robust to preamble/trailing text)
+    const coerceSteps = (parsed: unknown): string[] => {
+      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).steps)) {
+        return (parsed as any).steps.map(String);
       }
-    } catch {
-      // JSON parsing failed, try plain text parsing
+      if (Array.isArray(parsed)) {
+        return parsed.map(String);
+      }
+      return [];
+    };
+
+    const tryParseJson = (candidate: string): string[] => {
+      const parsed = JSON.parse(candidate);
+      return coerceSteps(parsed);
+    };
+
+    const rawTrimmed = rawText.trim();
+
+    // Prefer JSON inside fenced blocks if present.
+    const fencedJsonMatch = rawTrimmed.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (fencedJsonMatch) {
+      try {
+        planSteps = tryParseJson(fencedJsonMatch[1].trim());
+      } catch {
+        // ignore and fall through
+      }
+    }
+
+    if (planSteps.length === 0) {
+      // Basic cleanup for markdown code blocks if the model includes them despite jsonMode
+      const cleanedText = rawTrimmed.replace(/```json\n|\n```/g, '').trim();
+
+      // Try parsing whole string first.
+      try {
+        planSteps = tryParseJson(cleanedText);
+      } catch {
+        // ignore and fall through
+      }
+
+      // Try extracting the first JSON object or array from the text.
+      if (planSteps.length === 0) {
+        const firstBrace = cleanedText.indexOf('{');
+        const lastBrace = cleanedText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            planSteps = tryParseJson(cleanedText.slice(firstBrace, lastBrace + 1));
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (planSteps.length === 0) {
+        const firstBracket = cleanedText.indexOf('[');
+        const lastBracket = cleanedText.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          try {
+            planSteps = tryParseJson(cleanedText.slice(firstBracket, lastBracket + 1));
+          } catch {
+            // ignore
+          }
+        }
+      }
     }
 
     // Attempt 2: Parse text (bullets/numbers)

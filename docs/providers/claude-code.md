@@ -29,13 +29,14 @@ providers:
 
 ### Configuration Options
 
-| Option    | Description                                              | Default  |
-| :-------- | :------------------------------------------------------- | :------- |
-| `type`    | Must be `claude_code`.                                   | Required |
-| `command` | The executable to run.                                   | `claude` |
-| `args`    | List of arguments to pass to the command.                | `[]`     |
-| `env`     | List of environment variables to pass to the subprocess. | `[]`     |
-| `pty`     | Spawn Claude Code in a PTY.                              | `false`  |
+| Option      | Description                                              | Default  |
+| :---------- | :------------------------------------------------------- | :------- |
+| `type`      | Must be `claude_code`.                                   | Required |
+| `command`   | The executable to run.                                   | `claude` |
+| `args`      | List of arguments to pass to the command.                | `[]`     |
+| `env`       | List of environment variables to pass to the subprocess. | `[]`     |
+| `pty`       | Spawn Claude Code in a PTY.                              | `false`  |
+| `timeoutMs` | Max subprocess runtime (ms).                             | `600000` |
 
 ## Validation
 

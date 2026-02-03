@@ -89,6 +89,7 @@ export const ProviderConfigSchema = z
     args: z.array(z.string()).optional(),
     env: z.array(z.string()).optional(),
     cwdMode: z.enum(['repoRoot', 'runDir']).optional(),
+    timeoutMs: z.number().optional(),
     pricing: z
       .object({
         inputPerMTokUsd: z.number().optional(),
