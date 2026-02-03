@@ -87,6 +87,31 @@ export class ProcessManager extends EventEmitter {
       finalEnv.PATH = processPath;
     }
 
+    // Pass through a minimal set of non-secret environment variables that many CLIs rely on
+    // for config and credential discovery.
+    const baselineEnvKeys = [
+      'HOME',
+      'USER',
+      'LOGNAME',
+      'SHELL',
+      'TERM',
+      'COLORTERM',
+      'LANG',
+      'LC_ALL',
+      'LC_CTYPE',
+      'TMPDIR',
+      'TMP',
+      'TEMP',
+      'XDG_CONFIG_HOME',
+      'XDG_CACHE_HOME',
+      'XDG_DATA_HOME',
+    ];
+    for (const key of baselineEnvKeys) {
+      if (finalEnv[key] === undefined && process.env[key] !== undefined) {
+        finalEnv[key] = process.env[key] as string;
+      }
+    }
+
     // Explicitly add whitelisted environment variables from the current process.
     if (this.options.envAllowlist) {
       for (const key of this.options.envAllowlist) {

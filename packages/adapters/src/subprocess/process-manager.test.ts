@@ -119,4 +119,27 @@ describe('ProcessManager', () => {
     delete process.env['TEST_ENV_VAR'];
     delete process.env['ANOTHER_VAR'];
   });
+
+  it('should pass baseline environment variables by default', async () => {
+    const originalUser = process.env['USER'];
+    process.env['USER'] = 'pm_user_test';
+
+    try {
+      const pm = new ProcessManager();
+
+      const command = [process.execPath, '-e', 'console.log(`USER=${process.env.USER}`)'];
+      await pm.spawn(command, process.cwd(), {}, false);
+
+      const output = await pm.readUntil((t) => t.includes('USER='), 1000);
+      expect(output).toContain('USER=pm_user_test');
+
+      pm.kill();
+    } finally {
+      if (originalUser === undefined) {
+        delete process.env['USER'];
+      } else {
+        process.env['USER'] = originalUser;
+      }
+    }
+  });
 });
