@@ -14,12 +14,26 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
     const pty = (config as unknown as { pty?: boolean }).pty ?? false;
     const timeoutMs = config.timeoutMs;
 
+    // We manage these flags to keep the subprocess output machine-parseable.
+    assertDoesNotIncludeAnyArg(args, ['exec', '-m', '--model', '--json', '--output-schema', '-']);
+
     if (!command.length) {
       throw new ConfigError(`Missing command for CodexCli provider. Checked config.command`);
     }
 
     super({
-      command: [...command, ...args],
+      command: [
+        ...command,
+        'exec',
+        ...args,
+        '--color',
+        'never',
+        '--sandbox',
+        'read-only',
+        '--model',
+        config.model,
+        '-',
+      ],
       cwdMode: 'repoRoot',
       envAllowlist: config.env,
       endInputAfterWrite: true,
@@ -54,4 +68,64 @@ index 1234567..89abcdef 100644
 @@ -1,3 +1,3 @@
 -const x = 1;
 +const x = 2;
+<END_DIFF>
+`,
+            },
+          ],
+        }
+      : req;
+
+    const response = await super.generate(wrappedReq, ctx);
+
+    // Extract diff if present using robust parser
+    if (response.text) {
+      const diffParsed = parseUnifiedDiffFromText(response.text);
+      if (diffParsed && diffParsed.confidence >= 0.7) {
+        await ctx.logger.log({
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'diff', confidence: diffParsed.confidence },
+        });
+
+        return {
+          ...response,
+          text: diffParsed.diffText,
+        };
+      }
+
+      const planParsed = parsePlanFromText(response.text);
+      if (planParsed) {
+        await ctx.logger.log({
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'plan', confidence: planParsed.confidence },
+        });
+      } else {
+        await ctx.logger.log({
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: ctx.runId,
+          type: 'SubprocessParsed',
+          payload: { kind: 'text', confidence: 1.0 },
+        });
+      }
+    }
+
+    return response;
+  }
+}
+
+function assertDoesNotIncludeAnyArg(args: string[], forbidden: string[]): void {
+  for (const arg of args) {
+    if (forbidden.includes(arg)) {
+      throw new ConfigError(
+        `CodexCli provider manages ${forbidden.join(', ')} internally; remove '${arg}' from config.args.`,
+      );
+    }
+  }
+}
 

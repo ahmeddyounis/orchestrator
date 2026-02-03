@@ -36,7 +36,7 @@ providers:
 
 Each provider must include:
 
-- `type`: one of `openai`, `anthropic`, `claude_code`, `gemini_cli`, `fake`
+- `type`: one of `openai`, `anthropic`, `claude_code`, `gemini_cli`, `codex_cli`, `fake`
 - `model`: a string (adapter-specific; required by config validation)
 
 Hosted providers typically use one of:
@@ -73,6 +73,12 @@ providers:
     type: gemini_cli
     model: gemini-2.5-flash
     command: gemini
+    args: []
+
+  codex_cli:
+    type: codex_cli
+    model: o3-mini
+    command: codex
     args: []
 ```
 

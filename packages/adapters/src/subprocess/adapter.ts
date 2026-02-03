@@ -148,14 +148,20 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
 
       const shouldSendInput = prompt.trim().length > 0;
 
-      // Only clear outputText if we're going to send input to an interactive process.
-      // Some non-interactive commands may print a "prompt-looking" marker right before exiting;
+      // If the subprocess looks interactive (i.e. shows a prompt), clear any startup banner/prompt
+      // before we send input so we don't accidentally treat the initial prompt as "completion".
+      // Some non-interactive commands may print a prompt-looking marker right before exiting;
       // give them a brief window to exit before treating them as interactive.
       if (shouldSendInput && pm.isRunning) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (pm.isRunning) {
-          outputText = '';
-          pm.clearBuffer();
+        try {
+          await pm.readUntil(isPrompt, this.compatibilityProfile.initialPromptTimeoutMs);
+          await new Promise((r) => setTimeout(r, 25));
+          if (pm.isRunning) {
+            outputText = '';
+            pm.clearBuffer();
+          }
+        } catch {
+          // No prompt detected quickly; treat as non-interactive (don't clear output).
         }
       }
 

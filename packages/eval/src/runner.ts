@@ -30,6 +30,7 @@ import {
   OpenAIAdapter,
   AnthropicAdapter,
   ClaudeCodeAdapter,
+  CodexCliAdapter,
   GeminiCliAdapter,
   FakeAdapter,
   SubprocessProviderAdapter,
@@ -418,6 +419,7 @@ export class EvalRunner {
     registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
     registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
     registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
+    registry.registerFactory('codex_cli', (cfg: ProviderConfig) => new CodexCliAdapter(cfg));
     registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
     registry.registerFactory('subprocess', (cfg: ProviderConfig) => {
       if (!cfg.command) {

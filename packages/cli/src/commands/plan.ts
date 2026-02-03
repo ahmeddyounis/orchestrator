@@ -17,7 +17,13 @@ import {
   ConfigError,
   UsageError,
 } from '@orchestrator/shared';
-import { OpenAIAdapter, AnthropicAdapter, ClaudeCodeAdapter, GeminiCliAdapter } from '@orchestrator/adapters';
+import {
+  OpenAIAdapter,
+  AnthropicAdapter,
+  ClaudeCodeAdapter,
+  GeminiCliAdapter,
+  CodexCliAdapter,
+} from '@orchestrator/adapters';
 import { OutputRenderer, type OutputResult } from '../output/renderer';
 import * as fs from 'fs/promises';
 import path from 'path';
@@ -138,6 +144,7 @@ export function registerPlanCommand(program: Command) {
       registry.registerFactory('anthropic', (cfg) => new AnthropicAdapter(cfg));
       registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
       registry.registerFactory('gemini_cli', (cfg) => new GeminiCliAdapter(cfg));
+      registry.registerFactory('codex_cli', (cfg) => new CodexCliAdapter(cfg));
 
       const eventBus = {
         emit: async (event: OrchestratorEvent) => {

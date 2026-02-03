@@ -73,6 +73,9 @@ async function checkLocalProviderExecutables(config: Config): Promise<[string, s
     if (provider.type === 'gemini_cli') {
       commandsToCheck.add(provider.command || 'gemini');
     }
+    if (provider.type === 'codex_cli') {
+      commandsToCheck.add(provider.command || 'codex');
+    }
   }
 
   return await Promise.all([...commandsToCheck].map((cmd) => checkExecutable(cmd)));
