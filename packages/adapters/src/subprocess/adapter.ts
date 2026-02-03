@@ -73,7 +73,7 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    const timeoutMs = ctx.timeoutMs ?? this.config.timeoutMs ?? 600_000;
+    const timeoutMs = ctx.timeoutMs ?? this.config.timeoutMs ?? 6_000_000;
 
     const pm = new ProcessManager({
       logger: ctx.logger,
