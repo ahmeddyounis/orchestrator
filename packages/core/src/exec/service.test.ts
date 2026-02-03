@@ -163,4 +163,24 @@ describe('ExecutionService', () => {
     expect(result.success).toBe(false);
     expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('HEAD');
   });
+
+  it('includes git apply stderr in the returned error message', async () => {
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: false,
+      filesChanged: [],
+      error: {
+        type: 'execution',
+        message: 'git apply failed with code 1',
+        details: {
+          stderr: 'error: patch failed: foo.txt:1\nerror: foo.txt: patch does not apply\n',
+        },
+      },
+    });
+
+    const result = await service.applyPatch('diff...', 'Fix bug');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('git apply failed with code 1');
+    expect(result.error).toContain('patch does not apply');
+  });
 });

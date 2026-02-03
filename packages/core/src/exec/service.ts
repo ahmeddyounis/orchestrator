@@ -109,7 +109,7 @@ export class ExecutionService {
         return { success: true, filesChanged: result.filesChanged };
       } else {
         // Application Failed
-        const errorMsg = result.error?.message || 'Unknown error';
+        const errorMsg = formatPatchApplyError(result.error) || 'Unknown error';
         await this.eventBus.emit({
           type: 'PatchApplyFailed',
           schemaVersion: 1,
@@ -166,4 +166,28 @@ export class ExecutionService {
       return { success: false, error: errorMsg };
     }
   }
+}
+
+function formatPatchApplyError(error: { message: string; details?: unknown } | undefined): string {
+  if (!error) return '';
+
+  const base = error.message || '';
+  const stderr = (error.details as { stderr?: unknown } | undefined)?.stderr;
+
+  if (typeof stderr !== 'string' || stderr.trim().length === 0) {
+    return base;
+  }
+
+  // Keep the error short so it can be safely embedded in retry prompts.
+  const tailLines = stderr
+    .trim()
+    .split('\n')
+    .filter((l) => l.trim().length > 0)
+    .slice(-10)
+    .join('\n');
+
+  const maxChars = 1000;
+  const excerpt = tailLines.length > maxChars ? tailLines.slice(-maxChars) : tailLines;
+
+  return `${base}\n${excerpt}`.trim();
 }

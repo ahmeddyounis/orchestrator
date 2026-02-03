@@ -3,7 +3,12 @@ import {
   parseUnifiedDiffFromText,
   parsePlanFromText,
 } from '../subprocess';
-import { ProviderConfig, ModelRequest, ModelResponse, ProviderCapabilities } from '@orchestrator/shared';
+import {
+  ProviderConfig,
+  ModelRequest,
+  ModelResponse,
+  ProviderCapabilities,
+} from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
@@ -147,35 +152,16 @@ index 1234567..89abcdef 100644
     // Try to parse JSON output or text-based stats from Codex CLI
     const parsed = parseCodexCliJson(rawText);
     const responseText = extractResponseText(parsed, rawText);
-    
+
     // Extract usage from JSON stats, text-based stats, or fall back to placeholder.
-    // Log when extraction fails to help diagnose token tracking issues.
     const jsonUsage = extractUsageFromCodexStats(parsed);
     const textUsage = parseTextBasedTokenUsage(rawText);
-    
-    let usage = jsonUsage ?? textUsage ?? response.usage;
-    
-    // Log fallback when neither JSON nor text-based extraction yielded results
-    if (!jsonUsage && !textUsage) {
-      await ctx.logger.log({
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId: ctx.runId,
-        type: 'TokenExtractionFallback',
-        payload: {
-          reason: 'Unable to extract token usage from Codex CLI output',
-          hadJsonParsed: parsed !== null,
-          rawTextLength: rawText.length,
-          rawTextPreview: rawText.slice(0, 200),
-          fallbackUsage: response.usage,
-        },
-      });
-    }
-                  response.usage;
+
+    const usage = jsonUsage ?? textUsage ?? response.usage;
 
     // Extract diff if present using robust parser
     if (responseText) {
-      const diffParsed = parseUnifiedDiffFromText(response.text);
+      const diffParsed = parseUnifiedDiffFromText(responseText);
       if (diffParsed && diffParsed.confidence >= 0.7) {
         await ctx.logger.log({
           schemaVersion: 1,
@@ -193,7 +179,7 @@ index 1234567..89abcdef 100644
         };
       }
 
-      const planParsed = parsePlanFromText(response.text);
+      const planParsed = parsePlanFromText(responseText);
       if (planParsed) {
         await ctx.logger.log({
           schemaVersion: 1,
@@ -262,8 +248,10 @@ function extractResponseText(parsed: CodexCliJson | null, fallback: string): str
  * Handles both 'usage' and 'stats' fields with various token count formats.
  */
 export function extractUsageFromCodexStats(
-  parsed: CodexCliJson,
+  parsed: CodexCliJson | null,
 ): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
+  if (!parsed) return undefined;
+
   const usage = parsed.usage ?? parsed.stats;
   if (!usage || typeof usage !== 'object') return undefined;
 
@@ -307,21 +295,21 @@ export function parseTextBasedTokenUsage(
   // Pattern 1: "input=X" and "output=Y" or "input_tokens=X"
   const inputMatch = text.match(/(?:input|prompt)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
   const outputMatch = text.match(/(?:output|completion|candidate)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
-  
+
   // Pattern 2: "X input tokens" and "Y output tokens"
   const inputMatch2 = text.match(/(\d+)\s+(?:input|prompt)\s+tokens?/i);
   const outputMatch2 = text.match(/(\d+)\s+(?:output|completion|candidate)\s+tokens?/i);
-  
+
   // Pattern 3: "X in, Y out" or "X in / Y out"
   const inOutMatch = text.match(/(\d+)\s*(?:tokens?)?\s*in[,\/\s]+(\d+)\s*(?:tokens?)?\s*out/i);
-  
+
   // Pattern 4: Total tokens line
   const totalMatch = text.match(/(?:total)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
   const totalMatch2 = text.match(/(\d+)\s+total\s+tokens?/i);
-  
+
   let inputTokens = 0;
   let outputTokens = 0;
-  
+
   if (inOutMatch) {
     inputTokens = parseInt(inOutMatch[1], 10);
     outputTokens = parseInt(inOutMatch[2], 10);
@@ -329,15 +317,16 @@ export function parseTextBasedTokenUsage(
     inputTokens = parseInt(inputMatch?.[1] ?? inputMatch2?.[1] ?? '0', 10);
     outputTokens = parseInt(outputMatch?.[1] ?? outputMatch2?.[1] ?? '0', 10);
   }
-  
-  const totalTokens = parseInt(totalMatch?.[1] ?? totalMatch2?.[1] ?? '0', 10) || 
-                      (inputTokens + outputTokens) || 
-                      undefined;
-  
+
+  const totalTokens =
+    parseInt(totalMatch?.[1] ?? totalMatch2?.[1] ?? '0', 10) ||
+    inputTokens + outputTokens ||
+    undefined;
+
   if (inputTokens === 0 && outputTokens === 0) {
     return undefined;
   }
-  
+
   return {
     inputTokens,
     outputTokens,
@@ -358,4 +347,3 @@ function assertDoesNotIncludeAnyArg(args: string[], forbidden: string[]): void {
     }
   }
 }
-

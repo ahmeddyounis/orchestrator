@@ -91,6 +91,29 @@ describe('PatchApplier', () => {
     expect(content).toBe('Hello Universe\n');
   });
 
+  it('treats header-only diffs as a no-op success', async () => {
+    const filePath = path.join(tmpDir, 'test.txt');
+    await fs.writeFile(filePath, 'Hello World\n');
+    await run('git', ['add', 'test.txt'], tmpDir);
+    await run('git', ['commit', '-m', 'Initial commit'], tmpDir);
+
+    const diffText =
+      [
+        'diff --git a/test.txt b/test.txt',
+        'index 557db03..980a0d5 100644',
+        '--- a/test.txt',
+        '+++ b/test.txt',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(true);
+    expect(result.filesChanged).toEqual([]);
+
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toBe('Hello World\n');
+  });
+
   it('refuses path traversal', async () => {
     const diffText = [
       'diff --git a/../secret.txt b/../secret.txt',

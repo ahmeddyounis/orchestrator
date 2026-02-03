@@ -53,6 +53,15 @@ export class PatchApplier {
       };
     }
 
+    // Some agents will produce "no-op" diffs (headers only) when a step is already satisfied.
+    // `git apply` rejects many such patches; treat them as a successful no-op to avoid repeated failures.
+    if (isNoOpDiff(normalizedDiffText)) {
+      return {
+        applied: true,
+        filesChanged: [],
+      };
+    }
+
     // 2. Extract affected files for reporting
     const affectedFiles = this.extractAffectedFiles(normalizedDiffText);
 
@@ -91,6 +100,9 @@ export class PatchApplier {
     let fileCount = 0;
     let addedLines = 0;
     let removedLines = 0;
+    let hasHunkHeader = false;
+    let hasOldHeader = false;
+    let hasNewHeader = false;
 
     for (const line of lines) {
       if (line.startsWith('+++ b/')) {
@@ -117,6 +129,10 @@ export class PatchApplier {
       // Check for LOC limits
       if (line.startsWith('+') && !line.startsWith('+++')) addedLines++;
       if (line.startsWith('-') && !line.startsWith('---')) removedLines++;
+
+      if (line.startsWith('@@ ')) hasHunkHeader = true;
+      if (line.startsWith('--- ')) hasOldHeader = true;
+      if (line.startsWith('+++ ')) hasNewHeader = true;
     }
 
     // Validate limits
@@ -132,6 +148,14 @@ export class PatchApplier {
       return {
         type: 'limit',
         message: `Too many lines touched (${totalLinesTouched} > ${limits.maxLinesTouched})`,
+      };
+    }
+
+    // Syntax: hunks require file headers.
+    if (hasHunkHeader && !(hasOldHeader && hasNewHeader)) {
+      return {
+        type: 'validation',
+        message: 'Invalid diff: hunk header found without file headers (---/+++)',
       };
     }
 
@@ -323,4 +347,21 @@ function stripCompletelyEmptyLines(raw: string): string {
   const lines = raw.split('\n').filter((line) => line !== '');
   if (lines.length === 0) return '';
   return lines.join('\n') + '\n';
+}
+
+function isNoOpDiff(diffText: string): boolean {
+  const lines = diffText.split('\n');
+
+  const hasOldHeader = lines.some((l) => l.startsWith('--- '));
+  const hasNewHeader = lines.some((l) => l.startsWith('+++ '));
+  if (!(hasOldHeader && hasNewHeader)) return false;
+
+  // If there are any hunks or real +/- lines, it's not a no-op.
+  for (const line of lines) {
+    if (line.startsWith('@@ ')) return false;
+    if (line.startsWith('+') && !line.startsWith('+++')) return false;
+    if (line.startsWith('-') && !line.startsWith('---')) return false;
+  }
+
+  return true;
 }
