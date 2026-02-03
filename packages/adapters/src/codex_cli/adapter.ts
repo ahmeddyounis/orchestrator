@@ -7,14 +7,27 @@ import { ProviderConfig, ModelRequest, ModelResponse } from '@orchestrator/share
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
+/**
+ * Extended config options for CodexCli provider.
+ * These are passed through ProviderConfigSchema.passthrough().
+ */
+interface CodexCliConfig extends ProviderConfig {
+  pty?: boolean;
+  /** Enable OSS mode with --oss and --local-provider flags for local model usage */
+  ossMode?: boolean;
+}
+
 export class CodexCliAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
+    const codexConfig = config as CodexCliConfig;
     const command = config.command ? [config.command] : ['codex'];
     const args = config.args || [];
-    const pty = (config as unknown as { pty?: boolean }).pty ?? false;
+    const pty = codexConfig.pty ?? false;
     const timeoutMs = config.timeoutMs;
+    const ossMode = codexConfig.ossMode ?? false;
 
     // We manage these flags to keep the subprocess output machine-parseable.
+    // Also forbid OSS-related flags since we control them via ossMode config.
     assertDoesNotIncludeAnyArg(args, ['exec', '-m', '--model', '--json', '--output-schema', '-']);
 
     if (!command.length) {
@@ -24,6 +37,7 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
     super({
       command: [
         ...command,
+        ...(ossMode ? ['--oss', '--local-provider', config.model] : []),
         'exec',
         ...args,
         '--color',

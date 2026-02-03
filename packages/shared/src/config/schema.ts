@@ -82,6 +82,8 @@ export const ProviderConfigSchema = z
   .object({
     type: z.string(),
     model: z.string(),
+    /** Enable OSS mode for codex_cli provider (adds --oss and --local-provider flags) */
+    ossMode: z.boolean().optional(),
     supportsTools: z.boolean().optional(),
     api_key_env: z.string().optional(),
     api_key: z.string().optional(),
