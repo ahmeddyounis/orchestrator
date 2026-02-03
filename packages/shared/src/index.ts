@@ -10,7 +10,7 @@ export * from './string-utils';
 export * from './config/schema';
 export * from './config/validation';
 export * from './types/memory';
-export * from './security/secrets';
+export * from './security';
 
 export * from './types/llm';
 export * from './types/patch';

@@ -4,7 +4,7 @@
  * Helpers for loading and validating plugins at runtime.
  */
 
-import { PluginValidationError } from '@orchestrator/shared';
+import { PluginValidationError, PluginPermissionError } from '@orchestrator/shared';
 import {
   SDK_VERSION,
   isVersionCompatible,
@@ -18,6 +18,13 @@ import type {
   PluginContext,
   PluginConfig,
 } from './interfaces';
+import {
+  type PluginSecurityContext,
+  DEFAULT_SECURITY_CONTEXT,
+  verifyPluginSecurity,
+  type SecurePluginManifest,
+} from './security';
+import { checkPermissions } from './permissions';
 
 /**
  * Result of loading a plugin
@@ -27,6 +34,14 @@ export interface LoadPluginResult<T extends PluginLifecycle = PluginLifecycle> {
   plugin?: T;
   manifest?: PluginManifest;
   error?: string;
+}
+
+/**
+ * Options for loading a plugin
+ */
+export interface LoadPluginOptions {
+  securityContext?: PluginSecurityContext;
+  pluginContent?: string | Buffer;
 }
 
 // Re-export error class for backward compatibility
@@ -68,12 +83,16 @@ export function validateManifest(manifest: unknown): manifest is PluginManifest 
 /**
  * Validate and load a plugin from an export object.
  * Throws PluginValidationError or PluginVersionMismatchError on failure.
+ * Throws PluginSignatureError if signature verification fails.
+ * Throws PluginPermissionError if permissions are insufficient.
  */
 export async function loadPlugin<T extends PluginLifecycle>(
   pluginExport: PluginExport<T>,
   config: PluginConfig,
   ctx: PluginContext,
+  options: LoadPluginOptions = {},
 ): Promise<T> {
+  const securityCtx = options.securityContext || DEFAULT_SECURITY_CONTEXT;
   // Extract name for error reporting (before validation)
   const rawManifest = pluginExport.manifest as unknown as Record<string, unknown> | undefined;
   const pluginName = typeof rawManifest?.name === 'string' ? rawManifest.name : 'unknown';
@@ -88,6 +107,25 @@ export async function loadPlugin<T extends PluginLifecycle>(
   // Check version compatibility
   if (!isVersionCompatible(manifest.sdkVersion)) {
     throw new PluginVersionMismatchError(manifest.name, manifest.sdkVersion, SDK_VERSION);
+  }
+
+  // Verify plugin security (signature and permissions)
+  if (options.pluginContent) {
+    verifyPluginSecurity(
+      manifest.name,
+      options.pluginContent,
+      manifest as SecurePluginManifest,
+      securityCtx,
+    );
+  } else if (securityCtx.enforcePermissions && manifest.permissions) {
+    // If no content provided, still check permissions
+    const { satisfied, missing } = checkPermissions(
+      manifest.permissions.required,
+      securityCtx.grantedPermissions,
+    );
+    if (!satisfied) {
+      throw new PluginPermissionError(manifest.name, missing);
+    }
   }
 
   // Create plugin instance
@@ -106,9 +144,10 @@ export async function safeLoadPlugin<T extends PluginLifecycle>(
   pluginExport: PluginExport<T>,
   config: PluginConfig,
   ctx: PluginContext,
+  options: LoadPluginOptions = {},
 ): Promise<LoadPluginResult<T>> {
   try {
-    const plugin = await loadPlugin(pluginExport, config, ctx);
+    const plugin = await loadPlugin(pluginExport, config, ctx, options);
     return {
       success: true,
       plugin,

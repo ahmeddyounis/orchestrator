@@ -48,7 +48,33 @@ export {
   PluginValidationError,
   PluginVersionMismatchError,
   type LoadPluginResult,
+  type LoadPluginOptions,
 } from './loader';
+
+// Permission exports
+export {
+  permissions,
+  PermissionManifestBuilder,
+  validatePermissionManifest,
+  checkPermissions,
+  DEFAULT_UNTRUSTED_PERMISSIONS,
+  DEFAULT_TRUSTED_PERMISSIONS,
+  type PluginPermissions,
+  type PermissionManifest,
+} from './permissions';
+
+// Security exports
+export {
+  generateSigningKeyPair,
+  signPlugin,
+  verifyPluginSecurity,
+  addTrustedKey,
+  DEFAULT_SECURITY_CONTEXT,
+  DEV_SECURITY_CONTEXT,
+  type PluginSecurityContext,
+  type SecurePluginManifest,
+  type SignedPluginBundle,
+} from './security';
 
 // Re-export commonly used types from shared for convenience
 export type {

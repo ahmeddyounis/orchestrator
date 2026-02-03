@@ -16,6 +16,7 @@ import type {
   ToolPolicy,
 } from '@orchestrator/shared';
 
+import type { PermissionManifest } from '@orchestrator/shared';
 import type { SdkVersionRange } from './version';
 
 // Re-export Logger type (may be sync or async depending on implementation)
@@ -286,6 +287,11 @@ export interface PluginManifest {
    * Configuration schema (optional, for validation)
    */
   configSchema?: Record<string, unknown>;
+
+  /**
+   * Permission manifest declaring required capabilities
+   */
+  permissions?: PermissionManifest;
 }
 
 /**

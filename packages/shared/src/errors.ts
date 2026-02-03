@@ -270,3 +270,36 @@ export class PluginValidationError extends AppError {
     this.pluginName = pluginName;
   }
 }
+
+/**
+ * Error thrown when plugin signature verification fails.
+ */
+export class PluginSignatureError extends AppError {
+  /** Name of the plugin that failed verification */
+  public readonly pluginName: string;
+
+  constructor(pluginName: string, message: string, options: AppErrorOptions = {}) {
+    super('PluginError', `Plugin "${pluginName}" signature error: ${message}`, options);
+    this.pluginName = pluginName;
+  }
+}
+
+/**
+ * Error thrown when plugin permissions are insufficient.
+ */
+export class PluginPermissionError extends AppError {
+  /** Name of the plugin with permission issues */
+  public readonly pluginName: string;
+  /** Permissions that were missing */
+  public readonly missingPermissions: string[];
+
+  constructor(
+    pluginName: string,
+    missingPermissions: string[],
+    options: AppErrorOptions = {},
+  ) {
+    super('PluginError', `Plugin "${pluginName}" missing permissions: ${missingPermissions.join(', ')}`, options);
+    this.pluginName = pluginName;
+    this.missingPermissions = missingPermissions;
+  }
+}
