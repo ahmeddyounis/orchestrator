@@ -41,6 +41,7 @@ import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
 import { ExecutionService } from './exec/service';
+import { extractUnifiedDiff } from './exec/diff_extractor';
 import { UserInterface } from '@orchestrator/exec';
 import { VerificationRunner } from './verify/runner';
 import { VerificationProfile } from './verify/types';
@@ -692,9 +693,9 @@ END_DIFF
     }
 
     // 4. Parse Diff
-    const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
+    const diffContent = extractUnifiedDiff(outputText);
 
-    if (!diffMatch || !diffMatch[1].trim()) {
+    if (!diffContent) {
       const msg = 'Failed to extract diff from executor output';
       await emitEvent({
         type: 'RunFinished',
@@ -745,21 +746,6 @@ END_DIFF
 
       return { status: 'failure', runId, summary: msg };
     }
-
-    const rawDiffContent = diffMatch[1];
-    // Remove completely empty leading/trailing lines (no characters at all)
-    // but preserve lines with spaces (which are valid diff context for blank lines)
-    const lines = rawDiffContent.split('\n');
-    const firstContentIdx = lines.findIndex((l) => l !== '');
-    let lastContentIdx = -1;
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i] !== '') {
-        lastContentIdx = i;
-        break;
-      }
-    }
-    const diffContent =
-      firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
@@ -1413,9 +1399,9 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           );
         }
 
-        const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
+        const diffContent = extractUnifiedDiff(outputText);
 
-        if (!diffMatch || !diffMatch[1].trim()) {
+        if (!diffContent) {
           lastError = 'Failed to extract diff from executor output';
           consecutiveInvalidDiffs++;
           if (consecutiveInvalidDiffs >= 2) {
@@ -1429,21 +1415,6 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
         } else {
           consecutiveInvalidDiffs = 0;
         }
-
-        const rawDiffContent = diffMatch[1];
-        // Remove completely empty leading/trailing lines (no characters at all)
-        // but preserve lines with spaces (which are valid diff context for blank lines)
-        const lines = rawDiffContent.split('\n');
-        const firstContentIdx = lines.findIndex((l) => l !== '');
-        let lastContentIdx = -1;
-        for (let i = lines.length - 1; i >= 0; i--) {
-          if (lines[i] !== '') {
-            lastContentIdx = i;
-            break;
-          }
-        }
-        const diffContent =
-          firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
         if (diffContent.length === 0) {
           return finish('failure', 'invalid_output', 'Executor produced empty patch');
@@ -2004,9 +1975,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         );
       }
 
-      const diffMatch = outputText?.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
+      const diffContent = extractUnifiedDiff(outputText);
 
-      if (!diffMatch) {
+      if (!diffContent) {
         // Fail iteration (no diff)
         await eventBus.emit({
           type: 'RepairAttempted',
@@ -2017,21 +1988,6 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         });
         continue;
       }
-
-      const rawDiffContent = diffMatch[1];
-      // Remove completely empty leading/trailing lines (no characters at all)
-      // but preserve lines with spaces (which are valid diff context for blank lines)
-      const lines = rawDiffContent.split('\n');
-      const firstContentIdx = lines.findIndex((l) => l !== '');
-      let lastContentIdx = -1;
-      for (let i = lines.length - 1; i >= 0; i--) {
-        if (lines[i] !== '') {
-          lastContentIdx = i;
-          break;
-        }
-      }
-      const diffContent =
-        firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 
       // Apply Patch
       const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);

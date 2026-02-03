@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { Reviewer, ReviewerContext } from './reviewer';
 import { PatchStore } from '../../exec/patch_store';
+import { extractUnifiedDiff } from '../../exec/diff_extractor';
 
 // Budget type derived from Config
 type Budget = NonNullable<Config['budget']>;
@@ -59,23 +60,7 @@ export class CandidateGenerator {
   }
 
   private parseDiff(rawOutput: string): string | null {
-    const diffMatch = rawOutput.match(/BEGIN_DIFF([\s\S]*?)END_DIFF/);
-    if (!diffMatch || !diffMatch[1].trim()) {
-      return null;
-    }
-    const rawDiffContent = diffMatch[1];
-    const lines = rawDiffContent.split('\n');
-    const firstContentIdx = lines.findIndex((l) => l !== '');
-    let lastContentIdx = -1;
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i] !== '') {
-        lastContentIdx = i;
-        break;
-      }
-    }
-    return firstContentIdx === -1
-      ? ''
-      : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
+    return extractUnifiedDiff(rawOutput);
   }
 
   private calculatePatchStats(patch: string): {
