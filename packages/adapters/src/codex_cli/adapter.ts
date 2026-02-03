@@ -3,7 +3,7 @@ import {
   parseUnifiedDiffFromText,
   parsePlanFromText,
 } from '../subprocess';
-import { ProviderConfig, ModelRequest, ModelResponse } from '@orchestrator/shared';
+import { ProviderConfig, ModelRequest, ModelResponse, ProviderCapabilities } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
@@ -92,6 +92,24 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
     // Check for "codex>" anywhere in the last line, or shell-style prompts at the end
     const lastLine = trimmed.split('\n').pop() ?? '';
     return CODEX_PROMPT_PATTERN.test(lastLine);
+  }
+
+  /**
+   * Returns Codex CLI-specific capabilities.
+   * Codex CLI supports structured diff output and text generation,
+   * but operates as a subprocess without streaming or native tool calling.
+   */
+  override capabilities(): ProviderCapabilities {
+    return {
+      supportsStreaming: false,
+      supportsToolCalling: false,
+      supportsJsonMode: false,
+      modality: 'text',
+      latencyClass: 'slow',
+      // Codex CLI typically works with models that have generous context windows.
+      // The actual limit depends on the underlying model configured via --model.
+      maxContextTokens: 128_000,
+    };
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
