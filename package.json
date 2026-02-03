@@ -20,7 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "guard:repo": "tsx scripts/guard_tracked_artifacts.ts",
-    "check": "pnpm guard:repo && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm guard:repo && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm audit",
+    "audit": "pnpm audit --audit-level=moderate",
     "release:check": "tsx scripts/release_check.ts",
     "prepare": "husky"
   },

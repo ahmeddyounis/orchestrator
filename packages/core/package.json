@@ -21,7 +21,7 @@
     "@orchestrator/memory": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.1",
-    "zod": "^3.23.8"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
