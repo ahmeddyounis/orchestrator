@@ -27,16 +27,7 @@ import {
   SemanticIndexStore,
   SemanticSearchService,
 } from '@orchestrator/repo';
-import {
-  MemoryEntry,
-  createMemoryStore,
-  ProceduralMemory,
-  ProceduralMemoryEntry,
-  ProceduralMemoryQuery,
-  MemorySearchService,
-  VectorBackendFactory,
-  NoopVectorMemoryBackend,
-} from '@orchestrator/memory';
+import { MemoryEntry, MemorySearchService, VectorBackendFactory, NoopVectorMemoryBackend } from '@orchestrator/memory';
 import { createEmbedder, type ProviderAdapter } from '@orchestrator/adapters';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
@@ -66,6 +57,8 @@ import {
 } from './orchestrator/l3/candidate_evaluator';
 import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge';
 import { Diagnoser } from './orchestrator/l3/diagnoser';
+import { ProceduralMemoryImpl } from './orchestrator/procedural_memory';
+import { collectHunkFailures, readFileContext } from './orchestrator/patch_utils';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -109,56 +102,6 @@ export interface RunResult {
 export interface RunOptions {
   thinkLevel: 'L0' | 'L1' | 'L2' | 'L3';
   runId?: string;
-}
-
-class ProceduralMemoryImpl implements ProceduralMemory {
-  constructor(
-    private config: Config,
-    private repoRoot: string,
-  ) {}
-
-  private resolveMemoryDbPath(): string | undefined {
-    const p = this.config.memory?.storage?.path;
-    if (!p) return undefined;
-    return path.isAbsolute(p) ? p : path.join(this.repoRoot, p);
-  }
-
-  async find(queries: ProceduralMemoryQuery[], limit: number): Promise<ProceduralMemoryEntry[][]> {
-    const dbPath = this.resolveMemoryDbPath();
-    if (!dbPath) {
-      return queries.map(() => []);
-    }
-    const store = createMemoryStore();
-    try {
-      const keyEnvVar = this.config.security?.encryption?.keyEnv ?? 'ORCHESTRATOR_ENC_KEY';
-      const key = process.env[keyEnvVar];
-
-      store.init({
-        dbPath,
-        encryption: {
-          encryptAtRest: this.config.memory?.storage?.encryptAtRest ?? false,
-          key: key || '',
-        },
-      });
-
-      const repoId = this.repoRoot; // Assuming repoRoot is the repoId
-      const allProcedural = store.list(repoId, 'procedural');
-
-      const results: ProceduralMemoryEntry[][] = [];
-      for (const query of queries) {
-        const filtered = allProcedural.filter((entry) => {
-          if (query.titleContains && !entry.title.includes(query.titleContains)) {
-            return false;
-          }
-          return true;
-        });
-        results.push(filtered.slice(0, limit));
-      }
-      return results;
-    } finally {
-      store.close();
-    }
-  }
 }
 
 export class Orchestrator {
@@ -2953,78 +2896,4 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     return finish('success', undefined, `L3 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
-}
-
-function normalizeGitApplyPath(filePath: string): string {
-  return filePath.replace(/^[ab]\//, '');
-}
-
-type HunkFailure = { filePath: string; line: number; kind?: string };
-
-function collectHunkFailures(errors: unknown[]): HunkFailure[] {
-  const byFile = new Map<string, HunkFailure>();
-
-  for (const entry of errors) {
-    if (!entry || typeof entry !== 'object') continue;
-
-    const file = (entry as { file?: unknown }).file;
-    const line = (entry as { line?: unknown }).line;
-    if (typeof file !== 'string') continue;
-    if (typeof line !== 'number' || !Number.isFinite(line)) continue;
-
-    const filePath = normalizeGitApplyPath(file);
-    // Prefer the earliest line number per file (usually most informative).
-    const existing = byFile.get(filePath);
-    const normalizedLine = Math.max(1, Math.floor(line));
-    if (!existing || normalizedLine < existing.line) {
-      const kind = (entry as { kind?: unknown }).kind;
-      byFile.set(filePath, {
-        filePath,
-        line: normalizedLine,
-        kind: typeof kind === 'string' ? kind : undefined,
-      });
-    }
-  }
-
-  return Array.from(byFile.values()).sort((a, b) => a.filePath.localeCompare(b.filePath));
-}
-
-function readFileContext(
-  repoRoot: string,
-  filePath: string,
-  line: number,
-  windowSize: number,
-  maxChars: number,
-): string {
-  const absPath = path.resolve(repoRoot, filePath);
-  const absRoot = path.resolve(repoRoot);
-
-  // Safety: avoid reading outside repoRoot.
-  if (absPath !== absRoot && !absPath.startsWith(absRoot + path.sep)) return '';
-
-  let content: string;
-  try {
-    content = fsSync.readFileSync(absPath, 'utf-8');
-  } catch {
-    return '';
-  }
-
-  const lines = content.split('\n');
-  if (lines.length === 0) return '';
-
-  const targetLine = Math.min(Math.max(1, Math.floor(line)), lines.length);
-  const start = Math.max(1, targetLine - windowSize);
-  const end = Math.min(lines.length, targetLine + windowSize);
-
-  const excerpt = lines
-    .slice(start - 1, end)
-    .map((lineText, idx) => {
-      const lineNo = start + idx;
-      const marker = lineNo === targetLine ? '>' : ' ';
-      return `${marker} ${String(lineNo).padStart(4, ' ')} | ${lineText}`;
-    })
-    .join('\n');
-
-  if (excerpt.length <= maxChars) return excerpt;
-  return excerpt.slice(0, maxChars) + '\n... (truncated)';
 }
