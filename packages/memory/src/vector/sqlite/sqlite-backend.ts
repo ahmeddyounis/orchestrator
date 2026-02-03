@@ -118,7 +118,7 @@ export class SQLiteVectorBackend implements VectorMemoryBackend {
     const processedItems = this.redactionConfig?.enabled
       ? items.map((item) => ({
           ...item,
-          metadata: redactVectorMetadata(item.metadata as Record<string, unknown>, this.redactionConfig) as typeof item.metadata,
+          metadata: redactVectorMetadata(item.metadata, this.redactionConfig),
         }))
       : items;
 

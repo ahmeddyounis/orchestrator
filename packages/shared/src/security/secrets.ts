@@ -162,13 +162,17 @@ const DEFAULT_VECTOR_REDACTION_OPTIONS: VectorRedactionOptions = {
  * Redacts sensitive data from vector metadata before storage
  * This prevents sensitive information from being stored in vector databases
  */
-export function redactVectorMetadata(
-  metadata: Record<string, unknown>,
+export function redactVectorMetadata<T>(
+  metadata: T,
   options: Partial<VectorRedactionOptions> = {},
-): Record<string, unknown> {
+): T {
   const opts = { ...DEFAULT_VECTOR_REDACTION_OPTIONS, ...options };
-  
+
   if (!opts.enabled) {
+    return metadata;
+  }
+
+  if (!isRecord(metadata)) {
     return metadata;
   }
 
@@ -198,5 +202,9 @@ export function redactVectorMetadata(
     result[key] = value;
   }
 
-  return result;
+  return result as unknown as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

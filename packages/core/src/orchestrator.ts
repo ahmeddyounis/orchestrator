@@ -27,7 +27,13 @@ import {
   SemanticIndexStore,
   SemanticSearchService,
 } from '@orchestrator/repo';
-import { MemoryEntry, MemorySearchService, VectorBackendFactory, NoopVectorMemoryBackend } from '@orchestrator/memory';
+import {
+  MemoryEntry,
+  MemorySearchService,
+  VectorBackendFactory,
+  NoopVectorMemoryBackend,
+  createMemoryStore,
+} from '@orchestrator/memory';
 import { createEmbedder, type ProviderAdapter } from '@orchestrator/adapters';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
