@@ -1,4 +1,4 @@
-import { CodexCliAdapter } from './adapter';
+import { CodexCliAdapter, extractUsageFromCodexStats } from './adapter';
 import { ProcessManager } from '../subprocess/process-manager';
 import { ModelRequest } from '@orchestrator/shared';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
@@ -309,6 +309,157 @@ describe('CodexCliAdapter', () => {
 
       expect(response.usage?.inputTokens).toBe(50);
       expect(response.usage?.outputTokens).toBe(30);
+    });
+  });
+
+  describe('extractUsageFromCodexStats function', () => {
+    describe('snake_case token field naming (input_tokens/output_tokens)', () => {
+      it('should extract input_tokens and output_tokens', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            input_tokens: 100,
+            output_tokens: 50,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should extract with total_tokens included', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+    });
+
+    describe('camelCase token field naming (inputTokens/outputTokens)', () => {
+      it('should extract inputTokens and outputTokens', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            inputTokens: 200,
+            outputTokens: 100,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 200,
+          outputTokens: 100,
+          totalTokens: 300,
+        });
+      });
+
+      it('should extract with totalTokens included', () => {
+        const result = extractUsageFromCodexStats({
+          stats: {
+            inputTokens: 200,
+            outputTokens: 100,
+            totalTokens: 300,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 200,
+          outputTokens: 100,
+          totalTokens: 300,
+        });
+      });
+    });
+
+    describe('OpenAI-style naming (prompt_tokens/completion_tokens)', () => {
+      it('should extract prompt_tokens and completion_tokens', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            prompt_tokens: 75,
+            completion_tokens: 25,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 75,
+          outputTokens: 25,
+          totalTokens: 100,
+        });
+      });
+
+      it('should extract with total_tokens included', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            prompt_tokens: 75,
+            completion_tokens: 25,
+            total_tokens: 100,
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 75,
+          outputTokens: 25,
+          totalTokens: 100,
+        });
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should return undefined for null parsed object', () => {
+        const result = extractUsageFromCodexStats(null as any);
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined when usage/stats is missing', () => {
+        const result = extractUsageFromCodexStats({});
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined when all token values are zero', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+          },
+        });
+        expect(result).toBeUndefined();
+      });
+
+      it('should prefer stats over usage when both present', () => {
+        const result = extractUsageFromCodexStats({
+          stats: { inputTokens: 500, outputTokens: 250 },
+        });
+        expect(result?.inputTokens).toBe(500);
+        expect(result?.outputTokens).toBe(250);
+      });
+
+      it('should handle non-numeric values gracefully', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            input_tokens: 'not a number' as any,
+            output_tokens: null as any,
+          },
+        });
+        expect(result).toBeUndefined();
+      });
+
+      it('should prioritize snake_case over camelCase when both present', () => {
+        const result = extractUsageFromCodexStats({
+          usage: {
+            input_tokens: 100,
+            inputTokens: 999, // Should be ignored
+            output_tokens: 50,
+            outputTokens: 888, // Should be ignored
+          },
+        });
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
     });
   });
 

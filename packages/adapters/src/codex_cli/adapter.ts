@@ -223,7 +223,7 @@ function extractResponseText(parsed: CodexCliJson | null, fallback: string): str
  * Extracts usage/token statistics from Codex CLI JSON output.
  * Handles both 'usage' and 'stats' fields with various token count formats.
  */
-function extractUsageFromCodexStats(
+export function extractUsageFromCodexStats(
   parsed: CodexCliJson,
 ): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
   const usage = parsed.usage ?? parsed.stats;
