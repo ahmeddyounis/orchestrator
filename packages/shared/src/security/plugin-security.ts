@@ -86,7 +86,7 @@ export const PermissionManifestSchema = z.object({
   optional: PluginPermissionSchema.optional(),
 
   /** Human-readable justification for each permission */
-  justifications: z.record(z.string()).optional(),
+  justifications: z.record(z.string(), z.string()).optional(),
 
   /** Allowed network hosts (if network permissions are requested) */
   allowedHosts: z.array(z.string()).optional(),
