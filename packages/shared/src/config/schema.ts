@@ -161,6 +161,32 @@ export const BudgetSchema = z.object({
   time: z.number().optional(),
 });
 
+/**
+ * Sensitivity levels for memory entries.
+ */
+export const SensitivityLevelSchema = z.enum(['public', 'internal', 'confidential', 'restricted']);
+
+/**
+ * Retention policy schema for memory hardening.
+ */
+export const RetentionPolicySchema = z.object({
+  sensitivityLevel: SensitivityLevelSchema,
+  maxAgeMs: z.number().min(1).describe('Maximum age in milliseconds before automatic purge'),
+  entryTypes: z.array(z.enum(['procedural', 'episodic', 'semantic'])).optional(),
+  aggressiveStaleCleanup: z.boolean().optional(),
+});
+
+/**
+ * Memory hardening configuration schema.
+ */
+export const MemoryHardeningSchema = z.object({
+  enabled: z.boolean().default(false),
+  defaultSensitivity: SensitivityLevelSchema.default('internal'),
+  retentionPolicies: z.array(RetentionPolicySchema).optional(),
+  purgeIntervalMs: z.number().min(60000).default(6 * 60 * 60 * 1000).describe('Purge check interval (minimum 60s)'),
+  purgeOnStartup: z.boolean().default(false),
+});
+
 export const MemoryConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
@@ -252,6 +278,12 @@ export const MemoryConfigSchema = z
         requireEvidence: true,
         redactSecrets: true,
       }),
+    hardening: MemoryHardeningSchema.default({
+      enabled: false,
+      defaultSensitivity: 'internal',
+      purgeIntervalMs: 6 * 60 * 60 * 1000,
+      purgeOnStartup: false,
+    }),
   })
   .transform((cfg) => {
     const { retrieval, vector, ...rest } = cfg;
@@ -526,3 +558,5 @@ export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type SandboxConfig = z.infer<typeof SandboxConfigSchema>;
 export type VectorRedactionConfig = z.infer<typeof SecurityConfigSchema>['vectorRedaction'];
+export type MemoryHardeningSchemaType = z.infer<typeof MemoryHardeningSchema>;
+export type RetentionPolicySchemaType = z.infer<typeof RetentionPolicySchema>;

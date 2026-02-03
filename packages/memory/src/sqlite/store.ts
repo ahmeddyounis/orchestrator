@@ -11,6 +11,14 @@ import type {
   IntegrityStatus,
 } from '../types';
 import { createCrypto, type Crypto } from './crypto';
+import {
+  shouldPurgeEntry,
+  createEmptyPurgeResult,
+  type RetentionPolicy,
+  type PurgeResult,
+  type SensitivityLevel,
+  DEFAULT_RETENTION_POLICIES,
+} from '../hardening';
 
 export interface LexicalSearchOptions {
   topK?: number;
@@ -22,6 +30,13 @@ export interface MemoryStoreOptions {
     encryptAtRest: boolean;
     key: string;
   };
+  hardening?: {
+    retentionPolicies?: RetentionPolicy[];
+    enableAutoPurge?: boolean;
+    purgeIntervalMs?: number;
+  };
+  /** Sensitivity level to assign to entries that don't have one */
+  defaultSensitivity?: SensitivityLevel;
 }
 
 export interface MemoryStore {
@@ -37,6 +52,8 @@ export interface MemoryStore {
   wipe(repoId: string): void;
   status(repoId: string): MemoryStatus;
   close(): void;
+  purgeExpired(repoId: string): PurgeResult;
+  listExpired(repoId: string): MemoryEntry[];
 }
 
 interface MemoryEntryDbRow {
@@ -56,10 +73,15 @@ interface MemoryEntryDbRow {
   updatedAt: number;
 }
 
+interface MemoryEntryDbRowWithSensitivity extends MemoryEntryDbRow {
+  sensitivity?: SensitivityLevel;
+}
+
 export function createMemoryStore(): MemoryStore {
   let db: DatabaseSync | null = null;
   let crypto: Crypto | null = null;
   let isEncrypted = false;
+  let retentionPolicies: RetentionPolicy[] = DEFAULT_RETENTION_POLICIES;
 
   const toSafeFtsQuery = (raw: string): string => {
     const tokens = raw.match(/[a-zA-Z0-9_]+/g);
@@ -77,6 +99,10 @@ export function createMemoryStore(): MemoryStore {
       }
       crypto = createCrypto(options.encryption.key);
       isEncrypted = true;
+    }
+
+    if (options.hardening?.retentionPolicies) {
+      retentionPolicies = options.hardening.retentionPolicies;
     }
 
     mkdirSync(dirname(options.dbPath), { recursive: true });
@@ -360,6 +386,57 @@ export function createMemoryStore(): MemoryStore {
     stmt.run(repoId);
   };
 
+  const listExpired = (repoId: string): MemoryEntry[] => {
+    if (!db) throw new MemoryError('Database not initialized');
+
+    const query = 'SELECT * FROM memory_entries WHERE repoId = ?';
+    const stmt = db.prepare(query);
+    const rows = stmt.all(repoId) as unknown as MemoryEntryDbRowWithSensitivity[];
+
+    const expiredEntries: MemoryEntry[] = [];
+    for (const row of rows) {
+      const entry = rowToEntry(row);
+      const extendedEntry = { ...entry, sensitivity: row.sensitivity };
+      const { shouldPurge } = shouldPurgeEntry(extendedEntry, retentionPolicies);
+      if (shouldPurge) {
+        expiredEntries.push(entry);
+      }
+    }
+
+    return expiredEntries;
+  };
+
+  const purgeExpired = (repoId: string): PurgeResult => {
+    if (!db) throw new MemoryError('Database not initialized');
+
+    const result = createEmptyPurgeResult();
+    const expiredEntries = listExpired(repoId);
+
+    if (expiredEntries.length === 0) {
+      return result;
+    }
+
+    const deleteStmt = db.prepare('DELETE FROM memory_entries WHERE id = ?');
+
+    for (const entry of expiredEntries) {
+      try {
+        deleteStmt.run(entry.id);
+        result.purgedCount++;
+        result.purgedByType[entry.type]++;
+        // Use default 'internal' sensitivity for entries without explicit sensitivity
+        const sensitivity: SensitivityLevel = 'internal';
+        result.purgedBySensitivity[sensitivity]++;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        result.errors.push(`Failed to purge entry ${entry.id}: ${errorMessage}`);
+      }
+    }
+
+    result.purgedAt = Date.now();
+
+    return result;
+  };
+
   return {
     init,
     close,
@@ -373,5 +450,7 @@ export function createMemoryStore(): MemoryStore {
     search,
     status,
     wipe,
+    purgeExpired,
+    listExpired,
   };
 }
