@@ -214,6 +214,9 @@ export interface ProviderRequestStarted extends BaseEvent {
   };
 }
 
+/**
+ * Emitted when a provider API request completes (success or failure).
+ */
 export interface ProviderRequestFinished extends BaseEvent {
   type: 'ProviderRequestFinished';
   payload: {
@@ -221,6 +224,7 @@ export interface ProviderRequestFinished extends BaseEvent {
     durationMs: number;
     success: boolean;
     error?: string;
+    /** Number of retry attempts made (0 = succeeded on first try) */
     retries: number;
   };
 }
@@ -330,6 +334,9 @@ export interface IterationFinished extends BaseEvent {
   };
 }
 
+/**
+ * Emitted when a repair attempt is made in L2 mode.
+ */
 export interface RepairAttempted extends BaseEvent {
   type: 'RepairAttempted';
   payload: {

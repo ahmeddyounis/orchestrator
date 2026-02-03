@@ -1,6 +1,51 @@
 import { AdapterContext, RetryOptions } from '../types';
 import { RateLimitError, TimeoutError, ConfigError } from '../errors';
 
+/**
+ * Default retry options for provider API requests.
+ *
+ * ## Retry Strategy
+ *
+ * The retry mechanism uses exponential backoff with jitter to handle transient
+ * failures when communicating with LLM provider APIs:
+ *
+ * - **maxRetries**: Maximum number of retry attempts (default: 3)
+ * - **initialDelayMs**: Starting delay between retries (default: 1000ms)
+ * - **maxDelayMs**: Cap on delay to prevent excessive waits (default: 10000ms)
+ * - **backoffFactor**: Multiplier for exponential growth (default: 2x)
+ *
+ * ## Retriable Errors
+ *
+ * The following errors trigger automatic retry:
+ * - `RateLimitError` (HTTP 429)
+ * - `TimeoutError`
+ * - Server errors (HTTP 5xx: 500, 502, 503, 504)
+ * - Network errors (ETIMEDOUT, ECONNRESET, ECONNREFUSED)
+ *
+ * ## Non-Retriable Errors
+ *
+ * These errors fail immediately without retry:
+ * - `ConfigError` (HTTP 401, 403 - authentication/authorization)
+ * - Client errors (HTTP 4xx except 429)
+ * - Abort signals (user cancellation)
+ *
+ * ## Delay Calculation
+ *
+ * ```
+ * delay = min(maxDelayMs, initialDelayMs * (backoffFactor ^ (attempt - 1)))
+ * jitter = delay * 0.1 * random(-1, 1)  // +/- 10%
+ * finalDelay = max(0, delay + jitter)
+ * ```
+ *
+ * ## Metrics
+ *
+ * Retry attempts are logged via the `ProviderRequestFinished` event with:
+ * - `retries`: Number of retry attempts made
+ * - `success`: Whether the request ultimately succeeded
+ * - `durationMs`: Total time including all retry attempts
+ *
+ * @see RetryOptions for customization
+ */
 const DEFAULT_OPTIONS: Required<RetryOptions> = {
   maxRetries: 3,
   initialDelayMs: 1000,
@@ -8,6 +53,12 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
   backoffFactor: 2,
 };
 
+/**
+ * Determines if an error is safe to retry.
+ *
+ * @param error - The caught error to evaluate
+ * @returns true if the error is transient and retry is appropriate
+ */
 function isRetriableError(error: unknown): boolean {
   // Check for specific error types
   if (error instanceof RateLimitError || error instanceof TimeoutError) {
@@ -38,6 +89,24 @@ function isRetriableError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Executes a provider request with automatic retry, timeout, and abort handling.
+ *
+ * This is the main entry point for all provider API calls. It wraps the actual
+ * request with retry logic, timeout management, and proper event logging.
+ *
+ * ## Usage
+ *
+ * ```typescript
+ * const result = await executeProviderRequest(
+ *   ctx,
+ *   'anthropic',
+ *   'claude-3-opus',
+ *   (signal) => client.messages.create({ ... }, { signal }),
+ *   { maxRetries: 5 }  // Optional override
+ * );
+ * ```
+ */
 export async function executeProviderRequest<T>(
   ctx: AdapterContext,
   provider: string,
@@ -134,6 +203,8 @@ export async function executeProviderRequest<T>(
       if (!retriable || attempts >= maxRetries) {
         break;
       }
+      
+      // Note: Retry metrics are captured in the ProviderRequestFinished event below
 
       attempts++;
 
