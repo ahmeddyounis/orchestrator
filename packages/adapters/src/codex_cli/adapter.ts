@@ -126,15 +126,17 @@ index 1234567..89abcdef 100644
     const response = await super.generate(wrappedReq, ctx);
     const rawText = response.text ?? '';
 
-    // Try to parse JSON output from Codex CLI
+    // Try to parse JSON output or text-based stats from Codex CLI
     const parsed = parseCodexCliJson(rawText);
     const responseText = extractResponseText(parsed, rawText);
-    const usage = parsed ? extractUsageFromCodexStats(parsed) ?? response.usage : response.usage;
+    
+    // Extract usage from JSON stats, text-based stats, or fall back to placeholder
+    const usage = extractUsageFromCodexStats(parsed) ?? 
+                  parseTextBasedTokenUsage(rawText) ?? 
+                  response.usage;
 
     // Extract diff if present using robust parser
     if (responseText) {
-    // Extract diff if present using robust parser
-    if (response.text) {
       const diffParsed = parseUnifiedDiffFromText(response.text);
       if (diffParsed && diffParsed.confidence >= 0.7) {
         await ctx.logger.log({
@@ -172,7 +174,6 @@ index 1234567..89abcdef 100644
         });
       }
     }
-
     return {
       ...response,
       text: responseText,
@@ -246,6 +247,59 @@ function extractUsageFromCodexStats(
 
   if (inputTokens === 0 && outputTokens === 0 && totalTokens === 0) return undefined;
 
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: totalTokens || undefined,
+  };
+}
+
+/**
+ * Parses token usage from text-based output when JSON is not available.
+ * Handles common patterns from CLI tools:
+ * - "Tokens: input=123, output=456"
+ * - "Usage: 123 input tokens, 456 output tokens"
+ * - "Input tokens: 123\nOutput tokens: 456"
+ * - "prompt_tokens: 123, completion_tokens: 456"
+ * - "Tokens used: 123 in, 456 out"
+ */
+function parseTextBasedTokenUsage(
+  text: string,
+): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
+  // Pattern 1: "input=X" and "output=Y" or "input_tokens=X"
+  const inputMatch = text.match(/(?:input|prompt)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
+  const outputMatch = text.match(/(?:output|completion|candidate)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
+  
+  // Pattern 2: "X input tokens" and "Y output tokens"
+  const inputMatch2 = text.match(/(\d+)\s+(?:input|prompt)\s+tokens?/i);
+  const outputMatch2 = text.match(/(\d+)\s+(?:output|completion|candidate)\s+tokens?/i);
+  
+  // Pattern 3: "X in, Y out" or "X in / Y out"
+  const inOutMatch = text.match(/(\d+)\s*(?:tokens?)?\s*in[,\/\s]+(\d+)\s*(?:tokens?)?\s*out/i);
+  
+  // Pattern 4: Total tokens line
+  const totalMatch = text.match(/(?:total)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);
+  const totalMatch2 = text.match(/(\d+)\s+total\s+tokens?/i);
+  
+  let inputTokens = 0;
+  let outputTokens = 0;
+  
+  if (inOutMatch) {
+    inputTokens = parseInt(inOutMatch[1], 10);
+    outputTokens = parseInt(inOutMatch[2], 10);
+  } else {
+    inputTokens = parseInt(inputMatch?.[1] ?? inputMatch2?.[1] ?? '0', 10);
+    outputTokens = parseInt(outputMatch?.[1] ?? outputMatch2?.[1] ?? '0', 10);
+  }
+  
+  const totalTokens = parseInt(totalMatch?.[1] ?? totalMatch2?.[1] ?? '0', 10) || 
+                      (inputTokens + outputTokens) || 
+                      undefined;
+  
+  if (inputTokens === 0 && outputTokens === 0) {
+    return undefined;
+  }
+  
   return {
     inputTokens,
     outputTokens,
