@@ -27,6 +27,10 @@ export class PatchApplier {
     diffText: string,
     options: PatchApplierOptions = {},
   ): Promise<PatchApplyResult> {
+    // Some patch sources (including LLMs) include extra completely-empty lines outside hunks.
+    // `git apply --recount` can misinterpret these and fail to apply otherwise-valid patches.
+    const normalizedDiffText = trimCompletelyEmptyOuterLines(diffText);
+
     const {
       maxFilesChanged = 50,
       maxLinesTouched = 1000,
@@ -35,7 +39,7 @@ export class PatchApplier {
     } = options;
 
     // 1. Validate Patch Syntax and Security
-    const validationError = this.validateDiff(diffText, {
+    const validationError = this.validateDiff(normalizedDiffText, {
       maxFilesChanged,
       maxLinesTouched,
       allowBinary,
@@ -50,11 +54,11 @@ export class PatchApplier {
     }
 
     // 2. Extract affected files for reporting
-    const affectedFiles = this.extractAffectedFiles(diffText);
+    const affectedFiles = this.extractAffectedFiles(normalizedDiffText);
 
     // 3. Apply Patch
     try {
-      await this.execGitApply(repoRoot, diffText, dryRun);
+      await this.execGitApply(repoRoot, normalizedDiffText, dryRun);
       return {
         applied: true,
         filesChanged: affectedFiles,
@@ -157,40 +161,77 @@ export class PatchApplier {
 
   private execGitApply(repoRoot: string, diffText: string, dryRun: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
-      const args = ['apply', '--whitespace=nowarn', '--ignore-space-change', '--ignore-whitespace'];
-      if (dryRun) {
-        args.push('--check'); // --check is effectively a dry-run for apply
-      }
+      const baseArgs = [
+        'apply',
+        '--whitespace=nowarn',
+        '--ignore-space-change',
+        '--ignore-whitespace',
+      ];
 
-      // Use - to read from stdin
-      args.push('-');
+      const maybeCheckArg = dryRun ? ['--check'] : [];
 
-      const git = spawn('git', args, {
-        cwd: repoRoot,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      const tryApply = async (args: string[], patch: string): Promise<void> => {
+        const fullArgs = [...baseArgs, ...args, ...maybeCheckArg, '-'];
 
-      let stderr = '';
+        const git = spawn('git', fullArgs, {
+          cwd: repoRoot,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
 
-      if (git.stdin) {
-        git.stdin.write(diffText);
-        git.stdin.end();
-      }
+        let stderr = '';
 
-      git.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      git.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject({ message: `git apply failed with code ${code}`, stderr });
+        if (git.stdin) {
+          git.stdin.write(patch);
+          git.stdin.end();
         }
-      });
 
-      git.on('error', (err) => {
-        reject({ message: `Failed to spawn git: ${err.message}`, stderr });
+        git.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        const result = await new Promise<{ code: number | null; stderr: string }>((res, rej) => {
+          git.on('close', (code) => res({ code, stderr }));
+          git.on('error', (err) => rej(err));
+        });
+
+        if (result.code === 0) return;
+
+        throw { message: `git apply failed with code ${result.code ?? -1}`, stderr: result.stderr };
+      };
+
+      (async () => {
+        try {
+          // First try: standard apply. This is the most compatible with "git diff"-style output,
+          // including blank separator lines between file diffs.
+          await tryApply([], diffText);
+          resolve();
+        } catch (err: unknown) {
+          const error = err as { message: string; stderr?: string };
+          const stderr = error.stderr || '';
+
+          // LLM-generated diffs frequently have incorrect hunk line counts, which `git apply`
+          // reports as "corrupt patch". As a fallback, retry with `--recount` after removing
+          // blank separator lines (which can confuse `--recount` parsing).
+          if (stderr.includes('corrupt patch at line')) {
+            try {
+              await tryApply(['--recount'], stripCompletelyEmptyLines(diffText));
+              resolve();
+              return;
+            } catch (recountErr: unknown) {
+              const recountError = recountErr as { message: string; stderr?: string };
+              reject({
+                message: recountError.message || error.message,
+                stderr: recountError.stderr || stderr,
+              });
+              return;
+            }
+          }
+
+          reject({ message: error.message || 'git apply failed', stderr });
+        }
+      })().catch((e) => {
+        const err = e as Error;
+        reject({ message: `Failed to spawn git: ${err.message}` });
       });
     });
   }
@@ -255,4 +296,31 @@ export class PatchApplier {
 
     return { kind: overallKind, errors };
   }
+}
+
+function trimCompletelyEmptyOuterLines(raw: string): string {
+  // Remove completely empty leading/trailing lines (no characters at all),
+  // but preserve lines with spaces (which can be meaningful diff context).
+  const lines = raw.split('\n');
+  const firstContentIdx = lines.findIndex((l) => l !== '');
+  if (firstContentIdx === -1) return '';
+
+  let lastContentIdx = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i] !== '') {
+      lastContentIdx = i;
+      break;
+    }
+  }
+
+  // `git apply --recount` requires a final newline; add exactly one.
+  return lines.slice(firstContentIdx, lastContentIdx + 1).join('\n') + '\n';
+}
+
+function stripCompletelyEmptyLines(raw: string): string {
+  // `git apply --recount` is sensitive to blank separator lines between file diffs.
+  // Remove lines that are exactly empty, but keep whitespace-only lines (which can be meaningful).
+  const lines = raw.split('\n').filter((line) => line !== '');
+  if (lines.length === 0) return '';
+  return lines.join('\n') + '\n';
 }

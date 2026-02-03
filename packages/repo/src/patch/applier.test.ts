@@ -65,6 +65,32 @@ describe('PatchApplier', () => {
     expect(content).toBe('Hello Universe\n');
   });
 
+  it('applies patches with incorrect hunk counts (--recount)', async () => {
+    const filePath = path.join(tmpDir, 'test.txt');
+    await fs.writeFile(filePath, 'Hello World\n');
+    await run('git', ['add', 'test.txt'], tmpDir);
+    await run('git', ['commit', '-m', 'Initial commit'], tmpDir);
+
+    // Intentionally incorrect new line count (+1,2) to simulate LLM-generated diffs.
+    const diffText =
+      [
+        'diff --git a/test.txt b/test.txt',
+        'index 557db03..980a0d5 100644',
+        '--- a/test.txt',
+        '+++ b/test.txt',
+        '@@ -1,1 +1,2 @@',
+        '-Hello World',
+        '+Hello Universe',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(true);
+
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toBe('Hello Universe\n');
+  });
+
   it('refuses path traversal', async () => {
     const diffText = [
       'diff --git a/../secret.txt b/../secret.txt',
