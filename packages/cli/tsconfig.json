@@ -5,7 +5,8 @@
     "rootDir": "./src",
     "resolveJsonModule": true,
     "declaration": true,
-    "emitDeclarationOnly": true
+    "emitDeclarationOnly": true,
+    "composite": true
   },
   "include": ["src/**/*"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],

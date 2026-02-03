@@ -42,18 +42,44 @@ async function checkProviderConfig(config: Config): Promise<[string, string]> {
   }
 
   const providerNames = Object.keys(providers);
+  const warnings: string[] = [];
   for (const name of providerNames) {
     const provider = providers[name];
-    if (!provider.api_key && !provider.api_key_env) {
-      return [CHECKS.WARN, `Provider '${name}' is missing an api_key or api_key_env.`];
+    if (providerRequiresApiKey(provider.type) && !provider.api_key && !provider.api_key_env) {
+      warnings.push(`Provider '${name}' (${provider.type}) is missing an api_key or api_key_env.`);
     }
   }
   const defaultPlanner = config.defaults?.planner || 'not set';
+
+  if (warnings.length > 0) {
+    return [CHECKS.WARN, warnings.join(' ')];
+  }
 
   return [
     CHECKS.OK,
     `Providers configured: ${providerNames.join(', ')}. Default planner: ${defaultPlanner}`,
   ];
+}
+
+async function checkLocalProviderExecutables(config: Config): Promise<[string, string][]> {
+  const providers = config.providers;
+  if (!providers) return [];
+
+  const commandsToCheck = new Set<string>();
+  for (const provider of Object.values(providers)) {
+    if (provider.type === 'claude_code') {
+      commandsToCheck.add(provider.command || 'claude');
+    }
+    if (provider.type === 'gemini_cli') {
+      commandsToCheck.add(provider.command || 'gemini');
+    }
+  }
+
+  return await Promise.all([...commandsToCheck].map((cmd) => checkExecutable(cmd)));
+}
+
+function providerRequiresApiKey(type: string): boolean {
+  return type === 'openai' || type === 'anthropic';
 }
 
 async function checkPluginStatus(config: Config): Promise<[string, string]> {
@@ -133,6 +159,7 @@ export const registerDoctorCommand = (program: Command) => {
 
       console.log('\n' + chalk.bold('Configuration Checks (`.orchestrator.yaml`)'));
       results.push(await checkProviderConfig(config));
+      results.push(...(await checkLocalProviderExecutables(config)));
       results.push(await checkPluginStatus(config));
       results.push(...checkToolExecPolicy(config));
 

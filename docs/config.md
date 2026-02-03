@@ -36,7 +36,7 @@ providers:
 
 Each provider must include:
 
-- `type`: one of `openai`, `anthropic`, `claude_code`, `fake`
+- `type`: one of `openai`, `anthropic`, `claude_code`, `gemini_cli`, `fake`
 - `model`: a string (adapter-specific; required by config validation)
 
 Hosted providers typically use one of:
@@ -68,6 +68,12 @@ providers:
     # Allowlisted env vars forwarded to the subprocess (optional).
     env:
       - ANTHROPIC_API_KEY
+
+  gemini_cli:
+    type: gemini_cli
+    model: gemini-2.5-flash
+    command: gemini
+    args: []
 ```
 
 ## Defaults

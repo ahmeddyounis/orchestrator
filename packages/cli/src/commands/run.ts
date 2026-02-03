@@ -12,6 +12,7 @@ import {
   AnthropicAdapter,
   ClaudeCodeAdapter,
   FakeAdapter,
+  GeminiCliAdapter,
   OpenAIAdapter,
 } from '@orchestrator/adapters';
 import {
@@ -245,6 +246,7 @@ export function registerRunCommand(program: Command) {
       registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
       registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
       registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
+      registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
       registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
 
       const ui = new ConsoleUI();
