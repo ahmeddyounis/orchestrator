@@ -320,6 +320,70 @@ describe('CodexCliAdapter', () => {
     });
   });
 
+  describe('isPrompt pattern validation', () => {
+    // Access the protected isPrompt method via a test subclass
+    class TestableCodexCliAdapter extends CodexCliAdapter {
+      public testIsPrompt(text: string): boolean {
+        return this['isPrompt'](text);
+      }
+    }
+
+    let testAdapter: TestableCodexCliAdapter;
+
+    beforeEach(() => {
+      testAdapter = new TestableCodexCliAdapter({
+        type: 'codex_cli',
+        model: 'o3-mini',
+        command: 'codex',
+        args: [],
+      });
+    });
+
+    it('should detect "codex>" prompt (lowercase)', () => {
+      expect(testAdapter.testIsPrompt('Some output\ncodex>')).toBe(true);
+      expect(testAdapter.testIsPrompt('codex>')).toBe(true);
+    });
+
+    it('should detect "Codex>" prompt (capitalized)', () => {
+      expect(testAdapter.testIsPrompt('Some output\nCodex>')).toBe(true);
+      expect(testAdapter.testIsPrompt('Codex>')).toBe(true);
+    });
+
+    it('should detect "CODEX>" prompt (uppercase)', () => {
+      expect(testAdapter.testIsPrompt('Some output\nCODEX>')).toBe(true);
+    });
+
+    it('should detect "> " minimal shell prompt at end of line', () => {
+      expect(testAdapter.testIsPrompt('Ready\n> ')).toBe(true);
+      expect(testAdapter.testIsPrompt('>')).toBe(true);
+    });
+
+    it('should detect ">>> " Python REPL style prompt', () => {
+      expect(testAdapter.testIsPrompt('Some output\n>>> ')).toBe(true);
+      expect(testAdapter.testIsPrompt('>>>')).toBe(true);
+    });
+
+    it('should detect "$ " shell style prompt at end of line', () => {
+      expect(testAdapter.testIsPrompt('Output\n$ ')).toBe(true);
+      expect(testAdapter.testIsPrompt('$')).toBe(true);
+    });
+
+    it('should NOT detect prompts in the middle of output', () => {
+      expect(testAdapter.testIsPrompt('Use codex> command to run\nMore text here')).toBe(false);
+    });
+
+    it('should NOT detect regular text as prompts', () => {
+      expect(testAdapter.testIsPrompt('This is regular output')).toBe(false);
+      expect(testAdapter.testIsPrompt('Processing your request...')).toBe(false);
+      expect(testAdapter.testIsPrompt('')).toBe(false);
+    });
+
+    it('should handle whitespace correctly', () => {
+      expect(testAdapter.testIsPrompt('  codex>  ')).toBe(true);
+      expect(testAdapter.testIsPrompt('\n\ncodex>\n')).toBe(true);
+    });
+  });
+
   describe('token extraction from JSON stats', () => {
     it('should extract tokens from usage object with input_tokens/output_tokens', async () => {
       const ctx = {
