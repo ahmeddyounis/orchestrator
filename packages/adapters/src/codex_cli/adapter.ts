@@ -191,7 +191,7 @@ index 1234567..89abcdef 100644
  * @param text - Raw output text from Codex CLI
  * @returns Parsed CodexCliJson object, or null if no valid JSON found
  */
-function parseCodexCliJson(text: string): CodexCliJson | null {
+export function parseCodexCliJson(text: string): CodexCliJson | null {
   const firstBrace = text.indexOf('{');
   const lastBrace = text.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {

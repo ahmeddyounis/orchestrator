@@ -1,4 +1,4 @@
-import { CodexCliAdapter, extractUsageFromCodexStats, parseTextBasedTokenUsage } from './adapter';
+import { CodexCliAdapter, extractUsageFromCodexStats, parseTextBasedTokenUsage, parseCodexCliJson } from './adapter';
 import { ProcessManager } from '../subprocess/process-manager';
 import { ModelRequest } from '@orchestrator/shared';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
@@ -1058,6 +1058,268 @@ Token usage: 150 input tokens, 75 output tokens
       const response = await adapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
 
       expect(response.text).toBe('the message content');
+    });
+  });
+  
+  describe('parseCodexCliJson function', () => {
+    describe('malformed JSON handling', () => {
+      it('should return null for completely invalid JSON', () => {
+        expect(parseCodexCliJson('not json at all')).toBeNull();
+      });
+
+      it('should return null for JSON with only opening brace', () => {
+        expect(parseCodexCliJson('{"response": "incomplete')).toBeNull();
+      });
+
+      it('should return null for JSON with only closing brace', () => {
+        expect(parseCodexCliJson('response": "incomplete"}')).toBeNull();
+      });
+
+      it('should return null for JSON with unbalanced braces', () => {
+        expect(parseCodexCliJson('{"response": {"nested": "value"')).toBeNull();
+      });
+
+      it('should return null for JSON with syntax errors', () => {
+        expect(parseCodexCliJson('{"response": "value",}')).toBeNull(); // trailing comma
+      });
+
+      it('should return null for JSON with invalid escape sequences', () => {
+        expect(parseCodexCliJson('{"response": "value\\x"}')).toBeNull();
+      });
+
+      it('should return null for empty string', () => {
+        expect(parseCodexCliJson('')).toBeNull();
+      });
+
+      it('should return null for whitespace only', () => {
+        expect(parseCodexCliJson('   \n\t   ')).toBeNull();
+      });
+
+      it('should return null for array JSON (not object)', () => {
+        // Note: This will actually parse but return the array - the function expects object
+        const result = parseCodexCliJson('[1, 2, 3]');
+        // Arrays don't have braces in the right positions
+        expect(result).toBeNull();
+      });
+
+      it('should handle JSON with control characters in strings', () => {
+        // JSON with embedded newline should fail standard parsing
+        const result = parseCodexCliJson('{"response": "line1\nline2"}');
+        expect(result).toBeNull();
+      });
+
+      it('should return null for truncated JSON in the middle of a key', () => {
+        expect(parseCodexCliJson('{"respon')).toBeNull();
+      });
+
+      it('should return null when braces are in wrong order', () => {
+        expect(parseCodexCliJson('}{"response": "test"{')).toBeNull();
+      });
+    });
+
+    describe('missing fields handling', () => {
+      it('should parse JSON with no response field', () => {
+        const result = parseCodexCliJson('{"other": "value"}');
+        expect(result).toEqual({ other: 'value' });
+        expect(result?.response).toBeUndefined();
+      });
+
+      it('should parse JSON with no message field', () => {
+        const result = parseCodexCliJson('{"data": 123}');
+        expect(result).toEqual({ data: 123 });
+        expect(result?.message).toBeUndefined();
+      });
+
+      it('should parse JSON with no usage field', () => {
+        const result = parseCodexCliJson('{"response": "test"}');
+        expect(result).toEqual({ response: 'test' });
+        expect(result?.usage).toBeUndefined();
+      });
+
+      it('should parse JSON with no stats field', () => {
+        const result = parseCodexCliJson('{"response": "test", "usage": {}}');
+        expect(result).toEqual({ response: 'test', usage: {} });
+        expect(result?.stats).toBeUndefined();
+      });
+
+      it('should parse empty JSON object', () => {
+        const result = parseCodexCliJson('{}');
+        expect(result).toEqual({});
+      });
+
+      it('should handle JSON with null values', () => {
+        const result = parseCodexCliJson('{"response": null, "message": null}');
+        expect(result).toEqual({ response: null, message: null });
+      });
+
+      it('should handle JSON with undefined-like string values', () => {
+        const result = parseCodexCliJson('{"response": "undefined"}');
+        expect(result).toEqual({ response: 'undefined' });
+      });
+    });
+
+    describe('nested structures handling', () => {
+      it('should parse deeply nested JSON objects', () => {
+        const nested = {
+          response: {
+            content: {
+              text: {
+                value: 'deep value',
+              },
+            },
+          },
+        };
+        const result = parseCodexCliJson(JSON.stringify(nested));
+        expect(result).toEqual(nested);
+      });
+
+      it('should parse JSON with nested arrays', () => {
+        const withArrays = {
+          response: 'test',
+          choices: [
+            { index: 0, message: { content: 'first' } },
+            { index: 1, message: { content: 'second' } },
+          ],
+        };
+        const result = parseCodexCliJson(JSON.stringify(withArrays));
+        expect(result).toEqual(withArrays);
+      });
+
+      it('should parse JSON with mixed nested types', () => {
+        const mixed = {
+          response: 'text',
+          usage: {
+            input_tokens: 100,
+            details: {
+              cached: true,
+              breakdown: [10, 20, 30, 40],
+            },
+          },
+          metadata: null,
+          flags: ['a', 'b'],
+        };
+        const result = parseCodexCliJson(JSON.stringify(mixed));
+        expect(result).toEqual(mixed);
+      });
+
+      it('should handle nested objects with same field names', () => {
+        const sameFields = {
+          response: {
+            response: {
+              response: 'innermost',
+            },
+          },
+        };
+        const result = parseCodexCliJson(JSON.stringify(sameFields));
+        expect(result).toEqual(sameFields);
+      });
+
+      it('should parse JSON with empty nested objects', () => {
+        const emptyNested = {
+          response: {},
+          usage: {},
+          stats: { details: {} },
+        };
+        const result = parseCodexCliJson(JSON.stringify(emptyNested));
+        expect(result).toEqual(emptyNested);
+      });
+
+      it('should parse JSON with empty nested arrays', () => {
+        const emptyArrays = {
+          response: 'test',
+          items: [],
+          nested: { list: [] },
+        };
+        const result = parseCodexCliJson(JSON.stringify(emptyArrays));
+        expect(result).toEqual(emptyArrays);
+      });
+    });
+
+    describe('prefix and suffix text handling', () => {
+      it('should extract JSON from text with prefix', () => {
+        const result = parseCodexCliJson('Some log output\n{"response": "value"}');
+        expect(result).toEqual({ response: 'value' });
+      });
+
+      it('should extract JSON from text with suffix', () => {
+        const result = parseCodexCliJson('{"response": "value"}\nDone processing.');
+        expect(result).toEqual({ response: 'value' });
+      });
+
+      it('should extract JSON from text with both prefix and suffix', () => {
+        const result = parseCodexCliJson('Start\n{"response": "value"}\nEnd');
+        expect(result).toEqual({ response: 'value' });
+      });
+
+      it('should handle prefix with brace-like characters', () => {
+        // Text before JSON containing > < characters
+        const result = parseCodexCliJson('Log: x > 5\n{"response": "test"}');
+        expect(result).toEqual({ response: 'test' });
+      });
+
+      it('should handle ANSI escape codes in prefix', () => {
+        const result = parseCodexCliJson('\x1b[32mSuccess:\x1b[0m {"response": "value"}');
+        expect(result).toEqual({ response: 'value' });
+      });
+
+      it('should extract outermost JSON when multiple objects present', () => {
+        // When there are multiple JSON objects, it extracts from first { to last }
+        const result = parseCodexCliJson('{"a": 1} some text {"b": 2}');
+        // This will try to parse '{"a": 1} some text {"b": 2}' which is invalid
+        expect(result).toBeNull();
+      });
+
+      it('should handle JSON with braces inside string values', () => {
+        const result = parseCodexCliJson('{"response": "code: if (x) { return }"}');
+        expect(result).toEqual({ response: 'code: if (x) { return }' });
+      });
+    });
+
+    describe('special value types', () => {
+      it('should parse JSON with boolean values', () => {
+        const result = parseCodexCliJson('{"success": true, "error": false}');
+        expect(result).toEqual({ success: true, error: false });
+      });
+
+      it('should parse JSON with numeric values', () => {
+        const result = parseCodexCliJson('{"integer": 42, "float": 3.14, "negative": -10}');
+        expect(result).toEqual({ integer: 42, float: 3.14, negative: -10 });
+      });
+
+      it('should parse JSON with scientific notation', () => {
+        const result = parseCodexCliJson('{"large": 1e10, "small": 1e-5}');
+        expect(result).toEqual({ large: 1e10, small: 1e-5 });
+      });
+
+      it('should parse JSON with unicode characters', () => {
+        const result = parseCodexCliJson('{"response": "Hello 世界 🌍"}');
+        expect(result).toEqual({ response: 'Hello 世界 🌍' });
+      });
+
+      it('should parse JSON with escaped unicode', () => {
+        const result = parseCodexCliJson('{"response": "\\u0048\\u0065\\u006c\\u006c\\u006f"}');
+        expect(result).toEqual({ response: 'Hello' });
+      });
+
+      it('should parse JSON with escaped quotes', () => {
+        const result = parseCodexCliJson('{"response": "He said \\"hello\\""}');
+        expect(result).toEqual({ response: 'He said "hello"' });
+      });
+
+      it('should parse JSON with backslashes', () => {
+        const result = parseCodexCliJson('{"path": "C:\\\\Users\\\\test"}');
+        expect(result).toEqual({ path: 'C:\\Users\\test' });
+      });
+
+      it('should parse JSON with newlines in escaped form', () => {
+        const result = parseCodexCliJson('{"response": "line1\\nline2"}');
+        expect(result).toEqual({ response: 'line1\nline2' });
+      });
+
+      it('should parse JSON with tabs in escaped form', () => {
+        const result = parseCodexCliJson('{"response": "col1\\tcol2"}');
+        expect(result).toEqual({ response: 'col1\tcol2' });
+      });
     });
   });
 
