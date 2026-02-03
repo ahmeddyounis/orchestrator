@@ -17,6 +17,18 @@ interface CodexCliConfig extends ProviderConfig {
   ossMode?: boolean;
 }
 
+/**
+ * Pattern to detect Codex CLI prompt markers.
+ * Matches common interactive prompt styles:
+ * - "codex>" or "Codex>" (Codex CLI default)
+ * - "> " at end of line (minimal shell prompt)
+ * - ">>> " (Python REPL style)
+ * - "$ " at end of line (shell style)
+ *
+ * The pattern is case-insensitive for "codex" to handle variations.
+ */
+const CODEX_PROMPT_PATTERN = /(?:codex>|>\s*$|>>>\s*$|\$\s*$)/i;
+
 export class CodexCliAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const codexConfig = config as CodexCliConfig;
@@ -58,6 +70,17 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
 
   id(): string {
     return 'codex_cli';
+  }
+
+  /**
+   * Detects if text indicates Codex CLI is waiting for input.
+   * Recognizes patterns like "codex>", "> ", ">>> ", or "$ " at end of text.
+   */
+  protected override isPrompt(text: string): boolean {
+    const trimmed = text.trim();
+    // Check for "codex>" anywhere in the last line, or shell-style prompts at the end
+    const lastLine = trimmed.split('\n').pop() ?? '';
+    return CODEX_PROMPT_PATTERN.test(lastLine);
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
