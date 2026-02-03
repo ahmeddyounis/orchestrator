@@ -1,4 +1,5 @@
 import { CodexCliAdapter, extractUsageFromCodexStats, parseTextBasedTokenUsage, parseCodexCliJson } from './adapter';
+import { ConfigError } from '../errors';
 import { ProcessManager } from '../subprocess/process-manager';
 import { ModelRequest } from '@orchestrator/shared';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
@@ -1375,17 +1376,138 @@ index 1234567..89abcdef 100644
     expect(response.text).toContain('diff --git a/file.ts b/file.ts');
     expect(response.text).not.toContain('<BEGIN_DIFF>');
   });
+  
+  describe('managed flags validation', () => {
+    it('should reject "exec" in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['exec'],
+          }),
+      ).toThrow(ConfigError);
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['exec'],
+          }),
+      ).toThrow(/manages.*exec.*--model.*--json.*--output-schema/);
+    });
 
-  it('rejects config.args that include managed flags', () => {
-    expect(
-      () =>
+    it('should reject "-m" in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['-m'],
+          }),
+      ).toThrow(ConfigError);
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['-m'],
+          }),
+      ).toThrow(/manages/);
+    });
+
+    it('should reject "--model" in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['--model'],
+          }),
+      ).toThrow(ConfigError);
+    });
+
+    it('should reject "--json" in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['--json'],
+          }),
+      ).toThrow(ConfigError);
+    });
+
+    it('should reject "--output-schema" in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['--output-schema'],
+          }),
+      ).toThrow(ConfigError);
+    });
+
+    it('should reject "-" (stdin marker) in config.args', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['-'],
+          }),
+      ).toThrow(ConfigError);
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['-'],
+          }),
+      ).toThrow(/remove '-' from config\.args/);
+    });
+
+    it('should allow other valid args that are not managed', () => {
+      expect(
+        () =>
+          new CodexCliAdapter({
+            type: 'codex_cli',
+            model: 'o3-mini',
+            command: 'codex',
+            args: ['--verbose', '--some-other-flag'],
+          }),
+      ).not.toThrow();
+    });
+
+    it('should provide helpful error message listing all managed flags', () => {
+      let errorMessage = '';
+      try {
         new CodexCliAdapter({
           type: 'codex_cli',
           model: 'o3-mini',
           command: 'codex',
-          args: ['--json'],
-        }),
-    ).toThrow(/manages/i);
+          args: ['exec'],
+        });
+      } catch (e) {
+        errorMessage = (e as Error).message;
+      }
+      expect(errorMessage).toContain('exec');
+      expect(errorMessage).toContain('-m');
+      expect(errorMessage).toContain('--model');
+      expect(errorMessage).toContain('--json');
+      expect(errorMessage).toContain('--output-schema');
+      expect(errorMessage).toContain('-');
+    });
   });
 });
 
