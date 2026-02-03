@@ -195,6 +195,19 @@ Okay, here is the plan:
       expect(result?.steps[0]).toBe('Do this');
     });
 
+    it('extracts hierarchical numbered plan', () => {
+      const input = `
+1. SECTION
+  1.1. Do this
+  1.2) Do that
+2) Another
+  2.1 Do more
+`;
+      const result = parsePlanFromText(input);
+      expect(result).not.toBeNull();
+      expect(result?.steps).toEqual(['SECTION', 'Do this', 'Do that', 'Another', 'Do more']);
+    });
+
     it('extracts bulleted list plan', () => {
       const input = `
 - Step A

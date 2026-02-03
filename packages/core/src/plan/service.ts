@@ -13,6 +13,103 @@ import { EventBus } from '../registry';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+function stripPlanListPrefix(step: string): string {
+  let result = step.trim();
+  // Bullets / checkboxes
+  result = result.replace(/^[-*]\s*(?:\[[xX ]\]\s*)?/, '');
+  // Numbered lists, including hierarchical numbering like 1.1. or 2.3)
+  result = result.replace(/^\d+(?:\.\d+)*[.)]?\s+/, '');
+  return result.trim();
+}
+
+function looksActionable(step: string): boolean {
+  const trimmed = step.trim();
+  if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('set up ')) return true;
+  if (lower.startsWith('wire up ')) return true;
+
+  const firstWord = lower.split(/\s+/, 1)[0] ?? '';
+  const imperativeVerbs = new Set([
+    'add',
+    'audit',
+    'build',
+    'bump',
+    'check',
+    'configure',
+    'create',
+    'disable',
+    'document',
+    'enable',
+    'ensure',
+    'extract',
+    'fix',
+    'harden',
+    'implement',
+    'improve',
+    'install',
+    'integrate',
+    'investigate',
+    'limit',
+    'migrate',
+    'move',
+    'parse',
+    'refactor',
+    'remove',
+    'replace',
+    'review',
+    'run',
+    'sanitize',
+    'set',
+    'setup',
+    'support',
+    'test',
+    'update',
+    'validate',
+    'verify',
+    'wire',
+  ]);
+  return imperativeVerbs.has(firstWord);
+}
+
+function normalizePlanSteps(rawSteps: string[]): string[] {
+  const trimmedSteps = rawSteps.map((step) => String(step).trim()).filter(Boolean);
+  const hasHierarchicalNumbering = trimmedSteps.some((step) => /^\d+\.\d+/.test(step));
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const original of trimmedSteps) {
+    const content = stripPlanListPrefix(original);
+    if (!content) continue;
+
+    // If the model returns section headers as separate numbered steps (e.g. "1. CODE QUALITY FIXES"),
+    // drop them when it also returns hierarchical substeps (e.g. "1.1. ...").
+    if (hasHierarchicalNumbering) {
+      const isLevel1Numbered = /^\d+[.)]\s+/.test(original) && !/^\d+\.\d+/.test(original);
+      if (isLevel1Numbered && !looksActionable(content)) {
+        continue;
+      }
+    } else {
+      // Non-hierarchical plans: only drop obvious non-actionable headers.
+      const lettersOnly = content.replace(/[^A-Za-z]/g, '');
+      const isAllCaps = lettersOnly.length > 0 && lettersOnly === lettersOnly.toUpperCase();
+      const isObviousHeader = content.endsWith(':') || isAllCaps;
+      if (isObviousHeader && !looksActionable(content)) {
+        continue;
+      }
+    }
+
+    const key = content.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(content);
+  }
+
+  return normalized;
+}
+
 export class PlanService {
   constructor(private eventBus: EventBus) {}
 
@@ -170,7 +267,11 @@ export class PlanService {
     const systemPrompt = `You are an expert software architecture planner.
 Your goal is to break down a high-level user goal into a sequence of clear, actionable steps.
 Return ONLY a JSON object with a "steps" property containing an array of strings.
-Each step should be a concise instruction.`;
+
+Critical formatting rules:
+- Do NOT include section headers/categories as steps.
+- Do NOT prefix steps with numbering/bullets (no "1.", "1.1.", "-", etc).
+- Each step must be a single, concise, actionable instruction (imperative voice).`;
 
     let userPrompt = `Goal: ${goal}`;
 
@@ -280,6 +381,8 @@ Each step should be a concise instruction.`;
       // Alternatively, we could treat the whole text as one step if it's short?
       // For now, empty array implies unstructured output that couldn't be parsed.
     }
+
+    planSteps = normalizePlanSteps(planSteps);
 
     // Write plan.json even if empty steps, as per spec "plan.json (may contain empty steps but valid JSON)"
     await fs.writeFile(

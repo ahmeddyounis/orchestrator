@@ -142,6 +142,56 @@ describe('PlanService', () => {
     );
   });
 
+  it('should drop section headers when falling back to text parsing', async () => {
+    const rawText = `
+1. CODE QUALITY FIXES
+  1.1. Do this
+  1.2. Do that
+`;
+    (planner.generate as Mock).mockResolvedValue({
+      text: rawText,
+    } as ModelResponse);
+
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
+
+    expect(result).toEqual(['Do this', 'Do that']);
+  });
+
+  it('should drop section headers and strip numbering in JSON steps', async () => {
+    const rawSteps = [
+      '1. CODE QUALITY FIXES',
+      '  1.1. Extract newline normalization into a shared utility function',
+      '  1.2. Replace direct console.log calls with proper logger usage',
+      '2. SECURITY FIXES',
+      '  2.1. Escape user input before RegExp construction',
+    ];
+    const normalizedSteps = [
+      'Extract newline normalization into a shared utility function',
+      'Replace direct console.log calls with proper logger usage',
+      'Escape user input before RegExp construction',
+    ];
+
+    const rawText = JSON.stringify({ steps: rawSteps });
+    (planner.generate as Mock).mockResolvedValue({
+      text: rawText,
+    } as ModelResponse);
+
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
+
+    expect(result).toEqual(normalizedSteps);
+    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan.json`,
+      JSON.stringify({ steps: normalizedSteps }, null, 2),
+    );
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'PlanCreated',
+        payload: { planSteps: normalizedSteps },
+      }),
+    );
+  });
+
   it('should return empty steps if parsing fails completely', async () => {
     const rawText = 'Just some random thoughts without structure.';
     (planner.generate as Mock).mockResolvedValue({

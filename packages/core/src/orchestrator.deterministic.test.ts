@@ -84,6 +84,7 @@ describe('Orchestrator Deterministic E2E', () => {
       providers: {
         'fake-cli': {
           type: 'subprocess',
+          model: 'fake',
           command: ['node', CLI_PATH], // Call the fake CLI
         } as any,
       },
@@ -125,10 +126,12 @@ describe('Orchestrator Deterministic E2E', () => {
       providers: {
         'fake-planner': {
           type: 'subprocess',
+          model: 'fake',
           command: ['node', CLI_PATH],
         } as any,
         'fake-executor': {
           type: 'subprocess',
+          model: 'fake',
           command: ['node', CLI_PATH],
         } as any,
       },
@@ -171,10 +174,12 @@ describe('Orchestrator Deterministic E2E', () => {
       providers: {
         'fake-planner': {
           type: 'subprocess',
+          model: 'fake',
           command: ['node', CLI_PATH],
         } as any,
         'fake-executor': {
           type: 'subprocess',
+          model: 'fake',
           command: ['node', CLI_PATH],
         } as any,
       },

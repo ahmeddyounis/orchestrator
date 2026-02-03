@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CandidateGenerator, StepContext } from './candidate_generator';
 import type { ProviderAdapter } from '@orchestrator/adapters';
-import type { EventBus, Logger, Config } from '@orchestrator/shared';
+import type { EventBus, Logger } from '@orchestrator/shared';
 import type { CostTracker } from '../../cost/tracker';
 import type { FusedContext } from '../../context';
 import * as fs from 'fs/promises';
 
 vi.mock('fs/promises');
 vi.mock('../../exec/patch_store', () => ({
-  PatchStore: vi.fn().mockImplementation(() => ({
-    saveCandidate: vi.fn().mockResolvedValue(undefined),
-  })),
+  PatchStore: class {
+    saveCandidate = vi.fn().mockResolvedValue(undefined);
+  },
 }));
 
 describe('CandidateGenerator', () => {
@@ -39,7 +39,7 @@ describe('CandidateGenerator', () => {
   let mockReviewer: ProviderAdapter;
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     (fs.mkdir as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
@@ -70,4 +70,56 @@ index 1234567..abcdefg 100644
 +import { newDep } from 'dep';
  const x = 1;
  const y = 2;
+<END_DIFF>
+`,
+    };
 
+    (mockExecutor.generate as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
+
+    const stepContext: StepContext = {
+      runId: 'test-run',
+      goal: 'Test goal',
+      step: 'Test step',
+      stepIndex: 0,
+      fusedContext: mockFusedContext,
+      eventBus: mockEventBus,
+      costTracker: mockCostTracker,
+      executor: mockExecutor,
+      reviewer: mockReviewer,
+      artifactsRoot: '/tmp/artifacts',
+      budget: {} as any,
+      logger: mockLogger,
+    };
+
+    const candidates = await generator.generateCandidates(stepContext, 1);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toEqual(
+      expect.objectContaining({
+        index: 0,
+        valid: true,
+        providerId: 'mock-executor',
+        patchStats: { filesChanged: 1, linesAdded: 1, linesDeleted: 0 },
+      }),
+    );
+    expect(candidates[0]?.patch).toContain('diff --git a/src/file.ts b/src/file.ts');
+
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      '/tmp/artifacts/patches/iter_0_candidate_0_raw.txt',
+      mockResponse.text,
+    );
+
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'CandidateGenerated',
+        payload: expect.objectContaining({
+          iteration: 0,
+          candidateIndex: 0,
+          valid: true,
+          providerId: 'mock-executor',
+          patchStats: { filesChanged: 1, linesAdded: 1, linesDeleted: 0 },
+        }),
+      }),
+    );
+  });
+});

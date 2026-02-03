@@ -170,7 +170,7 @@ export function parsePlanFromText(text: string): PlanParsed | null {
   for (const line of lines) {
     const trimmed = line.trim();
     // Match "1. Step" or "- Step"
-    const numberMatch = trimmed.match(/^\d+\.\s+(.*)/);
+    const numberMatch = trimmed.match(/^\d+(?:\.\d+)*[.)]?\s+(.*)/);
     const bulletMatch = trimmed.match(/^[-*]\s+(.*)/);
 
     if (numberMatch) {
