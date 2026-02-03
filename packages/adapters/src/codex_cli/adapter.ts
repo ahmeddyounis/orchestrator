@@ -130,9 +130,29 @@ index 1234567..89abcdef 100644
     const parsed = parseCodexCliJson(rawText);
     const responseText = extractResponseText(parsed, rawText);
     
-    // Extract usage from JSON stats, text-based stats, or fall back to placeholder
-    const usage = extractUsageFromCodexStats(parsed) ?? 
-                  parseTextBasedTokenUsage(rawText) ?? 
+    // Extract usage from JSON stats, text-based stats, or fall back to placeholder.
+    // Log when extraction fails to help diagnose token tracking issues.
+    const jsonUsage = extractUsageFromCodexStats(parsed);
+    const textUsage = parseTextBasedTokenUsage(rawText);
+    
+    let usage = jsonUsage ?? textUsage ?? response.usage;
+    
+    // Log fallback when neither JSON nor text-based extraction yielded results
+    if (!jsonUsage && !textUsage) {
+      await ctx.logger.log({
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: ctx.runId,
+        type: 'TokenExtractionFallback',
+        payload: {
+          reason: 'Unable to extract token usage from Codex CLI output',
+          hadJsonParsed: parsed !== null,
+          rawTextLength: rawText.length,
+          rawTextPreview: rawText.slice(0, 200),
+          fallbackUsage: response.usage,
+        },
+      });
+    }
                   response.usage;
 
     // Extract diff if present using robust parser
