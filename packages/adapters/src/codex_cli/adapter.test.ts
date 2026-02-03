@@ -1,4 +1,4 @@
-import { CodexCliAdapter, extractUsageFromCodexStats } from './adapter';
+import { CodexCliAdapter, extractUsageFromCodexStats, parseTextBasedTokenUsage } from './adapter';
 import { ProcessManager } from '../subprocess/process-manager';
 import { ModelRequest } from '@orchestrator/shared';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
@@ -525,6 +525,252 @@ describe('CodexCliAdapter', () => {
 
       expect(response.usage?.inputTokens).toBe(100);
       expect(response.usage?.outputTokens).toBe(50);
+    });
+  });
+
+  describe('parseTextBasedTokenUsage function', () => {
+    describe('Pattern: input=X, output=Y (equals sign format)', () => {
+      it('should parse "input=123, output=456"', () => {
+        const result = parseTextBasedTokenUsage('Tokens: input=123, output=456');
+        expect(result).toEqual({
+          inputTokens: 123,
+          outputTokens: 456,
+          totalTokens: 579,
+        });
+      });
+
+      it('should parse "input_tokens=100, output_tokens=50"', () => {
+        const result = parseTextBasedTokenUsage('Usage: input_tokens=100, output_tokens=50');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should parse with colon separator "input: 200 output: 100"', () => {
+        const result = parseTextBasedTokenUsage('input: 200 output: 100');
+        expect(result).toEqual({
+          inputTokens: 200,
+          outputTokens: 100,
+          totalTokens: 300,
+        });
+      });
+
+      it('should parse with space separator "input 300 output 150"', () => {
+        const result = parseTextBasedTokenUsage('input 300 output 150');
+        expect(result).toEqual({
+          inputTokens: 300,
+          outputTokens: 150,
+          totalTokens: 450,
+        });
+      });
+    });
+
+    describe('Pattern: X input tokens, Y output tokens (number-first format)', () => {
+      it('should parse "500 input tokens, 250 output tokens"', () => {
+        const result = parseTextBasedTokenUsage('Usage: 500 input tokens, 250 output tokens');
+        expect(result).toEqual({
+          inputTokens: 500,
+          outputTokens: 250,
+          totalTokens: 750,
+        });
+      });
+
+      it('should parse "1000 prompt tokens, 500 completion tokens"', () => {
+        const result = parseTextBasedTokenUsage('1000 prompt tokens, 500 completion tokens');
+        expect(result).toEqual({
+          inputTokens: 1000,
+          outputTokens: 500,
+          totalTokens: 1500,
+        });
+      });
+
+      it('should parse singular "1 input token"', () => {
+        const result = parseTextBasedTokenUsage('1 input token, 1 output token');
+        expect(result).toEqual({
+          inputTokens: 1,
+          outputTokens: 1,
+          totalTokens: 2,
+        });
+      });
+
+      it('should parse "200 candidate tokens" (Google style output)', () => {
+        const result = parseTextBasedTokenUsage('100 input tokens, 200 candidate tokens');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 200,
+          totalTokens: 300,
+        });
+      });
+    });
+
+    describe('Pattern: X in, Y out (shorthand format)', () => {
+      it('should parse "100 in, 50 out"', () => {
+        const result = parseTextBasedTokenUsage('Tokens used: 100 in, 50 out');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should parse "100 in / 50 out" with slash separator', () => {
+        const result = parseTextBasedTokenUsage('100 in / 50 out');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should parse "100 tokens in, 50 tokens out"', () => {
+        const result = parseTextBasedTokenUsage('100 tokens in, 50 tokens out');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should parse "100in/50out" without spaces', () => {
+        const result = parseTextBasedTokenUsage('100in/50out');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+    });
+
+    describe('Pattern: prompt_tokens/completion_tokens (OpenAI style)', () => {
+      it('should parse "prompt_tokens: 75, completion_tokens: 25"', () => {
+        const result = parseTextBasedTokenUsage('prompt_tokens: 75, completion_tokens: 25');
+        expect(result).toEqual({
+          inputTokens: 75,
+          outputTokens: 25,
+          totalTokens: 100,
+        });
+      });
+
+      it('should parse "prompt_tokens=150 completion_tokens=75"', () => {
+        const result = parseTextBasedTokenUsage('prompt_tokens=150 completion_tokens=75');
+        expect(result).toEqual({
+          inputTokens: 150,
+          outputTokens: 75,
+          totalTokens: 225,
+        });
+      });
+    });
+
+    describe('Pattern: total tokens', () => {
+      it('should parse total_tokens along with input/output', () => {
+        const result = parseTextBasedTokenUsage('input=100, output=50, total=150');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should parse "500 total tokens" format', () => {
+        const result = parseTextBasedTokenUsage('200 input tokens, 100 output tokens, 300 total tokens');
+        expect(result).toEqual({
+          inputTokens: 200,
+          outputTokens: 100,
+          totalTokens: 300,
+        });
+      });
+
+      it('should calculate totalTokens when not provided', () => {
+        const result = parseTextBasedTokenUsage('input=200, output=100');
+        expect(result?.totalTokens).toBe(300);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should return undefined when no token info found', () => {
+        const result = parseTextBasedTokenUsage('Just some regular text without token info');
+        expect(result).toBeUndefined();
+      });
+
+      it('should return undefined for empty string', () => {
+        const result = parseTextBasedTokenUsage('');
+        expect(result).toBeUndefined();
+      });
+
+      it('should handle multiline output', () => {
+        const result = parseTextBasedTokenUsage('Response complete.\n\nUsage statistics:\ninput_tokens=500\noutput_tokens=250');
+        expect(result).toEqual({
+          inputTokens: 500,
+          outputTokens: 250,
+          totalTokens: 750,
+        });
+      });
+
+      it('should be case insensitive', () => {
+        const result = parseTextBasedTokenUsage('INPUT=100, OUTPUT=50');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should handle large numbers', () => {
+        const result = parseTextBasedTokenUsage('input=1000000, output=500000');
+        expect(result).toEqual({
+          inputTokens: 1000000,
+          outputTokens: 500000,
+          totalTokens: 1500000,
+        });
+      });
+
+      it('should return undefined when only input is found (no output)', () => {
+        const result = parseTextBasedTokenUsage('input=100');
+        // Only input without output still returns a result
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 0,
+          totalTokens: 100,
+        });
+      });
+
+      it('should return undefined when only output is found (no input)', () => {
+        const result = parseTextBasedTokenUsage('output=50');
+        // Only output without input still returns a result  
+        expect(result).toEqual({
+          inputTokens: 0,
+          outputTokens: 50,
+          totalTokens: 50,
+        });
+      });
+
+      it('should prefer in/out pattern over separate input/output matches', () => {
+        // When "X in, Y out" pattern is present, it should be used
+        const result = parseTextBasedTokenUsage('100 in, 50 out');
+        expect(result).toEqual({
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+        });
+      });
+
+      it('should extract from mixed content with code', () => {
+        const result = parseTextBasedTokenUsage(`
+Here's your code:
+\`\`\`javascript
+const x = 1;
+\`\`\`
+
+Token usage: 150 input tokens, 75 output tokens
+        `);
+        expect(result).toEqual({
+          inputTokens: 150,
+          outputTokens: 75,
+          totalTokens: 225,
+        });
+      });
     });
   });
 

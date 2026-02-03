@@ -263,7 +263,7 @@ export function extractUsageFromCodexStats(
  * - "prompt_tokens: 123, completion_tokens: 456"
  * - "Tokens used: 123 in, 456 out"
  */
-function parseTextBasedTokenUsage(
+export function parseTextBasedTokenUsage(
   text: string,
 ): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
   // Pattern 1: "input=X" and "output=Y" or "input_tokens=X"
