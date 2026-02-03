@@ -1,6 +1,2 @@
-export class BudgetExceededError extends Error {
-  constructor(public reason: string) {
-    super(`Budget exceeded: ${reason}`);
-    this.name = 'BudgetExceededError';
-  }
-}
+// Re-export error classes from shared for backward compatibility
+export { BudgetExceededError } from '@orchestrator/shared';

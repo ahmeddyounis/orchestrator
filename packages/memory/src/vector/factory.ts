@@ -1,3 +1,8 @@
+import {
+  VectorBackendNotImplementedError,
+  RemoteBackendNotAllowedError,
+} from '@orchestrator/shared';
+
 import { QdrantVectorBackend, QdrantVectorBackendConfig } from './qdrant';
 import {
   VectorMemoryBackend,
@@ -14,21 +19,8 @@ import { SQLiteVectorBackend } from './sqlite/sqlite-backend';
 // Re-export VectorBackendConfig for tests
 export { VectorBackendConfig } from './backend';
 
-/** Error thrown when a requested backend is not implemented */
-export class VectorBackendNotImplementedError extends Error {
-  constructor(backend: string) {
-    super(`Vector backend "${backend}" is not implemented.`);
-    this.name = 'VectorBackendNotImplementedError';
-  }
-}
-
-/** Error thrown when a remote backend is used without opt-in */
-export class RemoteBackendNotAllowedError extends Error {
-  constructor(backend: string) {
-    super(`Remote vector backend "${backend}" requires explicit opt-in.`);
-    this.name = 'RemoteBackendNotAllowedError';
-  }
-}
+// Re-export error classes for backward compatibility
+export { VectorBackendNotImplementedError, RemoteBackendNotAllowedError } from '@orchestrator/shared';
 
 const REMOTE_BACKENDS = ['qdrant', 'chroma', 'pgvector'];
 

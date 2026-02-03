@@ -1,14 +1,11 @@
-import { Config, ProviderConfig, ConfigError, EventBus } from '@orchestrator/shared';
+import { Config, ProviderConfig, RegistryError, EventBus } from '@orchestrator/shared';
 import { ProviderAdapter } from '@orchestrator/adapters';
 import { CostTracker } from './cost/tracker';
 import { CostTrackingAdapter } from './cost/proxy';
 
 export { EventBus };
+export { RegistryError } from '@orchestrator/shared';
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
-
-export class RegistryError extends ConfigError {
-  public readonly exitCode = 2;
-}
 
 export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();

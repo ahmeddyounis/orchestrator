@@ -1,16 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { IndexCorruptedError } from '@orchestrator/shared';
 import { INDEX_SCHEMA_VERSION, type IndexFile } from './types';
 
 export { INDEX_SCHEMA_VERSION } from './types';
 export type { IndexFile } from './types';
 
-export class IndexCorruptedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'IndexCorruptedError';
-  }
-}
+// Re-export error class for backward compatibility
+export { IndexCorruptedError } from '@orchestrator/shared';
 
 export function validateIndex(indexFile: unknown): asserts indexFile is IndexFile {
   if (typeof indexFile !== 'object' || indexFile === null) {

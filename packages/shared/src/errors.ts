@@ -10,6 +10,12 @@ export type ErrorCode =
   | 'IndexError'
   | 'MemoryError'
   | 'HttpError'
+  | 'RateLimitError'
+  | 'TimeoutError'
+  | 'ProcessError'
+  | 'PolicyError'
+  | 'BudgetError'
+  | 'PluginError'
   | 'UnknownError';
 
 export interface AppErrorOptions {
@@ -82,5 +88,87 @@ export class MemoryError extends AppError {
 export class HttpError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {
     super('HttpError', message, options);
+  }
+}
+
+export class RateLimitError extends AppError {
+  public readonly retryAfter?: number;
+
+  constructor(message: string, options: AppErrorOptions & { retryAfter?: number } = {}) {
+    super('RateLimitError', message, options);
+    this.retryAfter = options.retryAfter;
+  }
+}
+
+export class TimeoutError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super('TimeoutError', message, options);
+  }
+}
+
+export class ProcessError extends AppError {
+  public readonly exitCode?: number;
+
+  constructor(message: string, options: AppErrorOptions & { exitCode?: number } = {}) {
+    super('ProcessError', message, options);
+    this.exitCode = options.exitCode;
+  }
+}
+
+export class PolicyDeniedError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super('PolicyError', message, options);
+  }
+}
+
+export class ConfirmationDeniedError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super('PolicyError', message, options);
+  }
+}
+
+export class BudgetExceededError extends AppError {
+  public readonly reason: string;
+
+  constructor(reason: string, options: AppErrorOptions = {}) {
+    super('BudgetError', `Budget exceeded: ${reason}`, options);
+    this.reason = reason;
+  }
+}
+
+export class RegistryError extends ConfigError {
+  public readonly exitCode = 2;
+}
+
+export class IndexCorruptedError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super('IndexError', message, options);
+  }
+}
+
+export class IndexNotFoundError extends AppError {
+  constructor(message: string, options: AppErrorOptions = {}) {
+    super('IndexError', message, options);
+  }
+}
+
+export class VectorBackendNotImplementedError extends AppError {
+  constructor(backend: string, options: AppErrorOptions = {}) {
+    super('MemoryError', `Vector backend "${backend}" is not implemented.`, options);
+  }
+}
+
+export class RemoteBackendNotAllowedError extends AppError {
+  constructor(backend: string, options: AppErrorOptions = {}) {
+    super('MemoryError', `Remote vector backend "${backend}" requires explicit opt-in.`, options);
+  }
+}
+
+export class PluginValidationError extends AppError {
+  public readonly pluginName: string;
+
+  constructor(pluginName: string, message: string, options: AppErrorOptions = {}) {
+    super('PluginError', `Plugin "${pluginName}": ${message}`, options);
+    this.pluginName = pluginName;
   }
 }

@@ -1,30 +1,7 @@
-export class ConfigError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ConfigError';
-  }
-}
-
-export class RateLimitError extends Error {
-  constructor(
-    message: string,
-    public retryAfter?: number,
-  ) {
-    super(message);
-    this.name = 'RateLimitError';
-  }
-}
-
-export class TimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'TimeoutError';
-  }
-}
-
-export class ProcessError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ProcessError';
-  }
-}
+// Re-export error classes from shared for backward compatibility
+export {
+  ConfigError,
+  RateLimitError,
+  TimeoutError,
+  ProcessError,
+} from '@orchestrator/shared';

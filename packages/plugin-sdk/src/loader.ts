@@ -4,6 +4,7 @@
  * Helpers for loading and validating plugins at runtime.
  */
 
+import { PluginValidationError } from '@orchestrator/shared';
 import {
   SDK_VERSION,
   isVersionCompatible,
@@ -28,18 +29,8 @@ export interface LoadPluginResult<T extends PluginLifecycle = PluginLifecycle> {
   error?: string;
 }
 
-/**
- * Plugin validation error
- */
-export class PluginValidationError extends Error {
-  constructor(
-    public readonly pluginName: string,
-    message: string,
-  ) {
-    super(`Plugin "${pluginName}": ${message}`);
-    this.name = 'PluginValidationError';
-  }
-}
+// Re-export error class for backward compatibility
+export { PluginValidationError } from '@orchestrator/shared';
 
 /**
  * Plugin version mismatch error

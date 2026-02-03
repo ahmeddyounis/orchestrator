@@ -1,3 +1,4 @@
+import { IndexNotFoundError } from '@orchestrator/shared';
 import { RepoScanner, RepoFileMeta } from '../scanner';
 import { IndexFile, loadIndex, saveIndexAtomic } from './store';
 import { hashFile } from './hasher';
@@ -5,12 +6,8 @@ import { resolve } from 'path';
 
 type IndexRecord = IndexFile['files'][0];
 
-export class IndexNotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'IndexNotFoundError';
-  }
-}
+// Re-export error class for backward compatibility
+export { IndexNotFoundError } from '@orchestrator/shared';
 
 export interface IndexUpdateResult {
   added: string[];
