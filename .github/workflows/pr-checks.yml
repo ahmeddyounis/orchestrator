@@ -1,0 +1,72 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+env:
+  PNPM_VERSION: 10.25.0
+  NODE_VERSION: 20
+
+jobs:
+  pr-title:
+    name: PR Title Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check PR title format
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          # Check for conventional commit format
+          if [[ ! "$TITLE" =~ ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?:\ .+ ]]; then
+            echo "PR title does not follow conventional commit format"
+            echo "Expected format: type(scope): description"
+            echo "Examples:"
+            echo "  feat: add new feature"
+            echo "  fix(core): resolve memory leak"
+            echo "  docs: update README"
+            exit 1
+          fi
+          echo "PR title is valid: $TITLE"
+
+  guard-artifacts:
+    name: Guard Tracked Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Guard repo artifacts
+        run: pnpm guard:repo
+
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for large files
+        run: |
+          # Check for files larger than 1MB (excluding node_modules and .git)
+          LARGE_FILES=$(find . -type f -size +1M -not -path "./node_modules/*" -not -path "./.git/*" -not -path "./packages/*/node_modules/*" 2>/dev/null || true)
+          if [ -n "$LARGE_FILES" ]; then
+            echo "Warning: Large files detected:"
+            echo "$LARGE_FILES"
+          fi

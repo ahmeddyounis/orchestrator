@@ -1,0 +1,12 @@
+# Default owners for everything in the repo
+* @orchestrator-team
+
+# CI/CD configuration
+.github/ @orchestrator-team
+
+# Core packages require additional review
+packages/core/ @orchestrator-team
+packages/shared/ @orchestrator-team
+
+# Security-sensitive files
+packages/shared/src/security/ @orchestrator-team
