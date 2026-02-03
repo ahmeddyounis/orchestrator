@@ -27,15 +27,24 @@ export interface RetryOptions {
   backoffFactor?: number;
 }
 
+/**
+ * Context passed to adapter methods for each request.
+ * Provides access to logging, cancellation, and execution configuration.
+ */
 export interface AdapterContext {
+  /** Unique identifier for the current orchestration run */
   runId: string;
+  /** Logger instance for this request */
   logger: Logger;
   /**
    * Absolute path to the repo root being orchestrated (where `.orchestrator/` lives).
    * Optional for backward compatibility; adapters should fall back to `process.cwd()`.
    */
   repoRoot?: string;
+  /** Signal to cancel the request */
   abortSignal?: AbortSignal;
+  /** Maximum time in milliseconds for the request */
   timeoutMs?: number;
+  /** Retry configuration for transient failures */
   retryOptions?: RetryOptions;
 }

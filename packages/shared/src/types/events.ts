@@ -1,21 +1,35 @@
 import { ProviderCapabilities } from './llm';
 import type { RetrievalIntent } from './memory';
 
+/**
+ * Base interface for all orchestrator events.
+ * All events include common metadata fields.
+ */
 export interface BaseEvent {
+  /** Schema version for event format compatibility */
   schemaVersion: number;
+  /** ISO 8601 timestamp when the event occurred */
   timestamp: string;
+  /** Unique identifier for the orchestration run */
   runId: string;
+  /** Event type discriminator */
   type: string;
 }
 
+/**
+ * Emitted when an orchestration run starts.
+ */
 export interface RunStarted extends BaseEvent {
   type: 'RunStarted';
   payload: {
+    /** Unique identifier for the task */
     taskId: string;
+    /** The goal or objective for this run */
     goal: string;
   };
 }
 
+/** Emitted when plan generation is requested */
 export interface PlanRequested extends BaseEvent {
   type: 'PlanRequested';
   payload: {
@@ -23,6 +37,7 @@ export interface PlanRequested extends BaseEvent {
   };
 }
 
+/** Emitted when a plan has been created */
 export interface PlanCreated extends BaseEvent {
   type: 'PlanCreated';
   payload: {
@@ -31,47 +46,64 @@ export interface PlanCreated extends BaseEvent {
   };
 }
 
+/** Emitted when context has been built for model consumption */
 export interface ContextBuilt extends BaseEvent {
   type: 'ContextBuilt';
   payload: {
+    /** Number of files included in context */
     fileCount: number;
+    /** Estimated token count */
     tokenEstimate: number;
   };
 }
 
+/** Emitted when search queries have been built */
 export interface QueriesBuilt extends BaseEvent {
   type: 'QueriesBuilt';
   payload: {
+    /** Number of repository queries */
     repoQueriesCount: number;
+    /** Number of memory queries */
     memoryQueriesCount: number;
   };
 }
 
+/** Emitted when a patch is proposed but not yet applied */
 export interface PatchProposed extends BaseEvent {
   type: 'PatchProposed';
   payload: {
+    /** Files that would be modified */
     filePaths: string[];
-    diffPreview: string; // potentially truncated
+    /** Preview of the diff (may be truncated) */
+    diffPreview: string;
   };
 }
 
+/** Emitted when a patch has been applied to the codebase */
 export interface PatchApplied extends BaseEvent {
   type: 'PatchApplied';
   payload: {
+    /** Description of changes */
     description?: string;
+    /** Files that were modified */
     filesChanged: string[];
+    /** Whether the patch was successfully applied */
     success: boolean;
   };
 }
 
+/** Emitted when a Git checkpoint (commit/stash) is created */
 export interface CheckpointCreated extends BaseEvent {
   type: 'CheckpointCreated';
   payload: {
+    /** Git ref for the checkpoint */
     checkpointRef: string;
+    /** Human-readable label */
     label: string;
   };
 }
 
+/** Emitted when a patch fails to apply */
 export interface PatchApplyFailed extends BaseEvent {
   type: 'PatchApplyFailed';
   payload: {
@@ -80,6 +112,7 @@ export interface PatchApplyFailed extends BaseEvent {
   };
 }
 
+/** Emitted when a rollback to a previous state is performed */
 export interface RollbackPerformed extends BaseEvent {
   type: 'RollbackPerformed';
   payload: {
@@ -88,6 +121,7 @@ export interface RollbackPerformed extends BaseEvent {
   };
 }
 
+/** Emitted when a tool completes execution */
 export interface ToolRun extends BaseEvent {
   type: 'ToolRun';
   payload: {
@@ -98,6 +132,7 @@ export interface ToolRun extends BaseEvent {
   };
 }
 
+/** Emitted when a tool execution is requested */
 export interface ToolRunRequested extends BaseEvent {
   type: 'ToolRunRequested';
   payload: {
@@ -108,6 +143,7 @@ export interface ToolRunRequested extends BaseEvent {
   };
 }
 
+/** Emitted when a tool execution is approved */
 export interface ToolRunApproved extends BaseEvent {
   type: 'ToolRunApproved';
   payload: {
@@ -116,6 +152,7 @@ export interface ToolRunApproved extends BaseEvent {
   };
 }
 
+/** Emitted when a tool execution is blocked by policy */
 export interface ToolRunBlocked extends BaseEvent {
   type: 'ToolRunBlocked';
   payload: {
@@ -125,6 +162,7 @@ export interface ToolRunBlocked extends BaseEvent {
   };
 }
 
+/** Emitted when a tool starts executing */
 export interface ToolRunStarted extends BaseEvent {
   type: 'ToolRunStarted';
   payload: {
@@ -132,6 +170,7 @@ export interface ToolRunStarted extends BaseEvent {
   };
 }
 
+/** Emitted when a tool finishes executing */
 export interface ToolRunFinished extends BaseEvent {
   type: 'ToolRunFinished';
   payload: {
@@ -144,6 +183,7 @@ export interface ToolRunFinished extends BaseEvent {
   };
 }
 
+/** Emitted when verification completes for a step */
 export interface VerifyResult extends BaseEvent {
   type: 'VerifyResult';
   payload: {
@@ -155,6 +195,7 @@ export interface VerifyResult extends BaseEvent {
   };
 }
 
+/** Emitted when an orchestration run finishes */
 export interface RunFinished extends BaseEvent {
   type: 'RunFinished';
   payload: {
@@ -163,6 +204,7 @@ export interface RunFinished extends BaseEvent {
   };
 }
 
+/** Emitted when the orchestration level is escalated */
 export interface RunEscalated extends BaseEvent {
   type: 'RunEscalated';
   payload: {
@@ -172,14 +214,16 @@ export interface RunEscalated extends BaseEvent {
   };
 }
 
+/** Emitted when data is written to memory */
 export interface MemoryWrite extends BaseEvent {
   type: 'MemoryWrite';
   payload: {
     key: string;
-    value: unknown; // or string if it's strictly text
+    value: unknown;
   };
 }
 
+/** Emitted when user confirmation is requested */
 export interface ConfirmationRequested extends BaseEvent {
   type: 'ConfirmationRequested';
   payload: {
@@ -189,14 +233,17 @@ export interface ConfirmationRequested extends BaseEvent {
   };
 }
 
+/** Emitted when a confirmation request is resolved */
 export interface ConfirmationResolved extends BaseEvent {
   type: 'ConfirmationResolved';
   payload: {
     approved: boolean;
-    autoResolved: boolean; // True if resolved via flag (yes/no) without prompt
+    /** True if resolved via flag (yes/no) without user prompt */
+    autoResolved: boolean;
   };
 }
 
+/** Emitted when a provider is selected for a role */
 export interface ProviderSelected extends BaseEvent {
   type: 'ProviderSelected';
   payload: {
@@ -206,6 +253,7 @@ export interface ProviderSelected extends BaseEvent {
   };
 }
 
+/** Emitted when a provider API request starts */
 export interface ProviderRequestStarted extends BaseEvent {
   type: 'ProviderRequestStarted';
   payload: {
@@ -229,6 +277,7 @@ export interface ProviderRequestFinished extends BaseEvent {
   };
 }
 
+/** Emitted when a subprocess is spawned */
 export interface SubprocessSpawned extends BaseEvent {
   type: 'SubprocessSpawned';
   payload: {
@@ -239,16 +288,19 @@ export interface SubprocessSpawned extends BaseEvent {
   };
 }
 
+/** Emitted when subprocess output is captured (may be sampled) */
 export interface SubprocessOutputChunked extends BaseEvent {
   type: 'SubprocessOutputChunked';
   payload: {
     pid: number;
     stream: 'stdout' | 'stderr';
     chunk: string;
-    isSampled?: boolean; // if we are skipping chunks
+    /** True if some chunks were skipped for performance */
+    isSampled?: boolean;
   };
 }
 
+/** Emitted when a subprocess exits */
 export interface SubprocessExited extends BaseEvent {
   type: 'SubprocessExited';
   payload: {
@@ -256,10 +308,12 @@ export interface SubprocessExited extends BaseEvent {
     exitCode: number | null;
     signal: string | number | null;
     durationMs: number;
-    error?: string; // For things like timeouts or spawn errors
+    /** Error message for timeouts or spawn failures */
+    error?: string;
   };
 }
 
+/** Emitted when subprocess output is parsed into structured data */
 export interface SubprocessParsed extends BaseEvent {
   type: 'SubprocessParsed';
   payload: {
@@ -268,6 +322,7 @@ export interface SubprocessParsed extends BaseEvent {
   };
 }
 
+/** Emitted when the repository is scanned */
 export interface RepoScan extends BaseEvent {
   type: 'RepoScan';
   payload: {
@@ -276,6 +331,7 @@ export interface RepoScan extends BaseEvent {
   };
 }
 
+/** Emitted when a repository search completes */
 export interface RepoSearch extends BaseEvent {
   type: 'RepoSearch';
   payload: {
@@ -285,6 +341,7 @@ export interface RepoSearch extends BaseEvent {
   };
 }
 
+/** Emitted when a plan step starts executing */
 export interface StepStarted extends BaseEvent {
   type: 'StepStarted';
   payload: {
@@ -294,6 +351,7 @@ export interface StepStarted extends BaseEvent {
   };
 }
 
+/** Emitted when a plan step finishes */
 export interface StepFinished extends BaseEvent {
   type: 'StepFinished';
   payload: {
@@ -303,6 +361,7 @@ export interface StepFinished extends BaseEvent {
   };
 }
 
+/** Emitted when verification starts */
 export interface VerificationStarted extends BaseEvent {
   type: 'VerificationStarted';
   payload: {
@@ -310,6 +369,7 @@ export interface VerificationStarted extends BaseEvent {
   };
 }
 
+/** Emitted when verification finishes */
 export interface VerificationFinished extends BaseEvent {
   type: 'VerificationFinished';
   payload: {
@@ -318,6 +378,7 @@ export interface VerificationFinished extends BaseEvent {
   };
 }
 
+/** Emitted when an L2 iteration starts */
 export interface IterationStarted extends BaseEvent {
   type: 'IterationStarted';
   payload: {
@@ -326,6 +387,7 @@ export interface IterationStarted extends BaseEvent {
   };
 }
 
+/** Emitted when an L2 iteration finishes */
 export interface IterationFinished extends BaseEvent {
   type: 'IterationFinished';
   payload: {
@@ -345,6 +407,7 @@ export interface RepairAttempted extends BaseEvent {
   };
 }
 
+/** Emitted when the project toolchain is detected */
 export interface ToolchainDetected extends BaseEvent {
   type: 'ToolchainDetected';
   payload: {
@@ -358,6 +421,7 @@ export interface ToolchainDetected extends BaseEvent {
   };
 }
 
+/** Emitted when a run is stopped (cancelled or interrupted) */
 export interface RunStopped extends BaseEvent {
   type: 'RunStopped';
   payload: {
@@ -366,6 +430,7 @@ export interface RunStopped extends BaseEvent {
   };
 }
 
+/** Emitted when sensitive data is redacted from memory */
 export interface MemoryRedaction extends BaseEvent {
   type: 'MemoryRedaction';
   payload: {
@@ -374,6 +439,7 @@ export interface MemoryRedaction extends BaseEvent {
   };
 }
 
+/** Emitted when memory is searched */
 export interface MemorySearched extends BaseEvent {
   type: 'MemorySearched';
   payload: {
@@ -384,6 +450,7 @@ export interface MemorySearched extends BaseEvent {
   };
 }
 
+/** Emitted when stale memory entries are reconciled */
 export interface MemoryStalenessReconciled extends BaseEvent {
   type: 'MemoryStalenessReconciled';
   payload: {
@@ -391,6 +458,7 @@ export interface MemoryStalenessReconciled extends BaseEvent {
   };
 }
 
+/** Emitted when auto-index update starts */
 export interface IndexAutoUpdateStarted extends BaseEvent {
   type: 'IndexAutoUpdateStarted';
   payload: {
@@ -399,6 +467,7 @@ export interface IndexAutoUpdateStarted extends BaseEvent {
   };
 }
 
+/** Emitted when auto-index update finishes */
 export interface IndexAutoUpdateFinished extends BaseEvent {
   type: 'IndexAutoUpdateFinished';
   payload: {
@@ -408,7 +477,7 @@ export interface IndexAutoUpdateFinished extends BaseEvent {
   };
 }
 
-// M17-02: Candidate generation event
+/** Emitted when an L3 candidate is generated */
 export interface CandidateGenerated extends BaseEvent {
   type: 'CandidateGenerated';
   payload: {
@@ -425,6 +494,7 @@ export interface CandidateGenerated extends BaseEvent {
   };
 }
 
+/** Emitted when performance is measured for a specific operation */
 export interface PerformanceMeasured extends BaseEvent {
   type: 'PerformanceMeasured';
   payload: {
@@ -434,6 +504,10 @@ export interface PerformanceMeasured extends BaseEvent {
   };
 }
 
+/**
+ * Union type of all orchestrator events.
+ * Use this for type-safe event handling.
+ */
 export type OrchestratorEvent =
   | RunStarted
   | PlanRequested
@@ -490,7 +564,7 @@ export type OrchestratorEvent =
   | DiagnosisCompleted
   | PerformanceMeasured;
 
-// M17-06: Diagnosis events
+/** Emitted when L3 diagnosis starts */
 export interface DiagnosisStarted extends BaseEvent {
   type: 'DiagnosisStarted';
   payload: {
@@ -499,6 +573,7 @@ export interface DiagnosisStarted extends BaseEvent {
   };
 }
 
+/** Emitted when L3 diagnosis completes */
 export interface DiagnosisCompleted extends BaseEvent {
   type: 'DiagnosisCompleted';
   payload: {
@@ -507,7 +582,7 @@ export interface DiagnosisCompleted extends BaseEvent {
   };
 }
 
-// M17-05: Judge events
+/** Emitted when the L3 judge is invoked to select between candidates */
 export interface JudgeInvoked extends BaseEvent {
   type: 'JudgeInvoked';
   payload: {
@@ -517,6 +592,7 @@ export interface JudgeInvoked extends BaseEvent {
   };
 }
 
+/** Emitted when the L3 judge makes a decision */
 export interface JudgeDecided extends BaseEvent {
   type: 'JudgeDecided';
   payload: {
@@ -527,6 +603,7 @@ export interface JudgeDecided extends BaseEvent {
   };
 }
 
+/** Emitted when the L3 judge fails and a fallback is used */
 export interface JudgeFailed extends BaseEvent {
   type: 'JudgeFailed';
   payload: {
@@ -536,6 +613,7 @@ export interface JudgeFailed extends BaseEvent {
   };
 }
 
+/** Emitted when semantic search fails */
 export interface SemanticSearchFailedEvent extends BaseEvent {
   type: 'SemanticSearchFailed';
   payload: {
@@ -543,6 +621,7 @@ export interface SemanticSearchFailedEvent extends BaseEvent {
   };
 }
 
+/** Emitted when semantic search completes successfully */
 export interface SemanticSearchFinishedEvent extends BaseEvent {
   type: 'SemanticSearchFinished';
   payload: {
@@ -554,11 +633,29 @@ export interface SemanticSearchFinishedEvent extends BaseEvent {
   };
 }
 
+/**
+ * Interface for publishing orchestrator events.
+ * Implementations can write to logs, send to external services, etc.
+ */
 export interface EventBus {
+  /**
+   * Emit an event to all registered listeners.
+   * @param event - The event to emit
+   */
   emit(event: OrchestratorEvent): Promise<void> | void;
 }
 
+/**
+ * Interface for writing events to persistent storage.
+ */
 export interface EventWriter {
+  /**
+   * Write an event to storage.
+   * @param event - The event to write
+   */
   write(event: OrchestratorEvent): void;
+  /**
+   * Close the writer and flush any pending events.
+   */
   close(): Promise<void>;
 }

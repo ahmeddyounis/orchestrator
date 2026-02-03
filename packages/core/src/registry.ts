@@ -14,8 +14,28 @@ import { CostTrackingAdapter } from './cost/proxy';
 export { EventBus };
 export { RegistryError } from '@orchestrator/shared';
 export { validateProviderConfig, formatValidationResult } from '@orchestrator/shared';
+
+/**
+ * Factory function type for creating provider adapters.
+ * @param config - The provider configuration
+ * @returns A configured provider adapter instance
+ */
 export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
 
+/**
+ * Registry for managing LLM provider adapters.
+ * Handles adapter creation, caching, configuration validation, and cost tracking.
+ *
+ * @example
+ * ```typescript
+ * const registry = new ProviderRegistry(config, costTracker);
+ * registry.registerFactory('openai', (cfg) => new OpenAIAdapter(cfg));
+ * registry.registerFactory('anthropic', (cfg) => new AnthropicAdapter(cfg));
+ *
+ * const adapter = registry.getAdapter('my-openai-provider');
+ * const response = await adapter.generate(request, context);
+ * ```
+ */
 export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();
   private adapters = new Map<string, ProviderAdapter>();
@@ -73,10 +93,24 @@ export class ProviderRegistry {
     }
   }
 
+  /**
+   * Register a factory for creating adapters of a specific type.
+   * @param type - The provider type identifier (e.g., 'openai', 'anthropic')
+   * @param factory - Factory function to create adapter instances
+   */
   registerFactory(type: string, factory: AdapterFactory) {
     this.factories.set(type, factory);
   }
 
+  /**
+   * Get an adapter instance for the given provider ID.
+   * Creates and caches the adapter if not already instantiated.
+   * Validates configuration before creation.
+   *
+   * @param providerId - The provider ID from configuration
+   * @returns The adapter instance
+   * @throws {RegistryError} If provider not found, factory not registered, or config invalid
+   */
   getAdapter(providerId: string): ProviderAdapter {
     // Check cache
     if (this.adapters.has(providerId)) {
@@ -141,6 +175,14 @@ export class ProviderRegistry {
     return adapter;
   }
 
+  /**
+   * Resolve adapters for the planner, executor, and reviewer roles.
+   * Emits ProviderSelected events for each role.
+   *
+   * @param roles - Object containing provider IDs for each role
+   * @param context - Event bus and run ID for emitting events
+   * @returns Object containing resolved adapters for each role
+   */
   async resolveRoleProviders(
     roles: { plannerId: string; executorId: string; reviewerId: string },
     context: { eventBus: EventBus; runId: string },
