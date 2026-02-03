@@ -161,6 +161,99 @@ describe('CodexCliAdapter', () => {
       const localProviderIndex = spawnCommand.indexOf('--local-provider');
       expect(spawnCommand[localProviderIndex + 1]).toBe('deepseek-coder');
     });
+
+    it('should place OSS flags before exec command', async () => {
+      const ossAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'llama3',
+        command: 'codex',
+        args: [],
+        ossMode: true,
+      } as any);
+
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await ossAdapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      const ossIndex = spawnCommand.indexOf('--oss');
+      const localProviderIndex = spawnCommand.indexOf('--local-provider');
+      const execIndex = spawnCommand.indexOf('exec');
+      
+      // Both --oss and --local-provider should come before exec
+      expect(ossIndex).toBeLessThan(execIndex);
+      expect(localProviderIndex).toBeLessThan(execIndex);
+      // --oss should come before --local-provider
+      expect(ossIndex).toBeLessThan(localProviderIndex);
+    });
+
+    it('should NOT inject OSS flags when ossMode is explicitly false', async () => {
+      const nonOssAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'gpt-4',
+        command: 'codex',
+        args: [],
+        ossMode: false,
+      } as any);
+
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await nonOssAdapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      expect(spawnCommand).not.toContain('--oss');
+      expect(spawnCommand).not.toContain('--local-provider');
+    });
+
+    it('should still include --model flag separately with OSS mode enabled', async () => {
+      const ossAdapter = new CodexCliAdapter({
+        type: 'codex_cli',
+        model: 'mistral',
+        command: 'codex',
+        args: [],
+        ossMode: true,
+      } as any);
+
+      const ctx = {
+        logger: { log: vi.fn() },
+        runId: 'test-run',
+        timeoutMs: 5000,
+      };
+
+      pm.on.mockImplementation((event: string, callback: (chunk: string) => void) => {
+        if (event === 'output') callback('response');
+        return pm;
+      });
+      pm.readUntilHeuristic.mockResolvedValue('');
+
+      await ossAdapter.generate({ messages: [{ role: 'user', content: 'test' }] }, ctx);
+
+      const spawnCommand = pm.spawn.mock.calls[0][0] as string[];
+      // --model flag should still be present after exec
+      expect(spawnCommand).toContain('--model');
+      const modelIndex = spawnCommand.indexOf('--model');
+      expect(spawnCommand[modelIndex + 1]).toBe('mistral');
+    });
   });
 
   describe('isPrompt pattern validation', () => {
