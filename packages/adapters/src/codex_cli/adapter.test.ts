@@ -180,4 +180,3 @@ describe('codex_cli parsers', () => {
     expect(usage).toEqual({ inputTokens: 12, outputTokens: 34, totalTokens: 46 });
   });
 });
-

@@ -23,7 +23,9 @@ export function extractUnifiedDiff(outputText: string | undefined): string | nul
   // 2) Markdown fences ```diff ... ```
   const fenceStartIdx = lines.findIndex((line) => line.trim() === '```diff');
   if (fenceStartIdx !== -1) {
-    const fenceEndIdx = lines.findIndex((line, idx) => idx > fenceStartIdx && line.trim() === '```');
+    const fenceEndIdx = lines.findIndex(
+      (line, idx) => idx > fenceStartIdx && line.trim() === '```',
+    );
     if (fenceEndIdx !== -1 && fenceEndIdx > fenceStartIdx) {
       return trimDiff(lines.slice(fenceStartIdx + 1, fenceEndIdx).join('\n'));
     }
@@ -55,4 +57,3 @@ function trimDiff(raw: string): string {
   }
   return firstContentIdx === -1 ? '' : lines.slice(firstContentIdx, lastContentIdx + 1).join('\n');
 }
-

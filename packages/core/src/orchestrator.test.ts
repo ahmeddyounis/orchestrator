@@ -8,6 +8,9 @@ import { MemoryWriter } from './memory';
 import { PatchStore } from './exec/patch_store';
 import { ExecutionService } from './exec/service';
 import fs from 'fs/promises';
+import * as fsSync from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // Mocks
 vi.mock('fs/promises', () => ({
@@ -304,6 +307,69 @@ describe('Orchestrator', () => {
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('repeated_failure');
     expect(result.summary).toContain('Repeated patch apply failure');
+  });
+
+  it('should include file context in L1 retry prompt when a hunk fails', async () => {
+    const tempRepoRoot = fsSync.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-test-'));
+    try {
+      fsSync.mkdirSync(path.join(tempRepoRoot, 'src'), { recursive: true });
+      fsSync.writeFileSync(
+        path.join(tempRepoRoot, 'src', 'foo.ts'),
+        ['line 1', 'line 2', 'line 3', 'line 4', 'TARGET_LINE', 'line 6', 'line 7'].join('\n'),
+        'utf-8',
+      );
+
+      const executorGenerate = vi
+        .fn()
+        .mockResolvedValue({ text: 'BEGIN_DIFF\ndiff --git a/a b/b\nEND_DIFF' });
+      mockRegistry.resolveRoleProviders.mockResolvedValue({
+        planner: { generate: vi.fn() },
+        executor: { generate: executorGenerate },
+        reviewer: {},
+      });
+
+      const patchError = {
+        type: 'execution',
+        message: 'git apply failed with code 1',
+        details: {
+          errors: [
+            {
+              kind: 'HUNK_FAILED',
+              file: 'src/foo.ts',
+              line: 5,
+              message: 'Hunk failed at line 5',
+            },
+          ],
+        },
+      } as any;
+
+      (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+        return {
+          applyPatch: vi
+            .fn()
+            .mockResolvedValueOnce({ success: false, error: 'Same Error', patchError })
+            .mockResolvedValueOnce({ success: false, error: 'Same Error', patchError }),
+        };
+      });
+
+      const localOrchestrator = new Orchestrator({
+        config,
+        git: mockGit as unknown as GitService,
+        registry: mockRegistry as unknown as ProviderRegistry,
+        repoRoot: tempRepoRoot,
+      });
+
+      const result = await localOrchestrator.runL1('goal', runId);
+      expect(result.status).toBe('failure');
+
+      expect(executorGenerate).toHaveBeenCalledTimes(2);
+      const secondSystemPrompt = executorGenerate.mock.calls[1][0].messages[0].content;
+      expect(secondSystemPrompt).toContain('CURRENT FILE CONTEXT');
+      expect(secondSystemPrompt).toContain('File: src/foo.ts:5');
+      expect(secondSystemPrompt).toContain('TARGET_LINE');
+    } finally {
+      fsSync.rmSync(tempRepoRoot, { recursive: true, force: true });
+    }
   });
 
   it('should include memory hits in L1 prompt', async () => {

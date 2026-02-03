@@ -56,11 +56,12 @@ When `ossMode: true` is set, Orchestrator automatically adds `--oss` and `--loca
 providers:
   local-codex:
     type: 'codex_cli'
-    model: 'llama3.2'  # Your local model name
-    ossMode: true       # Enables --oss --local-provider flags
+    model: 'llama3.2' # Your local model name
+    ossMode: true # Enables --oss --local-provider flags
 ```
 
 This is equivalent to running:
+
 ```bash
 codex --oss --local-provider llama3.2 exec --model llama3.2 -
 ```
@@ -89,11 +90,11 @@ Codex CLI can return structured JSON output. Orchestrator parses the following f
 
 Orchestrator recognizes multiple naming conventions for token statistics:
 
-| Field Names                                      | Description              |
-| :----------------------------------------------- | :----------------------- |
-| `input_tokens`, `inputTokens`, `prompt_tokens`   | Input/prompt token count |
-| `output_tokens`, `outputTokens`, `completion_tokens` | Output token count   |
-| `total_tokens`, `totalTokens`                    | Total token count        |
+| Field Names                                          | Description              |
+| :--------------------------------------------------- | :----------------------- |
+| `input_tokens`, `inputTokens`, `prompt_tokens`       | Input/prompt token count |
+| `output_tokens`, `outputTokens`, `completion_tokens` | Output token count       |
+| `total_tokens`, `totalTokens`                        | Total token count        |
 
 Token statistics can appear under either `usage` or `stats` keys in the JSON output.
 

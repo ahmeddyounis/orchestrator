@@ -11,6 +11,7 @@ import {
   RunSummary,
   SummaryWriter,
   ConfigError,
+  PatchError,
   redactObject,
 } from '@orchestrator/shared';
 import {
@@ -1352,6 +1353,7 @@ END_DIFF
       let attempt = 0;
       let success = false;
       let lastError = '';
+      let lastErrorContext = '';
 
       while (attempt < 2 && !success) {
         attempt++;
@@ -1373,7 +1375,12 @@ INSTRUCTIONS:
         if (attempt > 1) {
           systemPrompt += `
 
-PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again.`;
+PREVIOUS ATTEMPT FAILED.
+Error:
+${lastError}
+${lastErrorContext ? `\n\nCURRENT FILE CONTEXT:\n${lastErrorContext}` : ''}
+
+Please regenerate a unified diff that applies cleanly to the current code.`;
         }
 
         const response = await providers.executor.generate(
@@ -1433,8 +1440,10 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
           }
           consecutiveApplyFailures = 0;
           lastApplyErrorHash = '';
+          lastErrorContext = '';
         } else {
           lastError = result.error || 'Unknown apply error';
+          lastErrorContext = this.buildPatchApplyRetryContext(result.patchError);
           const errorHash = createHash('sha256').update(lastError).digest('hex');
           if (lastApplyErrorHash === errorHash) {
             consecutiveApplyFailures++;
@@ -1480,6 +1489,60 @@ PREVIOUS ATTEMPT FAILED. Error: ${lastError}\nPlease fix the error and try again
     }
 
     return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
+  }
+
+  private buildPatchApplyRetryContext(patchError?: PatchError): string {
+    const details = patchError?.details;
+    if (!details || typeof details !== 'object') return '';
+
+    const errors = (details as { errors?: unknown }).errors;
+    if (!Array.isArray(errors)) return '';
+
+    const first = errors.find((e): e is { file: string; line: number } => {
+      if (!e || typeof e !== 'object') return false;
+      const file = (e as { file?: unknown }).file;
+      const line = (e as { line?: unknown }).line;
+      return typeof file === 'string' && typeof line === 'number' && Number.isFinite(line);
+    });
+
+    if (!first) return '';
+
+    const filePath = normalizeGitApplyPath(first.file);
+    const absPath = path.resolve(this.repoRoot, filePath);
+    const absRoot = path.resolve(this.repoRoot);
+
+    // Safety: avoid reading outside repoRoot.
+    if (absPath !== absRoot && !absPath.startsWith(absRoot + path.sep)) return '';
+
+    let content: string;
+    try {
+      content = fsSync.readFileSync(absPath, 'utf-8');
+    } catch {
+      return '';
+    }
+
+    const lines = content.split('\n');
+    if (lines.length === 0) return '';
+
+    const targetLine = Math.min(Math.max(1, Math.floor(first.line)), lines.length);
+    const windowSize = 20;
+    const start = Math.max(1, targetLine - windowSize);
+    const end = Math.min(lines.length, targetLine + windowSize);
+
+    const excerpt = lines
+      .slice(start - 1, end)
+      .map((line, idx) => {
+        const lineNo = start + idx;
+        const marker = lineNo === targetLine ? '>' : ' ';
+        return `${marker} ${String(lineNo).padStart(4, ' ')} | ${line}`;
+      })
+      .join('\n');
+
+    const maxChars = 2000;
+    const clipped =
+      excerpt.length > maxChars ? excerpt.slice(0, maxChars) + '\n... (truncated)' : excerpt;
+
+    return `File: ${filePath}:${targetLine}\n${clipped}`;
   }
 
   private async searchMemoryHits(
@@ -2904,4 +2967,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     return finish('success', undefined, `L3 Plan Executed Successfully. ${stepsCompleted} steps.`);
   }
+}
+
+function normalizeGitApplyPath(filePath: string): string {
+  return filePath.replace(/^[ab]\//, '');
 }

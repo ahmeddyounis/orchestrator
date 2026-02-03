@@ -84,7 +84,7 @@ index 1234567..89abcdef 100644
     const parsed = parseGeminiCliJson(rawText);
     const responseText = typeof parsed?.response === 'string' ? parsed.response : rawText;
 
-    const usage = parsed ? extractUsageFromStats(parsed.stats) ?? raw.usage : raw.usage;
+    const usage = parsed ? (extractUsageFromStats(parsed.stats) ?? raw.usage) : raw.usage;
 
     // Extract diff if present using robust parser
     if (responseText) {
@@ -199,4 +199,3 @@ function assertDoesNotIncludeAnyArg(args: string[], forbidden: string[]): void {
     }
   }
 }
-

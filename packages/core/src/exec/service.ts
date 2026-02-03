@@ -1,5 +1,5 @@
 import { GitService, PatchApplier, PatchApplierOptions } from '@orchestrator/repo';
-import { Config } from '@orchestrator/shared';
+import { Config, PatchError } from '@orchestrator/shared';
 import { EventBus } from '../registry';
 
 export interface ConfirmationProvider {
@@ -10,6 +10,7 @@ export interface ApplyResult {
   success: boolean;
   error?: string;
   filesChanged?: string[];
+  patchError?: PatchError;
 }
 
 export class ExecutionService {
@@ -135,7 +136,7 @@ export class ExecutionService {
           },
         });
 
-        return { success: false, error: errorMsg };
+        return { success: false, error: errorMsg, patchError: result.error };
       }
     } catch (err) {
       // Unexpected error
