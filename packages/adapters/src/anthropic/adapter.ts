@@ -47,6 +47,13 @@ export class AnthropicAdapter implements ProviderAdapter {
       supportsJsonMode: false,
       modality: 'text',
       latencyClass: 'medium',
+      configRequirements: {
+        requiresApiKey: true,
+        supportedFields: {
+          baseURL: { description: 'Custom API base URL', type: 'string' },
+          maxRetries: { description: 'Maximum retry attempts', type: 'number', default: 2 },
+        },
+      },
     };
   }
 

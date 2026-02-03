@@ -114,6 +114,13 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
       // Codex CLI typically works with models that have generous context windows.
       // The actual limit depends on the underlying model configured via --model.
       maxContextTokens: 128_000,
+      configRequirements: {
+        forbiddenArgs: ['exec', '-m', '--model', '--json', '--output-schema', '-'],
+        supportedFields: {
+          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+          ossMode: { description: 'Enable OSS mode with local model provider', type: 'boolean', default: false },
+        },
+      },
     };
   }
 

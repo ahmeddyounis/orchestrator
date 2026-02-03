@@ -3,7 +3,7 @@ import {
   parseUnifiedDiffFromText,
   parsePlanFromText,
 } from '../subprocess';
-import { ProviderConfig, ModelRequest, ModelResponse } from '@orchestrator/shared';
+import { ProviderConfig, ModelRequest, ModelResponse, ProviderCapabilities } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
@@ -49,6 +49,22 @@ export class GeminiCliAdapter extends SubprocessProviderAdapter {
 
   id(): string {
     return 'gemini_cli';
+  }
+
+  override capabilities(): ProviderCapabilities {
+    return {
+      supportsStreaming: false,
+      supportsToolCalling: false,
+      supportsJsonMode: false,
+      modality: 'text',
+      latencyClass: 'slow',
+      configRequirements: {
+        forbiddenArgs: ['-o', '--output-format', '-m', '--model', '-p', '--prompt'],
+        supportedFields: {
+          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+        },
+      },
+    };
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {

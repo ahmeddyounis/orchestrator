@@ -47,6 +47,13 @@ export class OpenAIAdapter implements ProviderAdapter {
       supportsJsonMode: true,
       modality: 'text',
       latencyClass: 'medium',
+      configRequirements: {
+        requiresApiKey: true,
+        supportedFields: {
+          baseURL: { description: 'Custom API base URL', type: 'string' },
+          organization: { description: 'OpenAI organization ID', type: 'string' },
+        },
+      },
     };
   }
 

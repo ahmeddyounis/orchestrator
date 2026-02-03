@@ -60,6 +60,15 @@ export class SubprocessProviderAdapter implements ProviderAdapter {
       supportsJsonMode: false,
       modality: 'text',
       latencyClass: 'slow',
+      configRequirements: {
+        requiresCommand: true,
+        supportedFields: {
+          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+          cwdMode: { description: 'Working directory mode', type: 'string', default: 'repoRoot' },
+          timeoutMs: { description: 'Maximum runtime in milliseconds', type: 'number' },
+          env: { description: 'Environment variables to pass through', type: 'string[]' },
+        },
+      },
     };
   }
 

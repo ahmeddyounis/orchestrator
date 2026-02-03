@@ -6,6 +6,7 @@ import {
 import { ProviderConfig, ModelRequest, ModelResponse } from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
+import { ProviderCapabilities } from '@orchestrator/shared';
 
 export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
@@ -38,6 +39,22 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
 
   protected override isPrompt(text: string): boolean {
     return text.trim().endsWith('Claude>');
+  }
+
+  override capabilities(): ProviderCapabilities {
+    return {
+      supportsStreaming: false,
+      supportsToolCalling: false,
+      supportsJsonMode: false,
+      modality: 'text',
+      latencyClass: 'slow',
+      configRequirements: {
+        supportedFields: {
+          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+          timeoutMs: { description: 'Maximum runtime in milliseconds', type: 'number' },
+        },
+      },
+    };
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
