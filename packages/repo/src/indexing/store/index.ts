@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { IndexCorruptedError } from '@orchestrator/shared';
 import { INDEX_SCHEMA_VERSION, type IndexFile } from './types';
@@ -23,12 +23,14 @@ export function validateIndex(indexFile: unknown): asserts indexFile is IndexFil
   // Add more validation logic here as needed based on the spec
 }
 
-export function loadIndex(indexPath: string): IndexFile | null {
-  if (!fs.existsSync(indexPath)) {
+export async function loadIndex(indexPath: string): Promise<IndexFile | null> {
+  try {
+    await fs.access(indexPath);
+  } catch {
     return null;
   }
 
-  const content = fs.readFileSync(indexPath, 'utf-8');
+  const content = await fs.readFile(indexPath, 'utf-8');
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
@@ -41,14 +43,14 @@ export function loadIndex(indexPath: string): IndexFile | null {
   return parsed;
 }
 
-export function saveIndexAtomic(indexPath: string, indexFile: IndexFile): void {
+export async function saveIndexAtomic(indexPath: string, indexFile: IndexFile): Promise<void> {
   validateIndex(indexFile);
 
   const tempPath = `${indexPath}.tmp`;
   const dir = path.dirname(indexPath);
 
-  fs.mkdirSync(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true });
 
-  fs.writeFileSync(tempPath, JSON.stringify(indexFile, null, 2));
-  fs.renameSync(tempPath, indexPath);
+  await fs.writeFile(tempPath, JSON.stringify(indexFile, null, 2));
+  await fs.rename(tempPath, indexPath);
 }
