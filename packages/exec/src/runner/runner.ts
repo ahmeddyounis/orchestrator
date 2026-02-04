@@ -1,4 +1,4 @@
-import { spawn, execSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import { join, isWindows } from '@orchestrator/shared';
 import { randomUUID } from 'crypto';
@@ -16,7 +16,7 @@ function killProcessTree(pid: number, signal: NodeJS.Signals | number = 'SIGTERM
   if (isWindows()) {
     // On Windows, process.kill is not effective for killing process trees.
     // We use taskkill to forcefully terminate the process and its children.
-    execSync(`taskkill /PID ${pid} /T /F`);
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F']);
   } else {
     // On POSIX systems, sending a signal to the negative PID kills the entire process group.
     // This requires the child process to have been spawned in detached mode.
