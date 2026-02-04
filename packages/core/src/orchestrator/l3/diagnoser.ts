@@ -1,5 +1,5 @@
 import { ProviderAdapter } from '@orchestrator/adapters';
-import { EventBus, Logger, Config, ModelRequest } from '@orchestrator/shared';
+import { EventBus, Logger, Config, ModelRequest, extractJsonObject } from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import * as path from 'path';
@@ -116,18 +116,8 @@ export class Diagnoser {
       throw new Error('Diagnosis model returned empty response.');
     }
 
-    const json = this.extractJson(raw);
-    return diagnosisResponseSchema.parse(json) as DiagnosisResponse;
-  }
-
-  private extractJson(text: string): unknown {
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      throw new Error('No JSON object found in diagnosis response.');
-    }
-    const jsonText = text.slice(firstBrace, lastBrace + 1);
-    return JSON.parse(jsonText) as unknown;
+    const json = extractJsonObject(raw, 'diagnosis');
+    return diagnosisResponseSchema.parse(json);
   }
 
   private buildPrompt(context: DiagnosisContext, maxBranches: number): string {

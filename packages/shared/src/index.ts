@@ -7,6 +7,7 @@ export * from './errors';
 export * from './fs/path';
 export * from './fs/artifacts';
 export * from './string-utils';
+export * from './json-utils';
 export * from './config/schema';
 export * from './config/validation';
 export * from './types/memory';

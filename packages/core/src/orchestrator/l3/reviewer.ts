@@ -1,5 +1,5 @@
 import { ProviderAdapter } from '@orchestrator/adapters';
-import { EventBus, Logger, ModelRequest, updateManifest } from '@orchestrator/shared';
+import { EventBus, Logger, ModelRequest, updateManifest, extractJsonObject } from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import { Candidate } from './candidate_generator';
@@ -91,18 +91,8 @@ export class Reviewer {
       throw new Error('Reviewer returned empty response.');
     }
 
-    const json = this.extractJson(raw);
-    return reviewerOutputSchema.parse(json) as ReviewerOutput;
-  }
-
-  private extractJson(text: string): unknown {
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      throw new Error('No JSON object found in reviewer response.');
-    }
-    const jsonText = text.slice(firstBrace, lastBrace + 1);
-    return JSON.parse(jsonText) as unknown;
+    const json = extractJsonObject(raw, 'reviewer');
+    return reviewerOutputSchema.parse(json);
   }
 
   private buildPrompt(input: ReviewerInput): string {

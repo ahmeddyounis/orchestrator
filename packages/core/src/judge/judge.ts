@@ -8,7 +8,7 @@ import {
   type JudgeInvocationReason,
 } from './types';
 import { type ProviderAdapter, type AdapterContext } from '@orchestrator/adapters';
-import { type ModelRequest, type Logger, type EventBus } from '@orchestrator/shared';
+import { type ModelRequest, type Logger, type EventBus, extractJsonObject } from '@orchestrator/shared';
 
 const judgeOutputSchema = z.object({
   winnerCandidateId: z.string(),
@@ -169,18 +169,8 @@ export class Judge {
       throw new Error('Judge returned empty response.');
     }
 
-    const json = this.extractJson(raw);
-    return judgeOutputSchema.parse(json) as JudgeOutput;
-  }
-
-  private extractJson(text: string): unknown {
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-      throw new Error('No JSON object found in judge response.');
-    }
-    const jsonText = text.slice(firstBrace, lastBrace + 1);
-    return JSON.parse(jsonText) as unknown;
+    const json = extractJsonObject(raw, 'judge');
+    return judgeOutputSchema.parse(json);
   }
 
   private buildPrompt(
