@@ -65,6 +65,13 @@ import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge'
 import { Diagnoser } from './orchestrator/l3/diagnoser';
 import { ProceduralMemoryImpl } from './orchestrator/procedural_memory';
 import { collectHunkFailures, readFileContext } from './orchestrator/patch_utils';
+import {
+  RunInitializationService,
+  ContextBuilderService,
+  VerificationService,
+  shouldAllowEmptyDiffForStep,
+  buildPatchApplyRetryContext,
+} from './orchestrator/services';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -119,6 +126,8 @@ export class Orchestrator {
   private toolPolicy?: ToolPolicy;
   private ui?: UserInterface;
   private suppressEpisodicMemoryWrite = false;
+  private initService: RunInitializationService;
+  private contextBuilder: ContextBuilderService;
   private escalationCount = 0;
 
   private constructor(
@@ -132,6 +141,8 @@ export class Orchestrator {
     this.costTracker = options.costTracker;
     this.toolPolicy = options.toolPolicy;
     this.ui = options.ui;
+    this.initService = new RunInitializationService(this.config, this.repoRoot);
+    this.contextBuilder = new ContextBuilderService(this.config, this.repoRoot);
   }
 
   public static async create(options: OrchestratorOptions): Promise<Orchestrator> {
@@ -277,31 +288,8 @@ export class Orchestrator {
     return path.relative(this.repoRoot, p);
   }
 
-  private shouldAllowEmptyDiffForStep(step: string): boolean {
-    const s = step.toLowerCase();
-
-    // If the step also asks for code changes, an empty diff should be treated as failure.
-    const mentionsCodeChange = /\b(fix|implement|add|remove|replace|refactor|update|change|wire|integrate|support|resolve)\b/.test(
-      s,
-    );
-    if (mentionsCodeChange) return false;
-
-    // Explicit command-like steps: treat empty diff as "no-op" success so diagnostic steps don't fail.
-    const mentionsPmCommand =
-      /\b(pnpm|npm|yarn|bun|turbo)\s+(test|build|lint|typecheck|check|format)\b/.test(s);
-    if (mentionsPmCommand) return true;
-
-    // Common diagnostic/baseline phrasing.
-    const startsWithDiagnosticVerb =
-      /^\s*(run|execute|verify|reproduce|establish|capture|record|measure|collect|inspect)\b/.test(s);
-    const mentionsDiagnosticsTarget =
-      /\b(test suite|tests|baseline|log|logs|output|report|status)\b/.test(s);
-    return startsWithDiagnosticVerb && mentionsDiagnosticsTarget;
-  }
-
   private collectArtifactPaths(
     runId: string,
-    artifactsRoot: string,
     patchPaths: string[] = [],
     extraPaths: string[] = [],
   ): string[] {
@@ -529,42 +517,17 @@ export class Orchestrator {
 
   async runL0(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
-    const startedAt = new Date().toISOString();
-    // 1. Setup Artifacts
-    const artifacts = await createRunDir(this.repoRoot, runId);
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
-    const logger = new JsonlLogger(artifacts.trace);
+    const runContext = await this.initService.initializeRun(runId, goal);
+    const { artifacts, logger, eventBus: eventBusObj } = runContext;
 
     const emitEvent = async (e: OrchestratorEvent) => {
-      const redactedEvent = this.config.security?.redaction?.enabled
-        ? (redactObject(e) as OrchestratorEvent)
-        : e;
-      await logger.log(redactedEvent);
+      await eventBusObj.emit(e);
     };
 
-    await emitEvent({
-      type: 'RunStarted',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { taskId: runId, goal },
-    });
+    await this.initService.emitRunStarted(eventBusObj, runId, goal);
 
     // Initialize manifest
-    await writeManifest(artifacts.manifest, {
-      schemaVersion: MANIFEST_VERSION,
-      runId,
-      startedAt,
-      command: `run ${goal}`,
-      repoRoot: this.repoRoot,
-      artifactsDir: artifacts.root,
-      tracePath: artifacts.trace,
-      summaryPath: artifacts.summary,
-      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-      patchPaths: [],
-      toolLogPaths: [],
-      verificationPaths: [],
-    });
+    await this.initService.initializeManifest(artifacts, runId, goal);
 
     // 2. Build Minimal Context
     const scanner = new RepoScanner();
@@ -926,45 +889,14 @@ END_DIFF
 
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
-    const startedAt = new Date().toISOString();
-    const artifacts = await createRunDir(this.repoRoot, runId);
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
-    const logger = new JsonlLogger(artifacts.trace);
+    const runContext = await this.initService.initializeRun(runId, goal);
+    const { artifacts, logger, eventBus } = runContext;
     const baseRef = await this.git.getHeadSha();
 
-    const eventBus: EventBus = {
-      emit: async (e) => {
-        const redactedEvent = this.config.security?.redaction?.enabled
-          ? (redactObject(e) as OrchestratorEvent)
-          : e;
-        await logger.log(redactedEvent);
-      },
-    };
-
-    await eventBus.emit({
-      type: 'RunStarted',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { taskId: runId, goal },
-    });
+    await this.initService.emitRunStarted(eventBus, runId, goal);
 
     // Initialize manifest
-    await writeManifest(artifacts.manifest, {
-      schemaVersion: MANIFEST_VERSION,
-      runId,
-      startedAt,
-      command: `run ${goal}`,
-      repoRoot: this.repoRoot,
-      artifactsDir: artifacts.root,
-      tracePath: artifacts.trace,
-      summaryPath: artifacts.summary,
-      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-      patchPaths: [],
-      contextPaths: [],
-      toolLogPaths: [],
-      verificationPaths: [],
-    });
+    await this.initService.initializeManifest(artifacts, runId, goal, true);
 
     const plannerId = this.config.defaults?.planner || 'openai';
     const executorId = this.config.defaults?.executor || 'openai';
@@ -1446,7 +1378,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
 
         // Empty diff is sometimes valid for diagnostic steps (e.g. "run pnpm test").
         if (diffContent.trim().length === 0) {
-          if (this.shouldAllowEmptyDiffForStep(step)) {
+          if (shouldAllowEmptyDiffForStep(step)) {
             await eventBus.emit({
               type: 'PatchApplied',
               schemaVersion: 1,
@@ -1496,7 +1428,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
           lastErrorContext = '';
         } else {
           lastError = result.error || 'Unknown apply error';
-          lastErrorContext = this.buildPatchApplyRetryContext(result.patchError);
+          lastErrorContext = buildPatchApplyRetryContext(result.patchError, this.repoRoot);
           const errorHash = createHash('sha256').update(lastError).digest('hex');
           if (lastApplyErrorHash === errorHash) {
             consecutiveApplyFailures++;
@@ -1542,113 +1474,6 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     }
 
     return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
-  }
-
-  private buildPatchApplyRetryContext(patchError?: PatchError): string {
-    const details = patchError?.details;
-    if (!details || typeof details !== 'object') return '';
-
-    const stderr = (details as { stderr?: unknown }).stderr;
-    const rawErrors = (details as { errors?: unknown }).errors;
-
-    const normalizedErrors: Array<{
-      kind: string;
-      file?: string;
-      line?: number;
-      message: string;
-      suggestion?: string;
-    }> = [];
-
-    if (Array.isArray(rawErrors)) {
-      for (const entry of rawErrors) {
-        if (!entry || typeof entry !== 'object') continue;
-        const kind = (entry as { kind?: unknown }).kind;
-        const message = (entry as { message?: unknown }).message;
-        if (typeof kind !== 'string' || typeof message !== 'string') continue;
-
-        const file = (entry as { file?: unknown }).file;
-        const line = (entry as { line?: unknown }).line;
-        const suggestion = (entry as { suggestion?: unknown }).suggestion;
-
-        normalizedErrors.push({
-          kind,
-          message,
-          file: typeof file === 'string' ? file : undefined,
-          line: typeof line === 'number' && Number.isFinite(line) ? line : undefined,
-          suggestion: typeof suggestion === 'string' ? suggestion : undefined,
-        });
-      }
-    }
-
-    const maxTotalChars = 6000;
-    const maxListItems = 6;
-    const lines: string[] = [];
-
-    if (normalizedErrors.length > 0) {
-      lines.push('Patch apply error details:');
-      for (const err of normalizedErrors.slice(0, maxListItems)) {
-        const loc =
-          err.file && err.line
-            ? `${err.file}:${err.line}`
-            : err.file
-              ? err.file
-              : err.line
-                ? `patch line ${err.line}`
-                : undefined;
-        lines.push(
-          `- ${loc ? `${loc}: ` : ''}${err.kind}: ${err.message}${
-            err.suggestion ? `\n  suggestion: ${err.suggestion}` : ''
-          }`,
-        );
-      }
-    } else if (typeof stderr === 'string' && stderr.trim().length > 0) {
-      // Fallback for unparsed stderr patterns.
-      if (stderr.includes('patch fragment without header')) {
-        lines.push(
-          'Patch format issue: a hunk header ("@@ ... @@") appears without file headers. Include "diff --git", "---", and "+++" headers before any hunks.',
-        );
-      } else if (stderr.includes('corrupt patch at line')) {
-        lines.push(
-          'Patch format issue: "corrupt patch" indicates malformed hunks (often incorrect @@ line counts). Regenerate the patch using current file content.',
-        );
-      }
-    }
-
-    // If we have file+line details, include file context to help regenerate a clean patch.
-    if (Array.isArray(rawErrors)) {
-      const hunkFailures = collectHunkFailures(rawErrors);
-      if (hunkFailures.length > 0) {
-        const maxFiles = 3;
-        const windowSize = 20;
-        const maxFileContextChars = 2000;
-
-        const selected = hunkFailures.slice(0, maxFiles);
-        const failureList = selected
-          .map((f) => `- ${f.filePath}:${f.line}${f.kind ? ` (${f.kind})` : ''}`)
-          .join('\n');
-
-        lines.push('');
-        lines.push(`Failed hunks:\n${failureList}`);
-
-        for (const failure of selected) {
-          const context = readFileContext(
-            this.repoRoot,
-            failure.filePath,
-            failure.line,
-            windowSize,
-            maxFileContextChars,
-          );
-          if (!context) continue;
-          lines.push('');
-          lines.push(`File: ${failure.filePath}:${failure.line}\n${context}`);
-        }
-      }
-    }
-
-    const full = lines.join('\n').trim();
-    if (!full) return '';
-    if (full.length <= maxTotalChars) return full;
-    return full.slice(0, maxTotalChars) + '\n... (truncated)';
   }
 
   private async searchMemoryHits(
@@ -1800,18 +1625,8 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
   async runL2(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
 
-    const artifacts = await createRunDir(this.repoRoot, runId);
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
-    const logger = new JsonlLogger(artifacts.trace);
-
-    const eventBus: EventBus = {
-      emit: async (e) => {
-        const redactedEvent = this.config.security?.redaction?.enabled
-          ? (redactObject(e) as OrchestratorEvent)
-          : e;
-        await logger.log(redactedEvent);
-      },
-    };
+    const runContext = await this.initService.initializeRun(runId, goal);
+    const { artifacts, logger, eventBus } = runContext;
 
     // 1. Initial Plan & Execute (L1)
     this.suppressEpisodicMemoryWrite = true;
@@ -1867,35 +1682,21 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
       };
     }
-    const proceduralMemory = new ProceduralMemoryImpl(this.config, this.repoRoot);
-    const verificationRunner = new VerificationRunner(
-      proceduralMemory,
-      this.toolPolicy,
-      this.ui,
-      eventBus,
+
+    const verificationService = new VerificationService(
+      this.config,
       this.repoRoot,
+      this.toolPolicy!,
+      this.ui!,
+      eventBus,
     );
 
-    // Construct Profile
-    const profile: VerificationProfile = {
-      enabled: this.config.verification?.enabled ?? true,
-      mode: this.config.verification?.mode || 'auto',
-      steps: [],
-      auto: {
-        enableLint: this.config.verification?.auto?.enableLint ?? true,
-        enableTypecheck: this.config.verification?.auto?.enableTypecheck ?? true,
-        enableTests: this.config.verification?.auto?.enableTests ?? true,
-        testScope: this.config.verification?.auto?.testScope || 'targeted',
-        maxCommandsPerIteration: this.config.verification?.auto?.maxCommandsPerIteration ?? 5,
-      },
-    };
+    const profile = verificationService.getProfile();
 
     // 3. Initial Verification
-    let verification = await verificationRunner.run(
-      profile,
-      profile.mode,
-      { touchedFiles: l1Result.filesChanged },
-      { runId },
+    let verification = await verificationService.verify(
+      l1Result.filesChanged || [],
+      runId,
     );
 
     const initialReportPath = path.join(artifacts.root, 'verification_report_initial.json');
@@ -2220,11 +2021,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       }
 
       // Verify again
-      verification = await verificationRunner.run(
-        profile,
-        profile.mode,
-        { touchedFiles: Array.from(touchedFiles) },
-        { runId },
+      verification = await verificationService.verify(
+        Array.from(touchedFiles),
+        runId,
       );
 
       const reportPath = path.join(artifacts.root, `verification_report_iter_${iterations}.json`);
@@ -2359,40 +2158,14 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
   async runL3(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
-    const startedAt = new Date().toISOString();
-    const artifacts = await createRunDir(this.repoRoot, runId);
-    ConfigLoader.writeEffectiveConfig(this.config, artifacts.root);
-    const logger = new JsonlLogger(artifacts.trace);
+    const runContext = await this.initService.initializeRun(runId, goal);
+    const { artifacts, logger, eventBus } = runContext;
     const baseRef = await this.git.getHeadSha();
 
-    const eventBus: EventBus = {
-      emit: async (e) => await logger.log(e),
-    };
-
-    await eventBus.emit({
-      type: 'RunStarted',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { taskId: runId, goal },
-    });
+    await this.initService.emitRunStarted(eventBus, runId, goal);
 
     // Initialize manifest
-    await writeManifest(artifacts.manifest, {
-      schemaVersion: MANIFEST_VERSION,
-      runId,
-      startedAt,
-      command: `run ${goal}`,
-      repoRoot: this.repoRoot,
-      artifactsDir: artifacts.root,
-      tracePath: artifacts.trace,
-      summaryPath: artifacts.summary,
-      effectiveConfigPath: path.join(artifacts.root, 'effective-config.json'),
-      patchPaths: [],
-      contextPaths: [],
-      toolLogPaths: [],
-      verificationPaths: [],
-    });
+    await this.initService.initializeManifest(artifacts, runId, goal, true);
 
     const plannerId = this.config.defaults?.planner || 'openai';
     const executorId = this.config.defaults?.executor || 'openai';
