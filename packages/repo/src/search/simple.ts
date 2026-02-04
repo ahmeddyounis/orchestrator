@@ -14,6 +14,9 @@ export class JsFallbackSearch implements SearchEngine {
 
     const matches: SearchMatch[] = [];
     let matchesFound = 0;
+    
+    // Counter map to track matches per file (avoids O(n²) filtering)
+    const matchesPerFile = new Map<string, number>();
 
     // Create regex from query
     let regex: RegExp;
@@ -51,6 +54,14 @@ export class JsFallbackSearch implements SearchEngine {
           regex.lastIndex = 0;
           const match = regex.exec(lineText);
           if (match) {
+            // Check if we've hit the per-file limit before adding
+            const currentFileMatches = matchesPerFile.get(file.path) ?? 0;
+            if (
+              options.maxMatchesPerFile &&
+              currentFileMatches >= options.maxMatchesPerFile
+            ) {
+              break;
+            }
             matches.push({
               path: file.path,
               line: i + 1, // 1-based
@@ -59,16 +70,9 @@ export class JsFallbackSearch implements SearchEngine {
               matchText: match[0],
             });
             matchesFound++;
-
-            // Optimization: if we have enough matches per file, skip to next file?
-            // The spec says "limit per file to maxMatchesPerFile".
-            // We can implement that here.
-            if (
-              options.maxMatchesPerFile &&
-              matches.filter((m) => m.path === file.path).length >= options.maxMatchesPerFile
-            ) {
-              break;
-            }
+            
+            // Update the counter map
+            matchesPerFile.set(file.path, currentFileMatches + 1);
           }
         }
       } catch {
