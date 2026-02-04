@@ -96,6 +96,8 @@ export class PatchApplier {
     diffText: string,
     limits: { maxFilesChanged: number; maxLinesTouched: number; allowBinary: boolean },
   ): PatchError | undefined {
+    const makeSecurityError = (message: string): PatchError => ({ type: 'security', message });
+
     const lines = diffText.split('\n');
     let fileCount = 0;
     let addedLines = 0;
@@ -186,13 +188,11 @@ export class PatchApplier {
         if (line.startsWith('+++ b/')) {
           fileCount++;
           const filePath = line.substring(6).trim();
-
-          // Security: Path Traversal
-          if (filePath.includes('../') || filePath.includes('..\\')) {
-            return {
-              type: 'security',
-              message: `Path traversal detected: ${filePath}`,
-            };
+          
+          // Security: Comprehensive path traversal and injection detection
+          const pathSecurityError = this.validatePathSecurity(filePath);
+          if (pathSecurityError) {
+            return makeSecurityError(pathSecurityError);
           }
 
           // Security: Binary Files
@@ -275,6 +275,91 @@ export class PatchApplier {
       if (diffText.trim().length === 0) {
         return { type: 'validation', message: 'Empty diff' };
       }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Validates a file path for security issues including:
+   * - Path traversal attempts (../, encoded variants)
+   * - Absolute paths
+   * - Null byte injection
+   * - Double encoding attacks
+   * - Suspicious patterns that could indicate symlink attacks
+   * 
+   * @returns Error message if path is unsafe, undefined if safe
+   */
+  private validatePathSecurity(filePath: string): string | undefined {
+    // Check for null bytes (can truncate paths in some systems)
+    if (filePath.includes('\0') || filePath.includes('%00')) {
+      return `Null byte injection detected in path: ${filePath}`;
+    }
+
+    // Decode the path to catch encoded traversal attempts
+    // Apply multiple rounds of decoding to catch double/triple encoding
+    let decodedPath = filePath;
+    let previousPath = '';
+    let iterations = 0;
+    const maxIterations = 5; // Prevent infinite loops from malformed input
+    
+    while (decodedPath !== previousPath && iterations < maxIterations) {
+      previousPath = decodedPath;
+      try {
+        decodedPath = decodeURIComponent(decodedPath);
+      } catch {
+        // Invalid URI encoding - could be an attack, but continue with current value
+        break;
+      }
+      iterations++;
+    }
+
+    // Normalize backslashes to forward slashes for consistent checking
+    const normalizedPath = decodedPath.replace(/\\/g, '/');
+
+    // Check for path traversal in both original and decoded forms
+    const traversalPatterns = [
+      '../',           // Standard Unix traversal
+      '..\\',          // Windows traversal (before normalization)
+      '..',            // Just ".." could be dangerous at path boundaries
+    ];
+
+    for (const pattern of traversalPatterns) {
+      if (filePath.includes(pattern) || normalizedPath.includes(pattern)) {
+        return `Path traversal detected: ${filePath}`;
+      }
+    }
+
+    // Check for absolute paths (Unix-style)
+    if (normalizedPath.startsWith('/')) {
+      return `Absolute path not allowed: ${filePath}`;
+    }
+
+    // Check for Windows absolute paths (drive letters)
+    // Matches patterns like "C:", "D:\", "c:/", etc.
+    if (/^[a-zA-Z]:[\\/]?/.test(normalizedPath) || /^[a-zA-Z]:[\\/]?/.test(filePath)) {
+      return `Absolute Windows path not allowed: ${filePath}`;
+    }
+
+    // Check for UNC paths (Windows network paths)
+    if (normalizedPath.startsWith('//') || filePath.startsWith('\\\\')) {
+      return `UNC path not allowed: ${filePath}`;
+    }
+
+    // Check for suspicious device paths (Windows)
+    const windowsDevices = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+    const pathParts = normalizedPath.split('/');
+    for (const part of pathParts) {
+      if (windowsDevices.test(part)) {
+        return `Reserved Windows device name detected: ${filePath}`;
+      }
+    }
+
+    // Check for paths that try to escape via encoded separators
+    // %2f = /, %5c = \
+    const encodedSeparatorPattern = /%(?:2f|5c)/i;
+    if (encodedSeparatorPattern.test(filePath)) {
+      return `Encoded path separator detected (potential traversal): ${filePath}`;
     }
 
     return undefined;
