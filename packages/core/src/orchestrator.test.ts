@@ -7,6 +7,7 @@ import { RepoScanner, SearchService, PatchApplier, GitService } from '@orchestra
 import { MemoryWriter } from './memory';
 import { PatchStore } from './exec/patch_store';
 import { ExecutionService } from './exec/service';
+import { PlanService } from './plan/service';
 import fs from 'fs/promises';
 import * as fsSync from 'node:fs';
 import os from 'node:os';
@@ -285,6 +286,33 @@ describe('Orchestrator', () => {
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('invalid_output');
     expect(result.summary).toContain('twice consecutively');
+  });
+
+  it('should allow no-op steps that intentionally produce an empty diff', async () => {
+    // Plan step that runs tests but does not require code changes.
+    (PlanService as unknown as ReturnType<typeof vi.fn>).prototype.generatePlan.mockResolvedValueOnce([
+      'Run full test suite to establish baseline (pnpm test).',
+    ]);
+
+    mockRegistry.resolveRoleProviders.mockResolvedValue({
+      planner: { generate: vi.fn() },
+      executor: {
+        generate: vi.fn().mockResolvedValue({
+          text: `Baseline results:\n<BEGIN_DIFF>\n<END_DIFF>\n`,
+        }),
+      },
+      reviewer: {},
+    });
+
+    const applyPatch = vi.fn();
+    (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return { applyPatch };
+    });
+
+    const result = await orchestrator.runL1('goal', runId);
+
+    expect(result.status).toBe('success');
+    expect(applyPatch).not.toHaveBeenCalled();
   });
 
   it('should stop runL1 if patch application fails repeatedly with same error', async () => {

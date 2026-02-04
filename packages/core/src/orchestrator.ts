@@ -277,6 +277,28 @@ export class Orchestrator {
     return path.relative(this.repoRoot, p);
   }
 
+  private shouldAllowEmptyDiffForStep(step: string): boolean {
+    const s = step.toLowerCase();
+
+    // If the step also asks for code changes, an empty diff should be treated as failure.
+    const mentionsCodeChange = /\b(fix|implement|add|remove|replace|refactor|update|change|wire|integrate|support|resolve)\b/.test(
+      s,
+    );
+    if (mentionsCodeChange) return false;
+
+    // Explicit command-like steps: treat empty diff as "no-op" success so diagnostic steps don't fail.
+    const mentionsPmCommand =
+      /\b(pnpm|npm|yarn|bun|turbo)\s+(test|build|lint|typecheck|check|format)\b/.test(s);
+    if (mentionsPmCommand) return true;
+
+    // Common diagnostic/baseline phrasing.
+    const startsWithDiagnosticVerb =
+      /^\s*(run|execute|verify|reproduce|establish|capture|record|measure|collect|inspect)\b/.test(s);
+    const mentionsDiagnosticsTarget =
+      /\b(test suite|tests|baseline|log|logs|output|report|status)\b/.test(s);
+    return startsWithDiagnosticVerb && mentionsDiagnosticsTarget;
+  }
+
   private collectArtifactPaths(
     runId: string,
     artifactsRoot: string,
@@ -645,8 +667,60 @@ END_DIFF
     // 4. Parse Diff
     const diffContent = extractUnifiedDiff(outputText);
 
-    if (!diffContent) {
+    if (diffContent === null) {
       const msg = 'Failed to extract diff from executor output';
+      await emitEvent({
+        type: 'RunFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { status: 'failure', summary: msg },
+      });
+
+      const runResult: RunResult = {
+        status: 'failure',
+        runId,
+        summary: msg,
+        memory: this.config.memory,
+        verification: {
+          enabled: false,
+          passed: false,
+          summary: 'Not run',
+        },
+      };
+
+      const summary = await this._buildRunSummary(
+        runId,
+        goal,
+        startTime,
+        'failure',
+        { thinkLevel: 'L0' },
+        runResult,
+        artifacts,
+      );
+      await SummaryWriter.write(summary, artifacts.root);
+
+      try {
+        await updateManifest(artifacts.manifest, (manifest) => {
+          manifest.finishedAt = new Date().toISOString();
+        });
+      } catch {
+        // Non-fatal: artifact updates should not fail the run.
+      }
+
+      await this.writeEpisodicMemory(
+        summary,
+        {
+          artifactsRoot: artifacts.root,
+        },
+        { emit: emitEvent },
+      );
+
+      return { status: 'failure', runId, summary: msg };
+    }
+
+    if (diffContent.trim().length === 0) {
+      const msg = 'Executor produced empty patch';
       await emitEvent({
         type: 'RunFinished',
         schemaVersion: 1,
@@ -1357,7 +1431,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
 
         const diffContent = extractUnifiedDiff(outputText);
 
-        if (!diffContent) {
+        if (diffContent === null) {
           lastError = 'Failed to extract diff from executor output';
           consecutiveInvalidDiffs++;
           if (consecutiveInvalidDiffs >= 2) {
@@ -1368,13 +1442,43 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
             );
           }
           continue;
-        } else {
-          consecutiveInvalidDiffs = 0;
         }
 
-        if (diffContent.length === 0) {
-          return finish('failure', 'invalid_output', 'Executor produced empty patch');
+        // Empty diff is sometimes valid for diagnostic steps (e.g. "run pnpm test").
+        if (diffContent.trim().length === 0) {
+          if (this.shouldAllowEmptyDiffForStep(step)) {
+            await eventBus.emit({
+              type: 'PatchApplied',
+              schemaVersion: 1,
+              timestamp: new Date().toISOString(),
+              runId,
+              payload: {
+                description: `No-op step (no changes): ${step}`,
+                filesChanged: [],
+                success: true,
+              },
+            });
+            success = true;
+            consecutiveInvalidDiffs = 0;
+            consecutiveApplyFailures = 0;
+            lastApplyErrorHash = '';
+            lastErrorContext = '';
+            break;
+          }
+
+          lastError = 'Executor produced empty patch';
+          consecutiveInvalidDiffs++;
+          if (consecutiveInvalidDiffs >= 2) {
+            return finish(
+              'failure',
+              'invalid_output',
+              'Executor produced empty patch twice consecutively',
+            );
+          }
+          continue;
         }
+
+        consecutiveInvalidDiffs = 0;
 
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
         const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
@@ -1975,7 +2079,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
       const diffContent = extractUnifiedDiff(outputText);
 
-      if (!diffContent) {
+      if (diffContent === null) {
         // Fail iteration (no diff)
         await eventBus.emit({
           type: 'RepairAttempted',
@@ -1983,6 +2087,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           timestamp: new Date().toISOString(),
           runId,
           payload: { iteration: iterations, patchPath: 'none (no-diff)' },
+        });
+        continue;
+      }
+
+      if (diffContent.trim().length === 0) {
+        await eventBus.emit({
+          type: 'RepairAttempted',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { iteration: iterations, patchPath: 'none (empty-diff)' },
         });
         continue;
       }
