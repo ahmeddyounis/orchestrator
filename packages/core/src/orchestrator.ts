@@ -71,6 +71,7 @@ import {
   VerificationService,
   shouldAllowEmptyDiffForStep,
   buildPatchApplyRetryContext,
+  extractPatchErrorKind,
 } from './orchestrator/services';
 
 export interface OrchestratorOptions {
@@ -289,7 +290,7 @@ export class Orchestrator {
   }
 
   private collectArtifactPaths(
-    runId: string,
+    artifactsRoot: string,
     patchPaths: string[] = [],
     extraPaths: string[] = [],
   ): string[] {
@@ -375,7 +376,6 @@ export class Orchestrator {
       memoryDbPath: this.resolveMemoryDbPath(),
       config: this.config,
       artifactPaths: this.collectArtifactPaths(
-        summary.runId,
         args.artifactsRoot,
         args.patchPaths ?? [],
         args.extraArtifactPaths ?? [],
@@ -980,14 +980,15 @@ END_DIFF
     // Budget & Loop State
     const budget = { ...DEFAULT_BUDGET, ...this.config.budget };
 
-    let stepsCompleted = 0;
+    let stepsSucceeded = 0;
+    const failedSteps: Array<{
+      step: string;
+      error: string;
+      stopReason?: RunResult['stopReason'];
+    }> = [];
     const patchPaths: string[] = [];
     const contextPaths: string[] = [];
     const touchedFiles = new Set<string>();
-
-    let consecutiveInvalidDiffs = 0;
-    let consecutiveApplyFailures = 0;
-    let lastApplyErrorHash = '';
 
     const finish = async (
       status: 'success' | 'failure',
@@ -1073,13 +1074,17 @@ END_DIFF
       return runResult;
     };
 
-    for (const step of steps) {
+    const maxStepAttempts = this.config.execution?.maxStepAttempts ?? 6;
+    const continueOnStepFailure = this.config.execution?.continueOnStepFailure ?? false;
+
+    for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
+      const step = steps[stepIndex];
       // 1. Budget Checks
       const elapsed = Date.now() - startTime;
       if (budget.time !== undefined && elapsed > budget.time) {
         return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`);
       }
-      if (budget.iter !== undefined && stepsCompleted >= budget.iter) {
+      if (budget.iter !== undefined && stepIndex >= budget.iter) {
         return finish('failure', 'budget_exceeded', `Iteration budget exceeded (${budget.iter})`);
       }
       if (budget.cost !== undefined && this.costTracker) {
@@ -1094,7 +1099,7 @@ END_DIFF
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
-        payload: { step, index: stepsCompleted, total: steps.length },
+        payload: { step, index: stepIndex, total: steps.length },
       });
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
@@ -1177,7 +1182,7 @@ END_DIFF
               if (hits.length > 0) {
                 const hitsArtifactPath = path.join(
                   artifacts.root,
-                  `semantic_hits_step_${stepsCompleted}.json`,
+                  `semantic_hits_step_${stepIndex}.json`,
                 );
                 await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
                 contextPaths.push(hitsArtifactPath);
@@ -1264,7 +1269,7 @@ END_DIFF
         {
           query: `${goal} ${step}`,
           runId,
-          stepId: stepsCompleted,
+          stepId: stepIndex,
           artifactsRoot: artifacts.root,
           intent: 'implementation',
         },
@@ -1292,11 +1297,11 @@ END_DIFF
       const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
       const fusedJsonPath = path.join(
         artifacts.root,
-        `fused_context_step_${stepsCompleted}_${stepSlug}.json`,
+        `fused_context_step_${stepIndex}_${stepSlug}.json`,
       );
       const fusedTxtPath = path.join(
         artifacts.root,
-        `fused_context_step_${stepsCompleted}_${stepSlug}.txt`,
+        `fused_context_step_${stepIndex}_${stepSlug}.txt`,
       );
 
       await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
@@ -1309,8 +1314,9 @@ END_DIFF
       let success = false;
       let lastError = '';
       let lastErrorContext = '';
+      let lastStopReason: RunResult['stopReason'] | undefined;
 
-      while (attempt < 2 && !success) {
+      while (attempt < maxStepAttempts && !success) {
         attempt++;
 
         let systemPrompt = `You are an expert software engineer.
@@ -1325,6 +1331,7 @@ INSTRUCTIONS:
 2. Produce a unified diff that implements the changes for THIS STEP ONLY.
 3. Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 4. Do not include any explanations outside the markers.
+5. The diff must be valid for \`git apply\`: every file MUST have a \`diff --git\` header and \`---\`/\`+++\` headers before any \`@@\` hunks.
 `;
 
         if (attempt > 1) {
@@ -1336,6 +1343,10 @@ ${lastError}
 ${lastErrorContext ? `\n\nCURRENT FILE CONTEXT:\n${lastErrorContext}` : ''}
 
 Please regenerate a unified diff that applies cleanly to the current code.`;
+
+          if (lastStopReason === 'invalid_output') {
+            systemPrompt += `\n\nIMPORTANT: Do not output patch fragments. Do not start with "@@". Include full file headers for every file.`;
+          }
         }
 
         const response = await providers.executor.generate(
@@ -1355,7 +1366,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
           await fs.writeFile(
             path.join(
               artifacts.root,
-              `step_${stepsCompleted}_${stepSlug}_attempt_${attempt}_output.txt`,
+              `step_${stepIndex}_${stepSlug}_attempt_${attempt}_output.txt`,
             ),
             outputText,
           );
@@ -1365,14 +1376,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
 
         if (diffContent === null) {
           lastError = 'Failed to extract diff from executor output';
-          consecutiveInvalidDiffs++;
-          if (consecutiveInvalidDiffs >= 2) {
-            return finish(
-              'failure',
-              'invalid_output',
-              'Executor produced invalid output twice consecutively',
-            );
-          }
+          lastStopReason = 'invalid_output';
           continue;
         }
 
@@ -1391,29 +1395,18 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
               },
             });
             success = true;
-            consecutiveInvalidDiffs = 0;
-            consecutiveApplyFailures = 0;
-            lastApplyErrorHash = '';
             lastErrorContext = '';
+            lastStopReason = undefined;
             break;
           }
 
           lastError = 'Executor produced empty patch';
-          consecutiveInvalidDiffs++;
-          if (consecutiveInvalidDiffs >= 2) {
-            return finish(
-              'failure',
-              'invalid_output',
-              'Executor produced empty patch twice consecutively',
-            );
-          }
+          lastStopReason = 'invalid_output';
           continue;
         }
 
-        consecutiveInvalidDiffs = 0;
-
         const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-        const patchPath = await patchStore.saveSelected(stepsCompleted, diffContent);
+        const patchPath = await patchStore.saveSelected(stepIndex, diffContent);
         if (attempt === 1) patchPaths.push(patchPath);
 
         const result = await executionService.applyPatch(diffContent, step);
@@ -1423,32 +1416,22 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
           if (result.filesChanged) {
             result.filesChanged.forEach((f) => touchedFiles.add(f));
           }
-          consecutiveApplyFailures = 0;
-          lastApplyErrorHash = '';
           lastErrorContext = '';
+          lastStopReason = undefined;
         } else {
           lastError = result.error || 'Unknown apply error';
           lastErrorContext = buildPatchApplyRetryContext(result.patchError, this.repoRoot);
-          const errorHash = createHash('sha256').update(lastError).digest('hex');
-          if (lastApplyErrorHash === errorHash) {
-            consecutiveApplyFailures++;
-          } else {
-            consecutiveApplyFailures = 1;
-            lastApplyErrorHash = errorHash;
-          }
 
-          if (consecutiveApplyFailures >= 2) {
-            return finish(
-              'failure',
-              'repeated_failure',
-              `Repeated patch apply failure: ${lastError}`,
-            );
-          }
+          const patchErrorKind = extractPatchErrorKind(result.patchError);
+          lastStopReason =
+            patchErrorKind === 'INVALID_PATCH' || patchErrorKind === 'CORRUPT_PATCH'
+              ? 'invalid_output'
+              : 'repeated_failure';
         }
       }
 
       if (success) {
-        stepsCompleted++;
+        stepsSucceeded++;
         await eventBus.emit({
           type: 'StepFinished',
           schemaVersion: 1,
@@ -1465,15 +1448,31 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
           payload: { step, success: false, error: lastError },
         });
 
-        return finish(
-          'failure',
-          'repeated_failure',
-          `Step failed after retries: ${step}. Error: ${lastError}`,
-        );
+        failedSteps.push({ step, error: lastError, stopReason: lastStopReason });
+
+        if (!continueOnStepFailure) {
+          return finish(
+            'failure',
+            lastStopReason ?? 'repeated_failure',
+            `Step failed after ${attempt} attempts: ${step}. Error: ${lastError}`,
+          );
+        }
       }
     }
 
-    return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsCompleted} steps.`);
+    if (failedSteps.length > 0) {
+      const summaryLines = failedSteps
+        .slice(0, 3)
+        .map((f) => `- ${f.step}: ${f.error}`)
+        .join('\n');
+      return finish(
+        'failure',
+        failedSteps.some((f) => f.stopReason === 'invalid_output') ? 'invalid_output' : 'repeated_failure',
+        `L1 Plan completed with failures. Succeeded: ${stepsSucceeded}/${steps.length}. Failed: ${failedSteps.length}.\n${summaryLines}`,
+      );
+    }
+
+    return finish('success', undefined, `L1 Plan Executed Successfully. ${stepsSucceeded} steps.`);
   }
 
   private async searchMemoryHits(

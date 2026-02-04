@@ -88,11 +88,26 @@ export class SecretScanner {
 
     // Filter out overlapping findings, keeping the highest confidence one.
     const confidenceOrder = ['low', 'medium', 'high'];
+    const kindPriority = new Map<string, number>([
+      // More specific patterns should win ties over broad heuristics.
+      ['private-key', 100],
+      ['openai-api-key', 90],
+      ['google-api-key', 90],
+      ['aws-access-key-id', 80],
+      ['github-token', 80],
+      ['env-assignment', 70],
+      ['api-key', 10],
+      ['aws-secret-access-key', 0],
+    ]);
     findings.sort((a, b) => {
       const confidenceDiff =
         confidenceOrder.indexOf(b.confidence) - confidenceOrder.indexOf(a.confidence);
       if (confidenceDiff !== 0) {
         return confidenceDiff;
+      }
+      const priorityDiff = (kindPriority.get(b.kind) ?? 0) - (kindPriority.get(a.kind) ?? 0);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
       }
       return b.end - b.start - (a.end - a.start); // longer match first
     });

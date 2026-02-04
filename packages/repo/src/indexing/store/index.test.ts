@@ -41,20 +41,20 @@ describe('IndexStore', () => {
   };
 
   describe('saveIndexAtomic and loadIndex', () => {
-    it('should save and load an index file correctly', () => {
-      saveIndexAtomic(indexPath, validIndex);
-      const loadedIndex = loadIndex(indexPath);
+    it('should save and load an index file correctly', async () => {
+      await saveIndexAtomic(indexPath, validIndex);
+      const loadedIndex = await loadIndex(indexPath);
       expect(loadedIndex).toEqual(validIndex);
     });
 
-    it('should return null if the index file does not exist', () => {
-      const loadedIndex = loadIndex(indexPath);
+    it('should return null if the index file does not exist', async () => {
+      const loadedIndex = await loadIndex(indexPath);
       expect(loadedIndex).toBeNull();
     });
 
-    it('should perform an atomic write', () => {
+    it('should perform an atomic write', async () => {
       const tempPath = `${indexPath}.tmp`;
-      saveIndexAtomic(indexPath, validIndex);
+      await saveIndexAtomic(indexPath, validIndex);
       expect(fs.existsSync(indexPath)).toBe(true);
       expect(fs.existsSync(tempPath)).toBe(false);
     });
@@ -80,16 +80,16 @@ describe('IndexStore', () => {
   });
 
   describe('loadIndex error handling', () => {
-    it('should throw IndexCorruptedError for invalid JSON', () => {
+    it('should throw IndexCorruptedError for invalid JSON', async () => {
       fs.writeFileSync(indexPath, 'invalid json');
-      expect(() => loadIndex(indexPath)).toThrow(IndexCorruptedError);
-      expect(() => loadIndex(indexPath)).toThrow(/Failed to parse index file/);
+      await expect(loadIndex(indexPath)).rejects.toThrow(IndexCorruptedError);
+      await expect(loadIndex(indexPath)).rejects.toThrow(/Failed to parse index file/);
     });
 
-    it('should throw IndexCorruptedError for a file that fails validation', () => {
+    it('should throw IndexCorruptedError for a file that fails validation', async () => {
       const invalidIndex = { ...validIndex, schemaVersion: 999 };
       fs.writeFileSync(indexPath, JSON.stringify(invalidIndex));
-      expect(() => loadIndex(indexPath)).toThrow(IndexCorruptedError);
+      await expect(loadIndex(indexPath)).rejects.toThrow(IndexCorruptedError);
     });
   });
 });

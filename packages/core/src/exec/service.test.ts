@@ -183,4 +183,22 @@ describe('ExecutionService', () => {
     expect(result.error).toContain('git apply failed with code 1');
     expect(result.error).toContain('patch does not apply');
   });
+
+  it('auto-repairs hunk-only patch fragments when enabled', async () => {
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: true,
+      filesChanged: ['src/foo.ts'],
+    });
+    mockGit.createCheckpoint.mockResolvedValue('sha123');
+
+    const fragment = ['@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
+    const result = await service.applyPatch(fragment, 'Fix src/foo.ts');
+
+    expect(result.success).toBe(true);
+    const appliedText = mockApplier.applyUnifiedDiff.mock.calls[0][1] as string;
+    expect(appliedText).toContain('diff --git a/src/foo.ts b/src/foo.ts');
+    expect(appliedText).toContain('--- a/src/foo.ts');
+    expect(appliedText).toContain('+++ b/src/foo.ts');
+    expect(appliedText).toContain('@@ -1,1 +1,1 @@');
+  });
 });

@@ -14,6 +14,18 @@ export interface PatchApplierOptions {
   dryRun?: boolean;
 }
 
+type DiffLimits = {
+  maxFilesChanged: number;
+  maxLinesTouched: number;
+  allowBinary: boolean;
+};
+
+type DiffStats = {
+  fileCount: number;
+  addedLines: number;
+  removedLines: number;
+};
+
 export class PatchApplier {
   /**
    * Applies a unified diff to the repository.
@@ -92,27 +104,9 @@ export class PatchApplier {
     }
   }
 
-  /**
-   * Validation limits for diff operations
-   */
-  private interface DiffLimits {
-    maxFilesChanged: number;
-    maxLinesTouched: number;
-    allowBinary: boolean;
-  }
-
-  /**
-   * Statistics collected during diff parsing
-   */
-  private interface DiffStats {
-    fileCount: number;
-    addedLines: number;
-    removedLines: number;
-  }
-
   private validateDiff(
     diffText: string,
-    limits: { maxFilesChanged: number; maxLinesTouched: number; allowBinary: boolean },
+    limits: DiffLimits,
   ): PatchError | undefined {
     const lines = diffText.split('\n');
     

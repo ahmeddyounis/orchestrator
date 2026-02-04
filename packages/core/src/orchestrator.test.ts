@@ -269,14 +269,11 @@ describe('Orchestrator', () => {
     expect(result.summary).toContain('Iteration budget exceeded');
   });
 
-  it('should stop runL1 if executor produces invalid output consecutively', async () => {
+  it('should stop runL1 after repeated invalid executor output', async () => {
     mockRegistry.resolveRoleProviders.mockResolvedValue({
       planner: { generate: vi.fn() },
       executor: {
-        generate: vi
-          .fn()
-          .mockResolvedValueOnce({ text: 'Bad output 1' })
-          .mockResolvedValueOnce({ text: 'Bad output 2' }),
+        generate: vi.fn().mockResolvedValue({ text: 'Bad output' }),
       },
       reviewer: {},
     });
@@ -285,7 +282,7 @@ describe('Orchestrator', () => {
 
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('invalid_output');
-    expect(result.summary).toContain('twice consecutively');
+    expect(result.summary).toContain('Failed to extract diff');
   });
 
   it('should allow no-op steps that intentionally produce an empty diff', async () => {
@@ -334,7 +331,7 @@ describe('Orchestrator', () => {
 
     expect(result.status).toBe('failure');
     expect(result.stopReason).toBe('repeated_failure');
-    expect(result.summary).toContain('Repeated patch apply failure');
+    expect(result.summary).toContain('Step failed after');
   });
 
   it('should include file context in L1 retry prompt when a hunk fails', async () => {
@@ -384,10 +381,7 @@ describe('Orchestrator', () => {
 
       (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
         return {
-          applyPatch: vi
-            .fn()
-            .mockResolvedValueOnce({ success: false, error: 'Same Error', patchError })
-            .mockResolvedValueOnce({ success: false, error: 'Same Error', patchError }),
+          applyPatch: vi.fn().mockResolvedValue({ success: false, error: 'Same Error', patchError }),
         };
       });
 
@@ -401,7 +395,7 @@ describe('Orchestrator', () => {
       const result = await localOrchestrator.runL1('goal', runId);
       expect(result.status).toBe('failure');
 
-      expect(executorGenerate).toHaveBeenCalledTimes(2);
+      expect(executorGenerate.mock.calls.length).toBeGreaterThanOrEqual(2);
       const secondSystemPrompt = executorGenerate.mock.calls[1][0].messages[0].content;
       expect(secondSystemPrompt).toContain('CURRENT FILE CONTEXT');
       expect(secondSystemPrompt).toContain('File: src/foo.ts:5');

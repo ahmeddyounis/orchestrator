@@ -500,6 +500,22 @@ export const ConfigSchema = z.object({
     .object({
       allowDirtyWorkingTree: z.boolean().default(false),
       noCheckpoints: z.boolean().default(false),
+      /**
+       * Maximum attempts per plan step when the executor produces invalid output
+       * or when a patch fails to apply. Higher values improve resilience but may
+       * increase runtime/cost.
+       */
+      maxStepAttempts: z.number().int().min(1).max(20).default(6),
+      /**
+       * If enabled, a plan step failure will be recorded and the run will
+       * continue to the next step instead of aborting the whole run.
+       */
+      continueOnStepFailure: z.boolean().default(false),
+      /**
+       * If enabled, the orchestrator will try to automatically repair common
+       * malformed diff fragments (e.g. missing file headers) before retrying.
+       */
+      autoRepairPatchFragments: z.boolean().default(true),
       tools: ToolPolicySchema.default(ToolPolicySchema.parse({})),
       sandbox: SandboxConfigSchema.default(SandboxConfigSchema.parse({})),
     })

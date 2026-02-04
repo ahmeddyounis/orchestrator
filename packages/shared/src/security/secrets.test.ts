@@ -56,7 +56,7 @@ describe('SecretScanner', () => {
   });
 
   it('should find a Google API key', () => {
-    const text = 'My Google key is AIzaSyBabcdefghijklmnopqrstuvwxyz12345';
+    const text = 'My Google key is AIzaSyBabcdefghijklmnopqrstuvwxyz123456';
     const findings = scanner.scan(text);
     expect(findings.some((f) => f.kind === 'google-api-key')).toBe(true);
   });

@@ -1,4 +1,4 @@
-import { PatchError } from '@orchestrator/shared';
+import { PatchError, PatchErrorKind } from '@orchestrator/shared';
 import { collectHunkFailures, readFileContext } from '../patch_utils';
 import path from 'path';
 import * as fsSync from 'fs';
@@ -133,4 +133,27 @@ export function buildPatchApplyRetryContext(
   if (!full) return '';
   if (full.length <= maxTotalChars) return full;
   return full.slice(0, maxTotalChars) + '\n... (truncated)';
+}
+
+export function extractPatchErrorKind(patchError: PatchError | undefined): PatchErrorKind | undefined {
+  if (!patchError) return undefined;
+
+  if (patchError.type === 'validation') return 'INVALID_PATCH';
+
+  const details = patchError.details;
+  if (!details || typeof details !== 'object') return undefined;
+
+  const kind = (details as { kind?: unknown }).kind;
+  if (typeof kind === 'string') return kind as PatchErrorKind;
+
+  const rawErrors = (details as { errors?: unknown }).errors;
+  if (!Array.isArray(rawErrors)) return undefined;
+
+  for (const entry of rawErrors) {
+    if (!entry || typeof entry !== 'object') continue;
+    const entryKind = (entry as { kind?: unknown }).kind;
+    if (typeof entryKind === 'string') return entryKind as PatchErrorKind;
+  }
+
+  return undefined;
 }

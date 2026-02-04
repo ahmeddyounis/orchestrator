@@ -40,6 +40,13 @@ export function extractUnifiedDiff(outputText: string | undefined): string | nul
     return trimDiff(lines.slice(diffStartIdx).join('\n'));
   }
 
+  // 4) Patch fragment (hunk-only). This is technically invalid as-is, but downstream
+  // recovery can sometimes repair it by inferring missing headers.
+  const hunkStartIdx = lines.findIndex((line) => line.replace(/\r$/, '').startsWith('@@ '));
+  if (hunkStartIdx !== -1) {
+    return trimDiff(lines.slice(hunkStartIdx).join('\n'));
+  }
+
   return null;
 }
 

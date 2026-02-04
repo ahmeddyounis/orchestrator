@@ -28,7 +28,7 @@ export class IndexUpdater {
   }
 
   async update(repoRoot: string): Promise<IndexUpdateResult> {
-    const existingIndex = loadIndex(this.indexPath);
+    const existingIndex = await loadIndex(this.indexPath);
     if (!existingIndex) {
       throw new IndexNotFoundError('Index file not found. Please build the index first.');
     }
@@ -75,7 +75,7 @@ export class IndexUpdater {
     }
 
     // Deep copy and update stats
-    const newStats = JSON.parse(JSON.stringify(existingIndex.stats));
+    const newStats = structuredClone(existingIndex.stats);
     newStats.fileCount = scanResult.files.length;
     // Note: A more accurate stat update would re-calculate textFileCount, byLanguage, etc.
     // This is a simplification for now.
@@ -87,7 +87,7 @@ export class IndexUpdater {
       stats: newStats,
     };
 
-    saveIndexAtomic(this.indexPath, newIndex);
+    await saveIndexAtomic(this.indexPath, newIndex);
 
     return {
       added,

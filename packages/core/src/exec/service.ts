@@ -1,6 +1,7 @@
 import { GitService, PatchApplier, PatchApplierOptions } from '@orchestrator/repo';
 import { Config, PatchError } from '@orchestrator/shared';
 import { EventBus } from '../registry';
+import { tryRepairUnifiedDiff } from './diff_repair';
 
 export interface ConfirmationProvider {
   confirm(message: string, details?: string, defaultNo?: boolean): Promise<boolean>;
@@ -34,16 +35,30 @@ export class ExecutionService {
       };
 
       // 2. Ensure patch has trailing newline (required by git apply)
-      const patchTextWithNewline = patchText.endsWith('\n') ? patchText : patchText + '\n';
+      let patchTextWithNewline = patchText.endsWith('\n') ? patchText : patchText + '\n';
 
-      // 3. Try applying with limits
+      // 3. Best-effort repair for common malformed diff fragments.
+      const autoRepairEnabled = this.config?.execution?.autoRepairPatchFragments ?? true;
+      if (autoRepairEnabled) {
+        const repaired = tryRepairUnifiedDiff(patchTextWithNewline, {
+          repoRoot: this.repoRoot,
+          stepHint: description,
+        });
+        if (repaired && repaired.diffText.trim() !== patchTextWithNewline.trim()) {
+          patchTextWithNewline = repaired.diffText.endsWith('\n')
+            ? repaired.diffText
+            : repaired.diffText + '\n';
+        }
+      }
+
+      // 4. Try applying with limits
       let result = await this.applier.applyUnifiedDiff(
         this.repoRoot,
         patchTextWithNewline,
         patchOptions,
       );
 
-      // 4. Handle Limit Exceeded -> Confirmation
+      // 5. Handle Limit Exceeded -> Confirmation
       if (!result.applied && result.error?.type === 'limit') {
         if (this.confirmationProvider) {
           const confirmed = await this.confirmationProvider.confirm(
