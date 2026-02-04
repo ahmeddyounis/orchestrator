@@ -92,31 +92,282 @@ export class PatchApplier {
     }
   }
 
+  /**
+   * Validation limits for diff operations
+   */
+  private interface DiffLimits {
+    maxFilesChanged: number;
+    maxLinesTouched: number;
+    allowBinary: boolean;
+  }
+
+  /**
+   * Statistics collected during diff parsing
+   */
+  private interface DiffStats {
+    fileCount: number;
+    addedLines: number;
+    removedLines: number;
+  }
+
   private validateDiff(
     diffText: string,
     limits: { maxFilesChanged: number; maxLinesTouched: number; allowBinary: boolean },
   ): PatchError | undefined {
-    const makeSecurityError = (message: string): PatchError => ({ type: 'security', message });
-
     const lines = diffText.split('\n');
-    let fileCount = 0;
-    let addedLines = 0;
-    let removedLines = 0;
+    
+    // Step 1: Check for empty diff
+    const emptyError = this.validateNotEmpty(diffText);
+    if (emptyError) return emptyError;
+
+    // Step 2: Validate diff structure (headers, hunks, blocks)
+    const structureResult = this.validateDiffStructure(lines, limits.allowBinary);
+    if (structureResult.error) return structureResult.error;
+
+    // Step 3: Validate limits (file count, lines touched)
+    const limitError = this.validateDiffLimits(structureResult.stats, limits);
+    if (limitError) return limitError;
+
+    return undefined;
+  }
+
+  /**
+   * Validates that the diff is not empty
+   */
+  private validateNotEmpty(diffText: string): PatchError | undefined {
+    if (diffText.trim().length === 0) {
+      return { type: 'validation', message: 'Empty diff' };
+    }
+    return undefined;
+  }
+
+  /**
+   * Validates diff limits (file count, lines touched)
+   */
+  private validateDiffLimits(
+    stats: { fileCount: number; addedLines: number; removedLines: number },
+    limits: { maxFilesChanged: number; maxLinesTouched: number },
+  ): PatchError | undefined {
+    if (stats.fileCount > limits.maxFilesChanged) {
+      return {
+        type: 'limit',
+        message: `Too many files changed (${stats.fileCount} > ${limits.maxFilesChanged})`,
+      };
+    }
+
+    const totalLinesTouched = stats.addedLines + stats.removedLines;
+    if (totalLinesTouched > limits.maxLinesTouched) {
+      return {
+        type: 'limit',
+        message: `Too many lines touched (${totalLinesTouched} > ${limits.maxLinesTouched})`,
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Validates diff structure including headers, hunks, and file blocks.
+   * Also performs security validation on file paths.
+   */
+  private validateDiffStructure(
+    lines: string[],
+    allowBinary: boolean,
+  ): { error?: PatchError; stats: { fileCount: number; addedLines: number; removedLines: number } } {
+    const stats = { fileCount: 0, addedLines: 0, removedLines: 0 };
     let hasAnyOldHeader = false;
     let hasAnyNewHeader = false;
     let hasAnyDiffGit = false;
 
     // Track whether we've seen valid file headers for the current file block.
-    // This prevents accepting malformed diffs that contain hunks ("@@ ... @@") without headers.
     let currentHasOldHeader = false;
     let currentHasNewHeader = false;
     let inFileBlock = false;
 
-    const makeValidationError = (
-      message: string,
-      line?: number,
-      suggestion?: string,
-    ): PatchError => ({
+    // Track each "diff --git" block to ensure it eventually contains file headers.
+    let currentDiffGitStartLine: number | undefined;
+    let currentDiffGitHasFileHeaders = false;
+
+    const resetCurrentFile = () => {
+      currentHasOldHeader = false;
+      currentHasNewHeader = false;
+      inFileBlock = false;
+    };
+
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx];
+      const lineNumber = idx + 1;
+
+      // Handle "diff --git" lines
+      if (line.startsWith('diff --git')) {
+        hasAnyDiffGit = true;
+        const blockError = this.validatePreviousDiffGitBlock(
+          currentDiffGitStartLine,
+          currentDiffGitHasFileHeaders,
+        );
+        if (blockError) return { error: blockError, stats };
+        
+        currentDiffGitStartLine = lineNumber;
+        currentDiffGitHasFileHeaders = false;
+        resetCurrentFile();
+        continue;
+      }
+
+      // Handle "--- " headers
+      if (line.startsWith('--- ')) {
+        hasAnyOldHeader = true;
+        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
+        currentHasOldHeader = true;
+        currentHasNewHeader = false;
+        inFileBlock = false;
+        continue;
+      }
+
+      // Handle "+++ " headers
+      if (line.startsWith('+++ ')) {
+        hasAnyNewHeader = true;
+        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
+        
+        if (!currentHasOldHeader) {
+          return {
+            error: this.makeValidationError(
+              `Invalid diff: "+++ ..." header without preceding "--- ..." header (line ${lineNumber})`,
+              lineNumber,
+              'Ensure each file diff includes both "--- ..." and "+++ ..." headers before any "@@" hunks.',
+            ),
+            stats,
+          };
+        }
+
+        currentHasNewHeader = true;
+        inFileBlock = true;
+
+        // Validate file path if this is a "+++ b/" header
+        if (line.startsWith('+++ b/')) {
+          stats.fileCount++;
+          const filePath = line.substring(6).trim();
+          
+          const securityError = this.validateFileInDiff(filePath, allowBinary);
+          if (securityError) return { error: securityError, stats };
+        }
+
+        continue;
+      }
+
+      // Handle hunk headers
+      if (line.startsWith('@@ ')) {
+        if (!inFileBlock || !(currentHasOldHeader && currentHasNewHeader)) {
+          return {
+            error: this.makeValidationError(
+              `Invalid diff: hunk header found without file headers (line ${lineNumber})`,
+              lineNumber,
+              'Include full file headers ("diff --git", "---", "+++") before any "@@" hunk headers. Do not output patch fragments.',
+            ),
+            stats,
+          };
+        }
+      }
+
+      // Count added/removed lines
+      if (line.startsWith('+') && !line.startsWith('+++')) stats.addedLines++;
+      if (line.startsWith('-') && !line.startsWith('---')) stats.removedLines++;
+    }
+
+    // Final validations after processing all lines
+    const finalError = this.validateFinalDiffState(
+      currentHasOldHeader,
+      currentHasNewHeader,
+      currentDiffGitStartLine,
+      currentDiffGitHasFileHeaders,
+      hasAnyOldHeader,
+      hasAnyNewHeader,
+      hasAnyDiffGit,
+    );
+    if (finalError) return { error: finalError, stats };
+
+    return { stats };
+  }
+
+  /**
+   * Validates that the previous "diff --git" block had proper file headers
+   */
+  private validatePreviousDiffGitBlock(
+    startLine: number | undefined,
+    hasFileHeaders: boolean,
+  ): PatchError | undefined {
+    if (startLine !== undefined && !hasFileHeaders) {
+      return this.makeValidationError(
+        `Invalid diff: "diff --git" block missing file headers (started at line ${startLine})`,
+        startLine,
+        'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
+      );
+    }
+    return undefined;
+  }
+
+  /**
+   * Validates a file path within a diff for security and binary restrictions
+   */
+  private validateFileInDiff(filePath: string, allowBinary: boolean): PatchError | undefined {
+    // Security: Comprehensive path traversal and injection detection
+    const pathSecurityError = this.validatePathSecurity(filePath);
+    if (pathSecurityError) {
+      return { type: 'security', message: pathSecurityError };
+    }
+
+    // Security: Binary Files
+    if (!allowBinary && isBinaryPath(filePath)) {
+      return {
+        type: 'security',
+        message: `Binary file patch detected: ${filePath}`,
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Validates the final state after processing all diff lines
+   */
+  private validateFinalDiffState(
+    currentHasOldHeader: boolean,
+    currentHasNewHeader: boolean,
+    currentDiffGitStartLine: number | undefined,
+    currentDiffGitHasFileHeaders: boolean,
+    hasAnyOldHeader: boolean,
+    hasAnyNewHeader: boolean,
+    hasAnyDiffGit: boolean,
+  ): PatchError | undefined {
+    // Check for incomplete file header pair
+    if (currentHasOldHeader && !currentHasNewHeader) {
+      return this.makeValidationError(
+        'Invalid diff: file header "--- ..." found without matching "+++ ..."',
+        undefined,
+        'Ensure every file diff contains both "--- ..." and "+++ ..." header lines.',
+      );
+    }
+
+    // Check for incomplete final "diff --git" block
+    if (currentDiffGitStartLine !== undefined && !currentDiffGitHasFileHeaders) {
+      return this.makeValidationError(
+        `Invalid diff: "diff --git" block missing file headers (started at line ${currentDiffGitStartLine})`,
+        currentDiffGitStartLine,
+        'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
+      );
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Creates a validation error with consistent structure
+   */
+  private makeValidationError(
+    message: string,
+    line?: number,
+    suggestion?: string,
+  ): PatchError {
+    return {
       type: 'validation',
       message,
       details: {
@@ -130,154 +381,7 @@ export class PatchApplier {
           },
         ],
       },
-    });
-
-    const resetCurrentFile = () => {
-      currentHasOldHeader = false;
-      currentHasNewHeader = false;
-      inFileBlock = false;
     };
-
-    // Track each "diff --git" block to ensure it eventually contains file headers.
-    let currentDiffGitStartLine: number | undefined;
-    let currentDiffGitHasFileHeaders = false;
-
-    for (let idx = 0; idx < lines.length; idx++) {
-      const line = lines[idx];
-      const lineNumber = idx + 1;
-
-      if (line.startsWith('diff --git')) {
-        hasAnyDiffGit = true;
-        if (currentDiffGitStartLine !== undefined && !currentDiffGitHasFileHeaders) {
-          return makeValidationError(
-            `Invalid diff: "diff --git" block missing file headers (started at line ${currentDiffGitStartLine})`,
-            currentDiffGitStartLine,
-            'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
-          );
-        }
-        currentDiffGitStartLine = lineNumber;
-        currentDiffGitHasFileHeaders = false;
-        resetCurrentFile();
-        continue;
-      }
-
-      if (line.startsWith('--- ')) {
-        hasAnyOldHeader = true;
-        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
-        currentHasOldHeader = true;
-        currentHasNewHeader = false;
-        inFileBlock = false;
-        continue;
-      }
-
-      if (line.startsWith('+++ ')) {
-        hasAnyNewHeader = true;
-        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
-        if (!currentHasOldHeader) {
-          return makeValidationError(
-            `Invalid diff: "+++ ..." header without preceding "--- ..." header (line ${lineNumber})`,
-            lineNumber,
-            'Ensure each file diff includes both "--- ..." and "+++ ..." headers before any "@@" hunks.',
-          );
-        }
-
-        currentHasNewHeader = true;
-        inFileBlock = true;
-
-        // Existing logic relies on "+++ b/" headers for file counting and security checks.
-        if (line.startsWith('+++ b/')) {
-          fileCount++;
-          const filePath = line.substring(6).trim();
-          
-          // Security: Comprehensive path traversal and injection detection
-          const pathSecurityError = this.validatePathSecurity(filePath);
-          if (pathSecurityError) {
-            return makeSecurityError(pathSecurityError);
-          }
-
-          // Security: Binary Files
-          if (!limits.allowBinary && isBinaryPath(filePath)) {
-            return {
-              type: 'security',
-              message: `Binary file patch detected: ${filePath}`,
-            };
-          }
-        }
-
-        continue;
-      }
-
-      if (line.startsWith('@@ ')) {
-        if (!inFileBlock || !(currentHasOldHeader && currentHasNewHeader)) {
-          return makeValidationError(
-            `Invalid diff: hunk header found without file headers (line ${lineNumber})`,
-            lineNumber,
-            'Include full file headers ("diff --git", "---", "+++") before any "@@" hunk headers. Do not output patch fragments.',
-          );
-        }
-      }
-
-      if (line.startsWith('+++ b/')) {
-        // Handled above in the "+++ " block to ensure ordering validation happens first.
-      }
-
-      // Check for LOC limits
-      if (line.startsWith('+') && !line.startsWith('+++')) addedLines++;
-      if (line.startsWith('-') && !line.startsWith('---')) removedLines++;
-    }
-
-    // Validate limits
-    if (fileCount > limits.maxFilesChanged) {
-      return {
-        type: 'limit',
-        message: `Too many files changed (${fileCount} > ${limits.maxFilesChanged})`,
-      };
-    }
-
-    const totalLinesTouched = addedLines + removedLines;
-    if (totalLinesTouched > limits.maxLinesTouched) {
-      return {
-        type: 'limit',
-        message: `Too many lines touched (${totalLinesTouched} > ${limits.maxLinesTouched})`,
-      };
-    }
-
-    // Syntax: hunks require file headers.
-    if (currentHasOldHeader && !currentHasNewHeader) {
-      return makeValidationError(
-        'Invalid diff: file header "--- ..." found without matching "+++ ..."',
-        undefined,
-        'Ensure every file diff contains both "--- ..." and "+++ ..." header lines.',
-      );
-    }
-
-    if (currentDiffGitStartLine !== undefined && !currentDiffGitHasFileHeaders) {
-      return makeValidationError(
-        `Invalid diff: "diff --git" block missing file headers (started at line ${currentDiffGitStartLine})`,
-        currentDiffGitStartLine,
-        'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
-      );
-    }
-
-    // Basic syntax check: must have at least one file header pair or a diff --git block.
-    // (We still allow header-only diffs: they are handled as no-op success later.)
-    if (!hasAnyOldHeader && !hasAnyNewHeader && !hasAnyDiffGit) {
-      if (diffText.trim().length === 0) {
-        return { type: 'validation', message: 'Empty diff' };
-      }
-    }
-
-    // Basic syntax check: must have at least one file header or valid hunk
-    // This is loose, as 'git apply' does stricter validation, but we want to catch garbage early.
-    if (fileCount === 0 && !diffText.includes('diff --git')) {
-      // Some diffs might rely on 'diff --git' but usually standard unified diffs have +++ and ---
-      // If it's a completely empty diff or garbage string
-      if (diffText.trim().length === 0) {
-        return { type: 'validation', message: 'Empty diff' };
-      }
-    }
-
-    return undefined;
   }
 
   /**
