@@ -13,14 +13,14 @@ import {
   ProviderAdapter,
   AdapterContext,
   ConfigError,
-  RateLimitError,
-  TimeoutError,
 } from '../index';
+import { BaseProviderAdapter, ErrorTypeConfig, APIErrorLike } from '../base-adapter';
 import { executeProviderRequest } from '../common';
 
-export class OpenAIAdapter implements ProviderAdapter {
+export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapter {
   private client: OpenAI;
   private model: string;
+  protected readonly errorConfig: ErrorTypeConfig;
 
   constructor(config: ProviderConfig) {
     const apiKey = config.api_key || (config.api_key_env && process.env[config.api_key_env]);
@@ -29,11 +29,18 @@ export class OpenAIAdapter implements ProviderAdapter {
         `Missing API Key for OpenAI provider. Checked config.api_key and env var ${config.api_key_env}`,
       );
     }
+    super();
     this.model = config.model;
     this.client = new OpenAI({
       apiKey,
       baseURL: undefined, // Could be added to config if needed
     });
+    this.errorConfig = {
+      isAPIError: (error: unknown): error is APIErrorLike =>
+        error instanceof APIError && typeof error.status === 'number',
+      isTimeoutError: (error: unknown): boolean =>
+        error instanceof APIConnectionTimeoutError,
+    };
   }
 
   id(): string {
@@ -233,21 +240,5 @@ export class OpenAIAdapter implements ProviderAdapter {
         strict: t.strict,
       },
     }));
-  }
-
-  private mapError(error: unknown): Error {
-    if (error instanceof APIError) {
-      if (error.status === 429) {
-        return new RateLimitError(error.message);
-      }
-      if (error.status === 401) {
-        return new ConfigError(error.message);
-      }
-    }
-    if (error instanceof APIConnectionTimeoutError) {
-      return new TimeoutError(error.message);
-    }
-    if (error instanceof Error) return error;
-    return new Error(String(error));
   }
 }

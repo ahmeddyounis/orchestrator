@@ -14,14 +14,14 @@ import {
   ProviderAdapter,
   AdapterContext,
   ConfigError,
-  RateLimitError,
-  TimeoutError,
 } from '../index';
+import { BaseProviderAdapter, ErrorTypeConfig, APIErrorLike } from '../base-adapter';
 import { executeProviderRequest } from '../common';
 
-export class AnthropicAdapter implements ProviderAdapter {
+export class AnthropicAdapter extends BaseProviderAdapter implements ProviderAdapter {
   private client: Anthropic;
   private model: string;
+  protected readonly errorConfig: ErrorTypeConfig;
 
   constructor(config: ProviderConfig) {
     const apiKey = config.api_key || (config.api_key_env && process.env[config.api_key_env]);
@@ -30,10 +30,17 @@ export class AnthropicAdapter implements ProviderAdapter {
         `Missing API Key for Anthropic provider. Checked config.api_key and env var ${config.api_key_env}`,
       );
     }
+    super();
     this.model = config.model;
     this.client = new Anthropic({
       apiKey,
     });
+    this.errorConfig = {
+      isAPIError: (error: unknown): error is APIErrorLike =>
+        error instanceof Anthropic.APIError && typeof error.status === 'number',
+      isTimeoutError: (error: unknown): boolean =>
+        error instanceof Anthropic.APIConnectionTimeoutError,
+    };
   }
 
   id(): string {
@@ -254,21 +261,5 @@ export class AnthropicAdapter implements ProviderAdapter {
       description: t.description,
       input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
     }));
-  }
-
-  private mapError(error: unknown): Error {
-    if (error instanceof Anthropic.APIError) {
-      if (error.status === 429) {
-        return new RateLimitError(error.message);
-      }
-      if (error.status === 401) {
-        return new ConfigError(error.message);
-      }
-    }
-    if (error instanceof Anthropic.APIConnectionTimeoutError) {
-      return new TimeoutError(error.message);
-    }
-    if (error instanceof Error) return error;
-    return new Error(String(error));
   }
 }

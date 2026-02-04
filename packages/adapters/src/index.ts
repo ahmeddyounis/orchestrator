@@ -4,6 +4,8 @@ export * from './types';
 
 export * from './adapter';
 
+export * from './base-adapter';
+
 export * from './errors';
 
 export * from './embed';
