@@ -1,8 +1,12 @@
 import { Embedder } from './embedder';
+import { LRUCache } from '@orchestrator/shared';
 import { hash } from 'ohash';
 
+/** Maximum number of embedding results to cache (LRU eviction) */
+const EMBEDDING_CACHE_MAX_SIZE = 500;
+
 export class CachingEmbedder implements Embedder {
-  private cache: Map<string, number[][]> = new Map();
+  private cache: LRUCache<string, number[][]> = new LRUCache(EMBEDDING_CACHE_MAX_SIZE);
 
   constructor(private readonly underlyingEmbedder: Embedder) {}
 

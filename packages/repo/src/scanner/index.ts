@@ -1,17 +1,21 @@
 import nodeFs from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
+import { LRUCache } from '@orchestrator/shared';
 import { RepoSnapshot, RepoFileMeta, ScanOptions } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
 import { hash } from 'ohash';
 
 export * from './types';
 
+/** Maximum number of scan results to cache (LRU eviction) */
+const SCAN_CACHE_MAX_SIZE = 50;
+
 type Fs = typeof nodeFs;
 
 export class RepoScanner {
   private fs: Fs;
-  private scanCache: Map<string, RepoSnapshot> = new Map();
+  private scanCache: LRUCache<string, RepoSnapshot> = new LRUCache(SCAN_CACHE_MAX_SIZE);
 
   constructor(fs: Fs = nodeFs) {
     this.fs = fs;
