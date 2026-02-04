@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { spawnSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -76,7 +76,7 @@ export class DockerSandboxProvider implements SandboxProvider {
   ): Promise<SandboxPrepareResult> {
     // Verify Docker is available
     try {
-      execSync('docker --version', { stdio: 'ignore' });
+      spawnSync('docker', ['--version'], { stdio: 'ignore' });
     } catch {
       throw new Error('Docker is not available. Please install Docker to use sandbox mode.');
     }
@@ -95,7 +95,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       execPrefix: ['docker', 'run', ...dockerArgs],
       cleanup: async () => {
         try {
-          execSync(`docker rm -f ${containerName}`, { stdio: 'ignore' });
+          spawnSync('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
         } catch {
           // Container may not exist, ignore
         }
@@ -164,7 +164,7 @@ export class DevcontainerSandboxProvider implements SandboxProvider {
 
     // Verify devcontainer CLI is available
     try {
-      execSync('devcontainer --version', { stdio: 'ignore' });
+      spawnSync('devcontainer', ['--version'], { stdio: 'ignore' });
     } catch {
       throw new Error('devcontainer CLI is not available. Please install @devcontainers/cli.');
     }
@@ -184,7 +184,7 @@ export class DevcontainerSandboxProvider implements SandboxProvider {
       ],
       cleanup: async () => {
         try {
-          execSync(`devcontainer down --workspace-folder ${repoRoot}`, { stdio: 'ignore' });
+          spawnSync('devcontainer', ['down', '--workspace-folder', repoRoot], { stdio: 'ignore' });
         } catch {
           // Container may not exist, ignore
         }
