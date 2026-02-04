@@ -54,6 +54,8 @@ export type PatchErrorKind =
   | 'HUNK_FAILED'
   | 'FILE_NOT_FOUND'
   | 'ALREADY_EXISTS'
+  | 'INVALID_PATCH'
+  | 'CORRUPT_PATCH'
   | 'WHITESPACE'
   | 'UNKNOWN';
 

@@ -278,4 +278,93 @@ describe('PatchApplier', () => {
       file: 'existing.txt',
     });
   });
+
+  it('rejects hunks without file headers (patch fragments)', async () => {
+    const diffText =
+      [
+        '@@ -1 +1 @@',
+        '-Hello World',
+        '+Hello Universe',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('validation');
+    expect(result.error?.message).toContain('hunk header found without file headers');
+
+    const details = result.error?.details as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+    expect(details.kind).toBe('INVALID_PATCH');
+    expect(details.errors[0]).toMatchObject({
+      kind: 'INVALID_PATCH',
+      line: 1,
+    });
+  });
+
+  it('rejects "+++ ..." headers without preceding "--- ..." header', async () => {
+    const diffText =
+      [
+        '+++ b/test.txt',
+        '@@ -0,0 +1 @@',
+        '+Hello',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('validation');
+    expect(result.error?.message).toContain('header without preceding');
+  });
+
+  it('rejects diff --git blocks that never include file headers', async () => {
+    const diffText =
+      [
+        'diff --git a/test.txt b/test.txt',
+        'index 0000000..1111111 100644',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('validation');
+    expect(result.error?.message).toContain('diff --git');
+
+    const details = result.error?.details as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+    expect(details.kind).toBe('INVALID_PATCH');
+    expect(details.errors[0]).toMatchObject({
+      kind: 'INVALID_PATCH',
+      line: 1,
+    });
+  });
+
+  it('parses "patch fragment without header" stderr into structured errors', () => {
+    const parsed = (applier as any).parseGitApplyError(
+      'error: patch fragment without header at line 55: @@ -1 +1 @@\n',
+    ) as { kind: PatchErrorKind; errors: PatchApplyErrorDetail[] };
+
+    expect(parsed.kind).toBe('INVALID_PATCH');
+    expect(parsed.errors[0]).toMatchObject({
+      kind: 'INVALID_PATCH',
+      line: 55,
+    });
+  });
+
+  it('parses "corrupt patch at line" stderr into structured errors', () => {
+    const parsed = (applier as any).parseGitApplyError('error: corrupt patch at line 12\n') as {
+      kind: PatchErrorKind;
+      errors: PatchApplyErrorDetail[];
+    };
+
+    expect(parsed.kind).toBe('CORRUPT_PATCH');
+    expect(parsed.errors[0]).toMatchObject({
+      kind: 'CORRUPT_PATCH',
+      line: 12,
+    });
+  });
 });

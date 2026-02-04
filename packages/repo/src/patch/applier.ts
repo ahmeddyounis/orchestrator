@@ -100,39 +100,130 @@ export class PatchApplier {
     let fileCount = 0;
     let addedLines = 0;
     let removedLines = 0;
-    let hasHunkHeader = false;
-    let hasOldHeader = false;
-    let hasNewHeader = false;
+    let hasAnyOldHeader = false;
+    let hasAnyNewHeader = false;
+    let hasAnyDiffGit = false;
 
-    for (const line of lines) {
+    // Track whether we've seen valid file headers for the current file block.
+    // This prevents accepting malformed diffs that contain hunks ("@@ ... @@") without headers.
+    let currentHasOldHeader = false;
+    let currentHasNewHeader = false;
+    let inFileBlock = false;
+
+    const makeValidationError = (
+      message: string,
+      line?: number,
+      suggestion?: string,
+    ): PatchError => ({
+      type: 'validation',
+      message,
+      details: {
+        kind: 'INVALID_PATCH',
+        errors: [
+          {
+            kind: 'INVALID_PATCH',
+            line,
+            message,
+            suggestion,
+          },
+        ],
+      },
+    });
+
+    const resetCurrentFile = () => {
+      currentHasOldHeader = false;
+      currentHasNewHeader = false;
+      inFileBlock = false;
+    };
+
+    // Track each "diff --git" block to ensure it eventually contains file headers.
+    let currentDiffGitStartLine: number | undefined;
+    let currentDiffGitHasFileHeaders = false;
+
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx];
+      const lineNumber = idx + 1;
+
+      if (line.startsWith('diff --git')) {
+        hasAnyDiffGit = true;
+        if (currentDiffGitStartLine !== undefined && !currentDiffGitHasFileHeaders) {
+          return makeValidationError(
+            `Invalid diff: "diff --git" block missing file headers (started at line ${currentDiffGitStartLine})`,
+            currentDiffGitStartLine,
+            'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
+          );
+        }
+        currentDiffGitStartLine = lineNumber;
+        currentDiffGitHasFileHeaders = false;
+        resetCurrentFile();
+        continue;
+      }
+
+      if (line.startsWith('--- ')) {
+        hasAnyOldHeader = true;
+        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
+        currentHasOldHeader = true;
+        currentHasNewHeader = false;
+        inFileBlock = false;
+        continue;
+      }
+
+      if (line.startsWith('+++ ')) {
+        hasAnyNewHeader = true;
+        if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
+        if (!currentHasOldHeader) {
+          return makeValidationError(
+            `Invalid diff: "+++ ..." header without preceding "--- ..." header (line ${lineNumber})`,
+            lineNumber,
+            'Ensure each file diff includes both "--- ..." and "+++ ..." headers before any "@@" hunks.',
+          );
+        }
+
+        currentHasNewHeader = true;
+        inFileBlock = true;
+
+        // Existing logic relies on "+++ b/" headers for file counting and security checks.
+        if (line.startsWith('+++ b/')) {
+          fileCount++;
+          const filePath = line.substring(6).trim();
+
+          // Security: Path Traversal
+          if (filePath.includes('../') || filePath.includes('..\\')) {
+            return {
+              type: 'security',
+              message: `Path traversal detected: ${filePath}`,
+            };
+          }
+
+          // Security: Binary Files
+          if (!limits.allowBinary && isBinaryPath(filePath)) {
+            return {
+              type: 'security',
+              message: `Binary file patch detected: ${filePath}`,
+            };
+          }
+        }
+
+        continue;
+      }
+
+      if (line.startsWith('@@ ')) {
+        if (!inFileBlock || !(currentHasOldHeader && currentHasNewHeader)) {
+          return makeValidationError(
+            `Invalid diff: hunk header found without file headers (line ${lineNumber})`,
+            lineNumber,
+            'Include full file headers ("diff --git", "---", "+++") before any "@@" hunk headers. Do not output patch fragments.',
+          );
+        }
+      }
+
       if (line.startsWith('+++ b/')) {
-        fileCount++;
-        const filePath = line.substring(6).trim();
-
-        // Security: Path Traversal
-        if (filePath.includes('../') || filePath.includes('..\\')) {
-          return {
-            type: 'security',
-            message: `Path traversal detected: ${filePath}`,
-          };
-        }
-
-        // Security: Binary Files
-        if (!limits.allowBinary && isBinaryPath(filePath)) {
-          return {
-            type: 'security',
-            message: `Binary file patch detected: ${filePath}`,
-          };
-        }
+        // Handled above in the "+++ " block to ensure ordering validation happens first.
       }
 
       // Check for LOC limits
       if (line.startsWith('+') && !line.startsWith('+++')) addedLines++;
       if (line.startsWith('-') && !line.startsWith('---')) removedLines++;
-
-      if (line.startsWith('@@ ')) hasHunkHeader = true;
-      if (line.startsWith('--- ')) hasOldHeader = true;
-      if (line.startsWith('+++ ')) hasNewHeader = true;
     }
 
     // Validate limits
@@ -152,11 +243,28 @@ export class PatchApplier {
     }
 
     // Syntax: hunks require file headers.
-    if (hasHunkHeader && !(hasOldHeader && hasNewHeader)) {
-      return {
-        type: 'validation',
-        message: 'Invalid diff: hunk header found without file headers (---/+++)',
-      };
+    if (currentHasOldHeader && !currentHasNewHeader) {
+      return makeValidationError(
+        'Invalid diff: file header "--- ..." found without matching "+++ ..."',
+        undefined,
+        'Ensure every file diff contains both "--- ..." and "+++ ..." header lines.',
+      );
+    }
+
+    if (currentDiffGitStartLine !== undefined && !currentDiffGitHasFileHeaders) {
+      return makeValidationError(
+        `Invalid diff: "diff --git" block missing file headers (started at line ${currentDiffGitStartLine})`,
+        currentDiffGitStartLine,
+        'Ensure each "diff --git" block includes both "--- ..." and "+++ ..." headers.',
+      );
+    }
+
+    // Basic syntax check: must have at least one file header pair or a diff --git block.
+    // (We still allow header-only diffs: they are handled as no-op success later.)
+    if (!hasAnyOldHeader && !hasAnyNewHeader && !hasAnyDiffGit) {
+      if (diffText.trim().length === 0) {
+        return { type: 'validation', message: 'Empty diff' };
+      }
     }
 
     // Basic syntax check: must have at least one file header or valid hunk
@@ -269,6 +377,39 @@ export class PatchApplier {
     let overallKind: PatchErrorKind = 'UNKNOWN';
 
     for (const line of lines) {
+      // Malformed patch: "patch fragment without header"
+      const fragmentMatch = line.match(/^error: patch fragment without header at line (\d+)(?::\s*(.*))?/);
+      if (fragmentMatch) {
+        const lineNo = parseInt(fragmentMatch[1] || '0', 10);
+        const fragment = fragmentMatch[2]?.trim();
+        errors.push({
+          kind: 'INVALID_PATCH',
+          line: Number.isFinite(lineNo) && lineNo > 0 ? lineNo : undefined,
+          message: fragment
+            ? `Patch fragment without header: ${fragment}`
+            : 'Patch fragment without header',
+          suggestion:
+            'Ensure each file diff includes headers ("diff --git", "---", "+++") before any "@@" hunks. Do not output patch fragments.',
+        });
+        if (overallKind === 'UNKNOWN') overallKind = 'INVALID_PATCH';
+        continue;
+      }
+
+      // Malformed patch: "corrupt patch at line"
+      const corruptMatch = line.match(/^error: corrupt patch at line (\d+)/);
+      if (corruptMatch) {
+        const lineNo = parseInt(corruptMatch[1] || '0', 10);
+        errors.push({
+          kind: 'CORRUPT_PATCH',
+          line: Number.isFinite(lineNo) && lineNo > 0 ? lineNo : undefined,
+          message: `Corrupt patch at line ${corruptMatch[1]}`,
+          suggestion:
+            'Hunk line counts may be incorrect. Regenerate the diff with correct @@ ranges, or regenerate based on the current file content.',
+        });
+        if (overallKind === 'UNKNOWN') overallKind = 'CORRUPT_PATCH';
+        continue;
+      }
+
       // Hunk Failed: error: patch failed: test.txt:1
       const hunkMatch = line.match(/^error: patch failed: (.+):(\d+)/);
       if (hunkMatch) {
