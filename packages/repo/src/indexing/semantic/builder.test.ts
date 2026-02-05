@@ -3,16 +3,19 @@ import path from 'node:path';
 import type { Embedder } from '@orchestrator/adapters';
 import { SemanticIndexBuilder } from './builder';
 import { emitter } from '../../events';
-import { RepoScanner } from '../../scanner';
 import { hashFile } from '../hasher';
-import { SemanticChunker } from './chunker';
-import { SemanticIndexStore } from './store';
 import { getLanguageForFile } from '../../tree-sitter';
 import * as fsPromises from 'node:fs/promises';
 
-let lastScanner: any;
-let lastChunker: any;
-let lastStore: any;
+let scannerScanMock: ReturnType<typeof vi.fn>;
+let chunkerChunkMock: ReturnType<typeof vi.fn>;
+
+let storeInitMock: ReturnType<typeof vi.fn>;
+let storeUpsertFileMetaMock: ReturnType<typeof vi.fn>;
+let storeReplaceChunksForFileMock: ReturnType<typeof vi.fn>;
+let storeUpsertEmbeddingsMock: ReturnType<typeof vi.fn>;
+let storeSetMetaMock: ReturnType<typeof vi.fn>;
+let storeCloseMock: ReturnType<typeof vi.fn>;
 
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
@@ -21,10 +24,7 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('../../scanner', () => ({
   RepoScanner: class RepoScanner {
-    scan = vi.fn();
-    constructor() {
-      lastScanner = this;
-    }
+    scan = (scannerScanMock ??= vi.fn());
   },
 }));
 
@@ -34,24 +34,18 @@ vi.mock('../hasher', () => ({
 
 vi.mock('./chunker', () => ({
   SemanticChunker: class SemanticChunker {
-    chunk = vi.fn();
-    constructor() {
-      lastChunker = this;
-    }
+    chunk = (chunkerChunkMock ??= vi.fn());
   },
 }));
 
 vi.mock('./store', () => ({
   SemanticIndexStore: class SemanticIndexStore {
-    init = vi.fn();
-    upsertFileMeta = vi.fn();
-    replaceChunksForFile = vi.fn();
-    upsertEmbeddings = vi.fn();
-    setMeta = vi.fn();
-    close = vi.fn();
-    constructor() {
-      lastStore = this;
-    }
+    init = (storeInitMock ??= vi.fn());
+    upsertFileMeta = (storeUpsertFileMetaMock ??= vi.fn());
+    replaceChunksForFile = (storeReplaceChunksForFileMock ??= vi.fn());
+    upsertEmbeddings = (storeUpsertEmbeddingsMock ??= vi.fn());
+    setMeta = (storeSetMetaMock ??= vi.fn());
+    close = (storeCloseMock ??= vi.fn());
   },
 }));
 
@@ -92,19 +86,19 @@ describe('SemanticIndexBuilder', () => {
     vi.mocked(mockEmbedder.embedTexts).mockResolvedValue([[0.1], [0.2]]);
 
     const builder = new SemanticIndexBuilder();
-    lastScanner.scan.mockResolvedValue({ files: [{ path: 'src/a.ts' }] });
-    lastChunker.chunk.mockReturnValue([
+    scannerScanMock.mockResolvedValue({ files: [{ path: 'src/a.ts' }] });
+    chunkerChunkMock.mockReturnValue([
       { chunkId: 'c1', content: 'one' },
       { chunkId: 'c2', content: 'two' },
     ] as any);
 
     await builder.build({ repoRoot, repoId: 'test-repo', embedder: mockEmbedder });
 
-    expect(lastStore.init).toHaveBeenCalledWith(
+    expect(storeInitMock).toHaveBeenCalledWith(
       path.resolve(repoRoot, '.orchestrator', 'semantic.sqlite'),
     );
 
-    expect(lastStore.upsertFileMeta).toHaveBeenCalledWith(
+    expect(storeUpsertFileMetaMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: 'src/a.ts',
         fileHash: 'hash',
@@ -112,10 +106,10 @@ describe('SemanticIndexBuilder', () => {
       }),
     );
 
-    expect(lastStore.replaceChunksForFile).toHaveBeenCalledWith('src/a.ts', expect.any(Array));
+    expect(storeReplaceChunksForFileMock).toHaveBeenCalledWith('src/a.ts', expect.any(Array));
     expect(mockEmbedder.embedTexts).toHaveBeenCalledWith(['one', 'two']);
 
-    expect(lastStore.setMeta).toHaveBeenCalledWith(
+    expect(storeSetMetaMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoId: 'test-repo',
         repoRoot,
@@ -143,7 +137,7 @@ describe('SemanticIndexBuilder', () => {
     mockGetLanguageForFile.mockReturnValue(undefined as any);
 
     const builder = new SemanticIndexBuilder();
-    lastScanner.scan.mockResolvedValue({ files: [{ path: 'src/unknown.ext' }] });
+    scannerScanMock.mockResolvedValue({ files: [{ path: 'src/unknown.ext' }] });
 
     await builder.build({ repoRoot, repoId: 'test-repo', embedder: mockEmbedder });
 
@@ -162,8 +156,8 @@ describe('SemanticIndexBuilder', () => {
     vi.mocked(mockEmbedder.embedTexts).mockResolvedValue([[0.1], [0.2]]);
 
     const builder = new SemanticIndexBuilder();
-    lastScanner.scan.mockResolvedValue({ files: [{ path: 'a.ts' }, { path: 'b.ts' }] });
-    lastChunker.chunk.mockReturnValue([
+    scannerScanMock.mockResolvedValue({ files: [{ path: 'a.ts' }, { path: 'b.ts' }] });
+    chunkerChunkMock.mockReturnValue([
       { chunkId: 'c1', content: 'one' },
       { chunkId: 'c2', content: 'two' },
     ] as any);
@@ -176,7 +170,7 @@ describe('SemanticIndexBuilder', () => {
     });
 
     // Only the first file should be processed because chunksEmbedded(2) > maxChunksPerBuild(1) triggers break.
-    expect(lastStore.upsertFileMeta).toHaveBeenCalledTimes(1);
+    expect(storeUpsertFileMetaMock).toHaveBeenCalledTimes(1);
     expect(mockEmbedder.embedTexts).toHaveBeenCalledTimes(1);
   });
 });

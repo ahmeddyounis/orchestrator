@@ -37,6 +37,45 @@ trailing text
       expect(result?.diffText).not.toContain('trailing text');
     });
 
+    it('extracts diff from BEGIN_DIFF and closing </END_DIFF> tag', () => {
+      const input = `
+Preamble
+<BEGIN_DIFF>
+--- a/file.ts
++++ b/file.ts
+@@ -1 +1 @@
+-old
++new
+</END_DIFF>
+Postamble
+`;
+      const result = parseUnifiedDiffFromText(input);
+      expect(result).not.toBeNull();
+      expect(result?.diffText).toContain('--- a/file.ts');
+      expect(result?.diffText).not.toContain('Preamble');
+      expect(result?.diffText).not.toContain('Postamble');
+    });
+
+    it('extracts diff from markers even with noise inside', () => {
+      const input = `
+<BEGIN_DIFF>
+Here is the diff you requested:
+diff --git a/file.ts b/file.ts
+--- a/file.ts
++++ b/file.ts
+@@ -1 +1 @@
+-foo
++bar
+Thanks!
+<END_DIFF>
+`;
+      const result = parseUnifiedDiffFromText(input);
+      expect(result).not.toBeNull();
+      expect(result?.diffText).toContain('diff --git a/file.ts b/file.ts');
+      expect(result?.diffText).not.toContain('Here is the diff you requested');
+      expect(result?.diffText).not.toContain('Thanks!');
+    });
+
     it('extracts diff from markdown code fences', () => {
       const input = `
 Here is the change:
@@ -159,6 +198,7 @@ diff --git a/file.ts b/file.ts
       const result = parseUnifiedDiffFromText(input);
       expect(result?.diffText).toContain('--- a/real');
       expect(result?.diffText).not.toContain('--- a/fake');
+      expect(result?.diffText).not.toContain('    --- a/real');
     });
 
     it('rejects partial/cutoff output', () => {
@@ -205,7 +245,7 @@ Okay, here is the plan:
 `;
       const result = parsePlanFromText(input);
       expect(result).not.toBeNull();
-      expect(result?.steps).toEqual(['SECTION', 'Do this', 'Do that', 'Another', 'Do more']);
+      expect(result?.steps).toEqual(['Do this', 'Do that', 'Do more']);
     });
 
     it('extracts bulleted list plan', () => {

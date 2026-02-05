@@ -49,6 +49,25 @@ Footer`;
     expect(diff).toContain('+b');
   });
 
+  it('extracts diff from <BEGIN_DIFF>...</END_DIFF> markers', () => {
+    const input = `Header
+<BEGIN_DIFF>
+diff --git a/a.ts b/a.ts
+--- a/a.ts
++++ b/a.ts
+@@ -1,1 +1,1 @@
+-a
++b
+</END_DIFF>
+Footer`;
+
+    const diff = extractUnifiedDiff(input);
+    expect(diff).toContain('diff --git a/a.ts b/a.ts');
+    expect(diff).toContain('-a');
+    expect(diff).toContain('+b');
+    expect(diff).not.toContain('Footer');
+  });
+
   it('extracts diff from ```diff fenced block', () => {
     const input = `Here is the patch:
 \`\`\`diff
@@ -66,6 +85,21 @@ Done.`;
     expect(diff).toContain('-x');
     expect(diff).toContain('+y');
     expect(diff).not.toContain('```diff');
+  });
+
+  it('does not include trailing chatter when extracting raw diff', () => {
+    const input = `diff --git a/foo.txt b/foo.txt
+--- a/foo.txt
++++ b/foo.txt
+@@ -1,1 +1,1 @@
+-a
++b
+All done!`;
+
+    const diff = extractUnifiedDiff(input);
+    expect(diff).toContain('diff --git a/foo.txt b/foo.txt');
+    expect(diff).toContain('+b');
+    expect(diff).not.toContain('All done!');
   });
 
   it('extracts raw diff starting at "diff --git"', () => {
@@ -110,4 +144,3 @@ More text`;
     expect(extractUnifiedDiff('Just some random text\nwith no diff')).toBeNull();
   });
 });
-

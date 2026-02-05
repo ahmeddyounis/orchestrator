@@ -33,9 +33,35 @@ function isShellCommand(command: string): boolean {
   return /[|&;<>`$]/.test(command);
 }
 
-// Common secret env vars to strip.
-// This is not exhaustive but covers many common cases.
-const SENSITIVE_ENV_VARS = ['SECRET', 'TOKEN', 'API_KEY', 'PASSWORD', 'CREDENTIALS', 'ACCESS_KEY'];
+// Minimal env vars that are safe and commonly needed by CLIs.
+// Secrets must be explicitly allowlisted via ToolPolicy.envAllowlist.
+const BASELINE_ENV_KEYS = [
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TERM',
+  'COLORTERM',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'XDG_CONFIG_HOME',
+  'XDG_CACHE_HOME',
+  'XDG_DATA_HOME',
+  'NODE_ENV',
+  // Windows
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SYSTEMROOT',
+  'COMSPEC',
+  'PATHEXT',
+  'HOMEDRIVE',
+  'HOMEPATH',
+];
 
 function getSafeEnv(
   policy: Pick<ToolPolicy, 'envAllowlist'>,
@@ -43,31 +69,23 @@ function getSafeEnv(
   requestEnv?: Record<string, string>,
 ): Record<string, string> {
   const safeEnv: Record<string, string> = {};
-  const allowlist = new Set(policy.envAllowlist);
-
-  // Always include PATH for basic command resolution.
-  if (baseEnv.PATH) {
-    safeEnv.PATH = baseEnv.PATH;
-  }
-
   const combinedEnv = { ...baseEnv, ...requestEnv };
 
-  for (const key of Object.keys(combinedEnv)) {
+  // Always include PATH for basic command resolution.
+  const pathValue = combinedEnv.PATH ?? combinedEnv.Path;
+  if (pathValue) {
+    safeEnv.PATH = pathValue;
+  }
+
+  for (const key of BASELINE_ENV_KEYS) {
     const value = combinedEnv[key];
     if (value === undefined) continue;
+    safeEnv[key] = value;
+  }
 
-    // 1. Is it on the explicit allowlist?
-    if (allowlist.has(key)) {
-      safeEnv[key] = value;
-      continue;
-    }
-
-    // 2. Is it a sensitive-looking var? (and not allowlisted)
-    const upperKey = key.toUpperCase();
-    if (SENSITIVE_ENV_VARS.some((suffix) => upperKey.endsWith(suffix))) {
-      continue; // Strip it
-    }
-
+  for (const key of policy.envAllowlist ?? []) {
+    const value = combinedEnv[key];
+    if (value === undefined) continue;
     safeEnv[key] = value;
   }
 

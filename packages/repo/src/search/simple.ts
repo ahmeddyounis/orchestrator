@@ -9,27 +9,7 @@ export class JsFallbackSearch implements SearchEngine {
 
   async search(options: SearchOptions): Promise<SearchResult> {
     const startTime = Date.now();
-    const scanner = new RepoScanner();
-    const snapshot = await scanner.scan(options.cwd);
-
-    const matches: SearchMatch[] = [];
-    let matchesFound = 0;
-    
-    // Counter map to track matches per file (avoids O(n²) filtering)
-    const matchesPerFile = new Map<string, number>();
-
-    // Create regex from query
-    let regex: RegExp;
-    try {
-      if (options.fixedStrings) {
-        // Escape special regex characters
-        const escaped = options.query.replace(/[.*+?^${}()|[\\]/g, '\\$&');
-        regex = new RegExp(escaped, 'g');
-      } else {
-        regex = new RegExp(options.query, 'g');
-      }
-    } catch {
-      // Invalid regex
+    if (options.query.trim().length === 0) {
       return {
         matches: [],
         stats: {
@@ -39,6 +19,19 @@ export class JsFallbackSearch implements SearchEngine {
         },
       };
     }
+    const scanner = new RepoScanner();
+    const snapshot = await scanner.scan(options.cwd);
+
+    const matches: SearchMatch[] = [];
+    let matchesFound = 0;
+    
+    // Counter map to track matches per file (avoids O(n²) filtering)
+    const matchesPerFile = new Map<string, number>();
+
+    // JS fallback intentionally performs *fixed string* search for safety.
+    // Regex search is delegated to ripgrep when available.
+    const escaped = options.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'g');
 
     // Iterate over text files
     for (const file of snapshot.files) {

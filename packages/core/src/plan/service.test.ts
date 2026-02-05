@@ -109,7 +109,7 @@ describe('PlanService', () => {
   it('should parse JSON from fenced blocks even with extra text', async () => {
     const mockSteps = ['Step 1', 'Step 2'];
     (planner.generate as Mock).mockResolvedValue({
-      text: `Here is the plan:\n\n\`\`\`json\n{\"steps\": [\"Step 1\", \"Step 2\"]}\n\`\`\`\n\nGood luck!`,
+      text: `Here is the plan:\n\n\`\`\`json\n{"steps": ["Step 1", "Step 2"]}\n\`\`\`\n\nGood luck!`,
     } as ModelResponse);
 
     const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
@@ -119,7 +119,7 @@ describe('PlanService', () => {
   it('should extract and parse a JSON object embedded in text', async () => {
     const mockSteps = ['Alpha', 'Beta'];
     (planner.generate as Mock).mockResolvedValue({
-      text: `Preamble\n{\"steps\": [\"Alpha\", \"Beta\"]}\nTrailing`,
+      text: `Preamble\n{"steps": ["Alpha", "Beta"]}\nTrailing`,
     } as ModelResponse);
 
     const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);

@@ -303,10 +303,14 @@ Critical formatting rules:
     let planSteps: string[] = [];
 
     // Attempt 1: Parse JSON (robust to preamble/trailing text)
+    const hasStepsArray = (value: unknown): value is { steps: unknown[] } => {
+      if (!value || typeof value !== 'object') return false;
+      const record = value as Record<string, unknown>;
+      return Array.isArray(record.steps);
+    };
+
     const coerceSteps = (parsed: unknown): string[] => {
-      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).steps)) {
-        return (parsed as any).steps.map(String);
-      }
+      if (hasStepsArray(parsed)) return parsed.steps.map(String);
       if (Array.isArray(parsed)) {
         return parsed.map(String);
       }

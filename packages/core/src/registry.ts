@@ -87,7 +87,7 @@ export class ProviderRegistry {
       const tempAdapter = factory({ ...providerConfig, api_key: providerConfig.api_key || 'validation-placeholder' });
       const capabilities = tempAdapter.capabilities();
       return validateProviderConfig(providerConfig, capabilities, providerId);
-    } catch (error) {
+    } catch (_error) {
       // Construction failed - this is also a form of validation failure
       return null;
     }

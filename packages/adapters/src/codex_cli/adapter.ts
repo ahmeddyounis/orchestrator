@@ -308,7 +308,7 @@ export function parseTextBasedTokenUsage(
   const outputMatch2 = text.match(/(\d+)\s+(?:output|completion|candidate)\s+tokens?/i);
 
   // Pattern 3: "X in, Y out" or "X in / Y out"
-  const inOutMatch = text.match(/(\d+)\s*(?:tokens?)?\s*in[,\/\s]+(\d+)\s*(?:tokens?)?\s*out/i);
+  const inOutMatch = text.match(/(\d+)\s*(?:tokens?)?\s*in[,/\s]+(\d+)\s*(?:tokens?)?\s*out/i);
 
   // Pattern 4: Total tokens line
   const totalMatch = text.match(/(?:total)[_\s]*(?:tokens)?[=:\s]+(\d+)/i);

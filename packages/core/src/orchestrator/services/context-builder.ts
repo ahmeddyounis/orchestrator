@@ -1,19 +1,15 @@
 import {
-  RepoScanner,
   SearchService,
   SnippetExtractor,
   SimpleContextPacker,
   ContextSignal,
-  SemanticIndexStore,
-  SemanticSearchService,
 } from '@orchestrator/repo';
-import { createEmbedder } from '@orchestrator/adapters';
-import { Config } from '@orchestrator/shared';
-import { EventBus } from '../../registry';
-import { SimpleContextFuser, FusedContext } from '../../context';
-import { MemoryEntry } from '@orchestrator/memory';
+import type { Config } from '@orchestrator/shared';
+import type { EventBus } from '../../registry';
+import { SimpleContextFuser } from '../../context';
+import type { FusedContext } from '../../context';
+import type { MemoryEntry } from '@orchestrator/memory';
 import path from 'path';
-import * as fsSync from 'fs';
 import * as fs from 'fs/promises';
 
 export interface ContextBuildResult {
@@ -44,7 +40,7 @@ export class ContextBuilderService {
     artifactsRoot: string;
     stepsCompleted: number;
   }): Promise<ContextBuildResult> {
-    const { goal, step, touchedFiles, memoryHits, signals, eventBus, runId, artifactsRoot, stepsCompleted } = options;
+    const { goal, step, touchedFiles, memoryHits, signals, artifactsRoot, stepsCompleted } = options;
 
     let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
 

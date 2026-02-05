@@ -1,7 +1,5 @@
 import { PatchError, PatchErrorKind } from '@orchestrator/shared';
 import { collectHunkFailures, readFileContext } from '../patch_utils';
-import path from 'path';
-import * as fsSync from 'fs';
 
 /**
  * Check if a step should allow an empty diff as success (diagnostic steps)

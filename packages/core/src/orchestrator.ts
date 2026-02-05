@@ -2,8 +2,6 @@ import {
   Config,
   OrchestratorEvent,
   createRunDir,
-  MANIFEST_VERSION,
-  writeManifest,
   updateManifest,
   JsonlLogger,
   ToolPolicy,
@@ -11,7 +9,6 @@ import {
   RunSummary,
   SummaryWriter,
   ConfigError,
-  PatchError,
   redactObject,
 } from '@orchestrator/shared';
 import {
@@ -52,7 +49,6 @@ import * as fsSync from 'fs';
 import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
-import { ConfigLoader } from './config/loader';
 import { PluginLoader, LoadedPlugin } from './plugins/loader';
 import { SimpleContextFuser } from './context';
 import { CandidateGenerator, StepContext, Candidate } from './orchestrator/l3/candidate_generator';
@@ -64,7 +60,6 @@ import {
 import { Judge, JudgeContext, JudgeCandidate, JudgeVerification } from './judge';
 import { Diagnoser } from './orchestrator/l3/diagnoser';
 import { ProceduralMemoryImpl } from './orchestrator/procedural_memory';
-import { collectHunkFailures, readFileContext } from './orchestrator/patch_utils';
 import {
   RunInitializationService,
   ContextBuilderService,

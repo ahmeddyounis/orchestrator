@@ -280,7 +280,7 @@ export class VectorIndex {
 
     const results = heap.getResults();
     return results.map(({ index, distance }) => {
-      const { vector, ...rest } = this.chunks[index];
+      const { vector: _vector, ...rest } = this.chunks[index];
       return {
         ...rest,
         score: 1 - distance, // Convert distance back to similarity
@@ -342,6 +342,6 @@ export class VectorIndex {
 
     scored.sort((a, b) => b.score - a.score);
 
-    return scored.slice(0, topK).map(({ vector, ...rest }) => rest);
+    return scored.slice(0, topK).map(({ vector: _vector, ...rest }) => rest);
   }
 }

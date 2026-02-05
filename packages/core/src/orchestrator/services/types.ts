@@ -1,5 +1,5 @@
-import { Config, JsonlLogger, OrchestratorEvent } from '@orchestrator/shared';
-import { EventBus } from '../../registry';
+import type { Config, JsonlLogger } from '@orchestrator/shared';
+import type { EventBus } from '../../registry';
 
 /**
  * Artifacts created for a run

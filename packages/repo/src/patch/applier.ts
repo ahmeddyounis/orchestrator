@@ -20,12 +20,6 @@ type DiffLimits = {
   allowBinary: boolean;
 };
 
-type DiffStats = {
-  fileCount: number;
-  addedLines: number;
-  removedLines: number;
-};
-
 export class PatchApplier {
   /**
    * Applies a unified diff to the repository.
@@ -169,9 +163,6 @@ export class PatchApplier {
     allowBinary: boolean,
   ): { error?: PatchError; stats: { fileCount: number; addedLines: number; removedLines: number } } {
     const stats = { fileCount: 0, addedLines: 0, removedLines: 0 };
-    let hasAnyOldHeader = false;
-    let hasAnyNewHeader = false;
-    let hasAnyDiffGit = false;
 
     // Track whether we've seen valid file headers for the current file block.
     let currentHasOldHeader = false;
@@ -194,7 +185,6 @@ export class PatchApplier {
 
       // Handle "diff --git" lines
       if (line.startsWith('diff --git')) {
-        hasAnyDiffGit = true;
         const blockError = this.validatePreviousDiffGitBlock(
           currentDiffGitStartLine,
           currentDiffGitHasFileHeaders,
@@ -209,7 +199,6 @@ export class PatchApplier {
 
       // Handle "--- " headers
       if (line.startsWith('--- ')) {
-        hasAnyOldHeader = true;
         if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
         currentHasOldHeader = true;
         currentHasNewHeader = false;
@@ -219,7 +208,6 @@ export class PatchApplier {
 
       // Handle "+++ " headers
       if (line.startsWith('+++ ')) {
-        hasAnyNewHeader = true;
         if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
         
         if (!currentHasOldHeader) {
@@ -273,9 +261,6 @@ export class PatchApplier {
       currentHasNewHeader,
       currentDiffGitStartLine,
       currentDiffGitHasFileHeaders,
-      hasAnyOldHeader,
-      hasAnyNewHeader,
-      hasAnyDiffGit,
     );
     if (finalError) return { error: finalError, stats };
 
@@ -328,9 +313,6 @@ export class PatchApplier {
     currentHasNewHeader: boolean,
     currentDiffGitStartLine: number | undefined,
     currentDiffGitHasFileHeaders: boolean,
-    hasAnyOldHeader: boolean,
-    hasAnyNewHeader: boolean,
-    hasAnyDiffGit: boolean,
   ): PatchError | undefined {
     // Check for incomplete file header pair
     if (currentHasOldHeader && !currentHasNewHeader) {
