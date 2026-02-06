@@ -189,6 +189,27 @@ describe('createArtifactCrypto', () => {
     });
   });
 
+  describe('static-salt format round-trip sanity check', () => {
+    it('encrypts with legacy static-salt format and decrypts via current code', () => {
+      const LEGACY_SALT = Buffer.from('orchestrator-artifact-salt');
+      const plaintext = 'round-trip sanity check payload';
+      const data = Buffer.from(plaintext, 'utf8');
+
+      // Manually encrypt using the old static-salt format (no version byte)
+      const derivedKey = scryptSync(TEST_KEY, LEGACY_SALT, 32);
+      const iv = randomBytes(12);
+      const cipher = createCipheriv('aes-256-gcm', derivedKey, iv);
+      const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      const legacyCiphertext = Buffer.concat([iv, authTag, encrypted]);
+
+      // Decrypt using the current createArtifactCrypto which should detect legacy format
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const decrypted = crypto.decryptBuffer(legacyCiphertext);
+      expect(decrypted.toString('utf8')).toBe(plaintext);
+    });
+  });
+
   describe('corrupt / truncated ciphertext rejection', () => {
     it('rejects a buffer that is too short', () => {
       const crypto = createArtifactCrypto(TEST_KEY);
