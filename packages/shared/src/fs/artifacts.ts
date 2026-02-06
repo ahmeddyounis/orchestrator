@@ -80,11 +80,11 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
     return Buffer.concat([Buffer.from([FORMAT_VERSION]), salt, iv, authTag, encrypted]);
   };
 
-  /** Minimum byte length for v1 format: 1 (version) + SALT_LENGTH + IV + authTag + at least 1 byte of ciphertext */
-  const MIN_V1_LENGTH = 1 + SALT_LENGTH + ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
+  /** Minimum byte length for v1 format: 1 (version) + SALT_LENGTH + IV + authTag (+ optional ciphertext) */
+  const MIN_V1_LENGTH = 1 + SALT_LENGTH + ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH;
 
-  /** Minimum byte length for legacy format: IV + authTag + at least 1 byte of ciphertext */
-  const MIN_LEGACY_LENGTH = ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
+  /** Minimum byte length for legacy format: IV + authTag (+ optional ciphertext) */
+  const MIN_LEGACY_LENGTH = ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH;
 
   const decryptBuffer = (data: Buffer): Buffer => {
     if (data.length < MIN_LEGACY_LENGTH) {
