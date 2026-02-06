@@ -303,8 +303,14 @@ export class PlanService {
     }
 
     const systemPrompt = `You are an expert software architecture planner.
-Your goal is to break down a high-level user goal into a sequence of clear, actionable steps.
+Your goal is to break down a high-level user goal into a sequence of clear, actionable implementation steps.
 Return ONLY a JSON object with a "steps" property containing an array of strings.
+
+Quality bar:
+- Steps must be specific enough that an engineer can implement each one without needing extra context.
+- Prefer concrete targets when possible (file/module/component names, API names, selectors, config keys).
+- Avoid vague steps like "handle edge cases" unless you name the edge cases and what to change.
+- Avoid pronouns ("it/this/that"); each step should be self-contained.
 
 Critical formatting rules:
 - Do NOT include section headers/categories as steps.
@@ -598,6 +604,13 @@ Rules:
     const expandSystemPrompt = `You are an expert software architecture planner.
 Your goal is to break down a single plan step into smaller, sequential, actionable substeps.
 Return ONLY a JSON object with a "steps" property containing an array of strings.
+
+Quality bar:
+- Substeps must retain the parent intent (do not lose key nouns from the ancestor chain).
+- Each substep must be self-contained (avoid pronouns like "it/this/that").
+- Prefer concrete targets when possible (file/module/component names, API names, config keys).
+- If you cannot name a target, write the substep so it is still actionable (e.g., "Locate X by searching for Y, then update Z").
+- Do not add generic meta-steps like "understand the codebase" or "review requirements".
 
 Critical formatting rules:
 - Do NOT include section headers/categories as steps.

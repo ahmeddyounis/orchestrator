@@ -882,6 +882,52 @@ END_DIFF
     return result;
   }
 
+  private async readPlanExecutionSteps(
+    artifactsRoot: string,
+    fallbackSteps: string[],
+  ): Promise<Array<{ id?: string; step: string; ancestors: string[] }>> {
+    const planPath = path.join(artifactsRoot, 'plan.json');
+    try {
+      const raw = await fs.readFile(planPath, 'utf8');
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('plan.json is not an object');
+      }
+
+      const record = parsed as Record<string, unknown>;
+      const execution = record.execution;
+      if (Array.isArray(execution)) {
+        const result: Array<{ id?: string; step: string; ancestors: string[] }> = [];
+        for (const entry of execution) {
+          if (!entry || typeof entry !== 'object') continue;
+          const step = (entry as Record<string, unknown>).step;
+          if (typeof step !== 'string' || step.trim().length === 0) continue;
+
+          const id = (entry as Record<string, unknown>).id;
+          const ancestorsRaw = (entry as Record<string, unknown>).ancestors;
+          const ancestors = Array.isArray(ancestorsRaw)
+            ? ancestorsRaw.map(String).map((s) => s.trim()).filter(Boolean)
+            : [];
+
+          result.push({
+            id: typeof id === 'string' && id.trim().length > 0 ? id : undefined,
+            step: step.trim(),
+            ancestors,
+          });
+        }
+        if (result.length > 0) return result;
+      }
+    } catch {
+      // ignore and fall back
+    }
+
+    return fallbackSteps.map((step, i) => ({
+      id: String(i + 1),
+      step,
+      ancestors: [],
+    }));
+  }
+
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
     const runContext = await this.initService.initializeRun(runId, goal);
@@ -962,6 +1008,8 @@ END_DIFF
 
       return runResult;
     }
+
+    const executionSteps = await this.readPlanExecutionSteps(artifacts.root, steps);
 
     const executionService = new ExecutionService(
       eventBus,
@@ -1072,8 +1120,13 @@ END_DIFF
     const maxStepAttempts = this.config.execution?.maxStepAttempts ?? 6;
     const continueOnStepFailure = this.config.execution?.continueOnStepFailure ?? false;
 
-    for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
-      const step = steps[stepIndex];
+    for (let stepIndex = 0; stepIndex < executionSteps.length; stepIndex++) {
+      const { step, ancestors, id: stepId } = executionSteps[stepIndex];
+      const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
+      const memoryQuery = [goal, ...ancestors, step]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(' ');
       // 1. Budget Checks
       const elapsed = Date.now() - startTime;
       if (budget.time !== undefined && elapsed > budget.time) {
@@ -1094,7 +1147,7 @@ END_DIFF
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
-        payload: { step, index: stepIndex, total: steps.length },
+        payload: { step, index: stepIndex, total: executionSteps.length },
       });
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
@@ -1120,7 +1173,7 @@ END_DIFF
           runId,
           () =>
             searchService.search({
-              query: step,
+              query: contextQuery,
               cwd: this.repoRoot,
               maxMatchesPerFile: 5,
             }),
@@ -1170,7 +1223,7 @@ END_DIFF
                 'semantic_search',
                 eventBus,
                 runId,
-                () => semanticSearchService.search(step, topK, runId),
+                () => semanticSearchService.search(contextQuery, topK, runId),
                 (h) => ({ hitCount: h.length }),
               );
 
@@ -1250,7 +1303,7 @@ END_DIFF
           eventBus,
           runId,
           () =>
-            packer.pack(step, [], candidates, {
+            packer.pack(contextQuery, [], candidates, {
               tokenBudget: this.config.context?.tokenBudget || 8000,
             }),
           (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
@@ -1262,7 +1315,7 @@ END_DIFF
       // Memory Search
       const memoryHits = await this.searchMemoryHits(
         {
-          query: `${goal} ${step}`,
+          query: memoryQuery,
           runId,
           stepId: stepIndex,
           artifactsRoot: artifacts.root,
@@ -1281,8 +1334,16 @@ END_DIFF
       // TODO: Plumb real signals
       const signals: ContextSignal[] = [];
 
+      const planContextLines: string[] = [`Goal: ${goal}`];
+      if (stepId) planContextLines.push(`Plan Step ID: ${stepId}`);
+      if (ancestors.length > 0) {
+        planContextLines.push('Plan Ancestors (outer → inner):');
+        for (const a of ancestors) planContextLines.push(`- ${a}`);
+      }
+      planContextLines.push(`Current Step (leaf): ${step}`);
+
       const fusedContext = fuser.fuse({
-        goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+        goal: planContextLines.join('\n'),
         repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
@@ -1316,14 +1377,20 @@ END_DIFF
 
         let systemPrompt = `You are an expert software engineer.
 Your task is to implement the current step: "${step}"
-Part of the overall goal: "${goal}"
+This step is a LEAF step from a hierarchical plan.
+
+OVERALL GOAL:
+"${goal}"
+
+PLAN CONTEXT:
+${stepId ? `- Step ID: ${stepId}\n` : ''}${ancestors.length > 0 ? `- Ancestors (outer → inner):\n${ancestors.map((a) => `  - ${a}`).join('\n')}\n` : ''}- Current leaf step: "${step}"
 
 CONTEXT:
 ${contextText}
 
 INSTRUCTIONS:
-1. Analyze the context and the step.
-2. Produce a unified diff that implements the changes for THIS STEP ONLY.
+1. Use the ancestor chain to disambiguate the leaf step and keep scope aligned.
+2. Produce a unified diff that implements the changes for THIS LEAF STEP ONLY (do not try to complete the whole ancestor plan in one patch).
 3. Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 4. Do not include any explanations outside the markers.
 5. The diff must be valid for \`git apply\`: every file MUST have a \`diff --git\` header and \`---\`/\`+++\` headers before any \`@@\` hunks.
@@ -1463,7 +1530,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
       return finish(
         'failure',
         failedSteps.some((f) => f.stopReason === 'invalid_output') ? 'invalid_output' : 'repeated_failure',
-        `L1 Plan completed with failures. Succeeded: ${stepsSucceeded}/${steps.length}. Failed: ${failedSteps.length}.\n${summaryLines}`,
+        `L1 Plan completed with failures. Succeeded: ${stepsSucceeded}/${executionSteps.length}. Failed: ${failedSteps.length}.\n${summaryLines}`,
       );
     }
 
@@ -2231,6 +2298,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       return runResult;
     }
 
+    const executionSteps = await this.readPlanExecutionSteps(artifacts.root, steps);
+
     const executionService = new ExecutionService(
       eventBus,
       this.git,
@@ -2400,7 +2469,13 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       return runResult;
     };
 
-    for (const step of steps) {
+    for (const execStep of executionSteps) {
+      const { step, ancestors, id: stepId } = execStep;
+      const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
+      const memoryQuery = [goal, ...ancestors, step]
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join(' ');
       const elapsed = Date.now() - startTime;
       if (budget.time !== undefined && elapsed > budget.time) {
         return finish('failure', 'budget_exceeded', `Time budget exceeded (${budget.time}ms)`);
@@ -2420,14 +2495,14 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
         runId,
-        payload: { step, index: stepsCompleted, total: steps.length },
+        payload: { step, index: stepsCompleted, total: executionSteps.length },
       });
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
         const searchService = new SearchService(this.config.context?.rgPath);
         const searchResults = await searchService.search({
-          query: step,
+          query: contextQuery,
           cwd: this.repoRoot,
           maxMatchesPerFile: 5,
         });
@@ -2465,7 +2540,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
 
         const packer = new SimpleContextPacker();
-        contextPack = packer.pack(step, [], candidates, {
+        contextPack = packer.pack(contextQuery, [], candidates, {
           tokenBudget: this.config.context?.tokenBudget || 8000,
         });
       } catch {
@@ -2474,7 +2549,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
       const memoryHits = await this.searchMemoryHits(
         {
-          query: `${goal} ${step}`,
+          query: memoryQuery,
           runId,
           stepId: stepsCompleted,
           artifactsRoot: artifacts.root,
@@ -2484,8 +2559,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       );
 
       const fuser = new SimpleContextFuser(this.config.security);
+      const planContextLines: string[] = [`Goal: ${goal}`];
+      if (stepId) planContextLines.push(`Plan Step ID: ${stepId}`);
+      if (ancestors.length > 0) {
+        planContextLines.push('Plan Ancestors (outer → inner):');
+        for (const a of ancestors) planContextLines.push(`- ${a}`);
+      }
+      planContextLines.push(`Current Step (leaf): ${step}`);
+      const planContextText = planContextLines.join('\n');
+
       let fusedContext = fuser.fuse({
-        goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+        goal: planContextText,
         repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
@@ -2519,6 +2603,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         runId,
         goal,
         step,
+        stepId,
+        ancestors,
         stepIndex: stepsCompleted,
         fusedContext,
         eventBus,
@@ -2787,7 +2873,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
               // Re-fuse context with new signal
               fusedContext = fuser.fuse({
-                goal: `Goal: ${goal}\nCurrent Step: ${step}`,
+                goal: planContextText,
                 repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
                 memoryHits,
                 signals,

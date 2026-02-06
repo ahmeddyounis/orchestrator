@@ -15,6 +15,8 @@ export interface StepContext {
   runId: string;
   goal: string;
   step: string;
+  stepId?: string;
+  ancestors?: string[];
   stepIndex: number;
   fusedContext: FusedContext;
   eventBus: EventBus;
@@ -81,6 +83,8 @@ export class CandidateGenerator {
       runId,
       goal,
       step,
+      stepId,
+      ancestors: ancestorsRaw,
       fusedContext,
       executor,
       eventBus,
@@ -90,21 +94,30 @@ export class CandidateGenerator {
       costTracker,
     } = stepContext;
 
+    const ancestors = ancestorsRaw ?? [];
+
     const manifestPath = path.join(artifactsRoot, 'manifest.json');
     const patchStore = new PatchStore(path.join(artifactsRoot, 'patches'), manifestPath);
 
     const systemPrompt = `You are an expert software engineer.
 Your task is to implement the current step: "${step}"
-Part of the overall goal: "${goal}"
+This step is a LEAF step from a hierarchical plan.
+
+OVERALL GOAL:
+"${goal}"
+
+PLAN CONTEXT:
+${stepId ? `- Step ID: ${stepId}\n` : ''}${ancestors.length > 0 ? `- Ancestors (outer → inner):\n${ancestors.map((a) => `  - ${a}`).join('\n')}\n` : ''}- Current leaf step: "${step}"
 
 CONTEXT:
 ${fusedContext.prompt}
 
 INSTRUCTIONS:
-1. Analyze the context and the step.
-2. Produce a unified diff that implements the changes for THIS STEP ONLY.
+1. Use the ancestor chain to disambiguate the leaf step and keep scope aligned.
+2. Produce a unified diff that implements the changes for THIS LEAF STEP ONLY (do not try to complete the whole ancestor plan in one patch).
 3. Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 4. Do not include any explanations outside the markers.
+5. The diff must be valid for \`git apply\`: every file MUST have a \`diff --git\` header and \`---\`/\`+++\` headers before any \`@@\` hunks.
 `;
 
     for (let i = 0; i < n; i++) {
