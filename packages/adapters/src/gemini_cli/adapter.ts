@@ -163,7 +163,7 @@ index 1234567..89abcdef 100644
   }
 }
 
-function parseGeminiCliJson(text: string): GeminiCliJson | null {
+export function parseGeminiCliJson(text: string): GeminiCliJson | null {
   const firstBrace = text.indexOf('{');
   const lastBrace = text.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
@@ -172,12 +172,13 @@ function parseGeminiCliJson(text: string): GeminiCliJson | null {
 
   try {
     return JSON.parse(text.slice(firstBrace, lastBrace + 1)) as GeminiCliJson;
-  } catch {
+  } catch (err) {
+    console.debug('[GeminiCliAdapter] Failed to parse JSON from output:', err, 'slice:', text.slice(firstBrace, Math.min(firstBrace + 200, lastBrace + 1)));
     return null;
   }
 }
 
-function extractUsageFromStats(
+export function extractUsageFromStats(
   stats: unknown,
 ): { inputTokens: number; outputTokens: number; totalTokens?: number } | undefined {
   if (!stats || typeof stats !== 'object') return undefined;
