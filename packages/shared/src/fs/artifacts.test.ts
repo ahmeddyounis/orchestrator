@@ -208,6 +208,19 @@ describe('createArtifactCrypto', () => {
       const decrypted = crypto.decryptBuffer(legacyCiphertext);
       expect(decrypted.toString('utf8')).toBe(plaintext);
     });
+
+    it('two encryptions of the same plaintext produce different ciphertexts', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const plaintext = 'identical input for uniqueness check';
+      const ciphertext1 = crypto.encrypt(plaintext);
+      const ciphertext2 = crypto.encrypt(plaintext);
+
+      // Both must decrypt back to the original
+      expect(crypto.decrypt(ciphertext1)).toBe(plaintext);
+      expect(crypto.decrypt(ciphertext2)).toBe(plaintext);
+      // Ciphertexts must differ due to random IV/salt per encryption
+      expect(ciphertext1).not.toBe(ciphertext2);
+    });
   });
 
   describe('corrupt / truncated ciphertext rejection', () => {
