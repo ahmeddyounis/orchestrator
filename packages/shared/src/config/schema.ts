@@ -90,6 +90,8 @@ export const ProviderConfigSchema = z
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
     env: z.array(z.string()).optional(),
+    /** Spawn the subprocess inside a pty (pseudo-terminal). Used by gemini_cli and claude_code adapters. */
+    pty: z.boolean().optional(),
     cwdMode: z.enum(['repoRoot', 'runDir']).optional(),
     timeoutMs: z.number().optional(),
     pricing: z
