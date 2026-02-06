@@ -39,8 +39,13 @@ const ARTIFACT_ALGORITHM = 'aes-256-gcm';
 const ARTIFACT_IV_LENGTH = 12;
 const ARTIFACT_AUTH_TAG_LENGTH = 16;
 const ARTIFACT_KEY_LENGTH = 32;
-const ARTIFACT_SALT = Buffer.from('orchestrator-artifact-salt');
 const ENCRYPTED_EXTENSION = '.enc';
+
+/** Version byte prepended to encrypted payloads for format detection. */
+const FORMAT_VERSION = 0x01;
+
+/** Length in bytes for the random per-encryption salt used in key derivation. */
+const SALT_LENGTH = 16;
 
 /**
  * Artifact encryption utilities for securing run artifacts
