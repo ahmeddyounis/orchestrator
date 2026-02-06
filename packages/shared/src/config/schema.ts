@@ -148,7 +148,7 @@ export const ToolPolicySchema = z.object({
   envAllowlist: z.array(z.string()).default([]),
   allowShell: z.boolean().default(false),
   timeoutMs: z.number().default(600_000),
-  maxOutputBytes: z.number().default(1_024_1024),
+  maxOutputBytes: z.number().default(1_048_576),
   autoApprove: z.boolean().default(false),
   interactive: z.boolean().default(true),
   toolTimeouts: ToolTimeoutsConfigSchema,
