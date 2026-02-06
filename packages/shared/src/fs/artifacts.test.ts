@@ -101,6 +101,11 @@ describe('createArtifactCrypto', () => {
     expect(() => createArtifactCrypto('')).toThrow('Artifact encryption key is required');
   });
 
+  it('throws an Error instance with the correct message for empty string key', () => {
+    expect(() => createArtifactCrypto('')).toThrow(Error);
+    expect(() => createArtifactCrypto('')).toThrow('Artifact encryption key is required');
+  });
+
   describe('new format (v1) round-trip', () => {
     it('encryptBuffer / decryptBuffer round-trips binary data', () => {
       const crypto = createArtifactCrypto(TEST_KEY);
