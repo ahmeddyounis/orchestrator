@@ -59,27 +59,39 @@ export interface ArtifactCrypto {
 
 /**
  * Creates an artifact encryption instance using AES-256-GCM
- * @param key Encryption key (will be derived using scrypt)
+ * @param key Encryption key (derived per-encryption via scrypt with a random salt)
  */
 export function createArtifactCrypto(key: string): ArtifactCrypto {
   if (!key) {
     throw new Error('Artifact encryption key is required');
   }
 
-  const derivedKey = scryptSync(key, ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
-
   const encryptBuffer = (data: Buffer): Buffer => {
+    const salt = randomBytes(SALT_LENGTH);
+    const derivedKey = scryptSync(key, salt, ARTIFACT_KEY_LENGTH);
     const iv = randomBytes(ARTIFACT_IV_LENGTH);
     const cipher = createCipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
     const authTag = cipher.getAuthTag();
-    return Buffer.concat([iv, authTag, encrypted]);
+    // Layout: [FORMAT_VERSION (1 byte), salt, iv, authTag, ciphertext]
+    return Buffer.concat([Buffer.from([FORMAT_VERSION]), salt, iv, authTag, encrypted]);
   };
 
   const decryptBuffer = (data: Buffer): Buffer => {
-    const iv = data.subarray(0, ARTIFACT_IV_LENGTH);
-    const authTag = data.subarray(ARTIFACT_IV_LENGTH, ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
-    const encrypted = data.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+    let offset = 0;
+    const version = data[offset];
+    offset += 1;
+    if (version !== FORMAT_VERSION) {
+      throw new Error(`Unsupported artifact format version: ${version}`);
+    }
+    const salt = data.subarray(offset, offset + SALT_LENGTH);
+    offset += SALT_LENGTH;
+    const iv = data.subarray(offset, offset + ARTIFACT_IV_LENGTH);
+    offset += ARTIFACT_IV_LENGTH;
+    const authTag = data.subarray(offset, offset + ARTIFACT_AUTH_TAG_LENGTH);
+    offset += ARTIFACT_AUTH_TAG_LENGTH;
+    const encrypted = data.subarray(offset);
+    const derivedKey = scryptSync(key, salt, ARTIFACT_KEY_LENGTH);
     const decipher = createDecipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
     decipher.setAuthTag(authTag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]);
