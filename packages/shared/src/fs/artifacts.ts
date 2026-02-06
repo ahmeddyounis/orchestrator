@@ -47,6 +47,9 @@ const FORMAT_VERSION = 0x01;
 /** Length in bytes for the random per-encryption salt used in key derivation. */
 const SALT_LENGTH = 16;
 
+/** Static salt used in the legacy encryption format (pre-v1) for backward compatibility. */
+const LEGACY_ARTIFACT_SALT = Buffer.from('orchestrator-artifact-salt');
+
 /**
  * Artifact encryption utilities for securing run artifacts
  */
@@ -77,19 +80,37 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
     return Buffer.concat([Buffer.from([FORMAT_VERSION]), salt, iv, authTag, encrypted]);
   };
 
-  /** Minimum byte length: 1 (version) + SALT_LENGTH + IV + authTag + at least 1 byte of ciphertext */
-  const MIN_ENCRYPTED_LENGTH = 1 + SALT_LENGTH + ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
+  /** Minimum byte length for v1 format: 1 (version) + SALT_LENGTH + IV + authTag + at least 1 byte of ciphertext */
+  const MIN_V1_LENGTH = 1 + SALT_LENGTH + ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
+
+  /** Minimum byte length for legacy format: IV + authTag + at least 1 byte of ciphertext */
+  const MIN_LEGACY_LENGTH = ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
 
   const decryptBuffer = (data: Buffer): Buffer => {
-    if (data.length < MIN_ENCRYPTED_LENGTH) {
-      throw new Error(`Encrypted artifact buffer too short (${data.length} bytes, minimum ${MIN_ENCRYPTED_LENGTH})`);
+    if (data.length < MIN_LEGACY_LENGTH) {
+      throw new Error(`Encrypted artifact buffer too short (${data.length} bytes, minimum ${MIN_LEGACY_LENGTH})`);
     }
-    let offset = 0;
-    const version = data[offset];
-    offset += 1;
+
+    // Detect legacy format: no version byte prefix, buffer starts directly with IV.
+    // Legacy layout: [iv (12 bytes), authTag (16 bytes), ciphertext]
+    // New v1 layout: [FORMAT_VERSION (1 byte), salt (16 bytes), iv, authTag, ciphertext]
+    const version = data[0];
     if (version !== FORMAT_VERSION) {
-      throw new Error(`Unsupported artifact format version: ${version}`);
+      // Legacy format – derive key using the old static salt
+      const legacyKey = scryptSync(key, LEGACY_ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
+      const iv = data.subarray(0, ARTIFACT_IV_LENGTH);
+      const authTag = data.subarray(ARTIFACT_IV_LENGTH, ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+      const encrypted = data.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+      const decipher = createDecipheriv(ARTIFACT_ALGORITHM, legacyKey, iv);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(encrypted), decipher.final()]);
     }
+
+    // V1 format
+    if (data.length < MIN_V1_LENGTH) {
+      throw new Error(`Encrypted artifact buffer too short for v1 format (${data.length} bytes, minimum ${MIN_V1_LENGTH})`);
+    }
+    let offset = 1; // skip version byte
     const salt = data.subarray(offset, offset + SALT_LENGTH);
     offset += SALT_LENGTH;
     const iv = data.subarray(offset, offset + ARTIFACT_IV_LENGTH);
