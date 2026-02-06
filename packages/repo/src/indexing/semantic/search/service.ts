@@ -5,6 +5,14 @@ import { SemanticHit } from './types';
 import { VectorIndex } from './vector-index';
 import type { Chunk } from '../store/types';
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export interface SemanticSearchServiceOptions {
   store: SemanticIndexStore;
   embedder: Embedder;
