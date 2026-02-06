@@ -346,6 +346,7 @@ export class SafeCommandRunner {
       });
 
       child.on('close', (code) => {
+        if (settled) return;
         settled = true;
         clearTimeout(timeoutTimer);
         stdoutStream.end();
