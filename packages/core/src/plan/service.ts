@@ -1,4 +1,4 @@
-import { ModelRequest, Config, ProviderError, extractJsonObject } from '@orchestrator/shared';
+import { ModelRequest, Config, ProviderError, extractJsonObject, logger } from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
   RepoScanner,
