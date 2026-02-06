@@ -11,7 +11,7 @@ import { ConfigError } from '../errors';
  * Extended config options for GeminiCli provider.
  * These are passed through ProviderConfigSchema.passthrough().
  */
-interface GeminiCliConfig extends ProviderConfig {
+export interface GeminiCliConfig extends ProviderConfig {
   pty?: boolean;
 }
 
