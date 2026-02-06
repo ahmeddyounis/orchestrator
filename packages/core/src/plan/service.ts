@@ -308,7 +308,7 @@ export class PlanService {
       await fs.writeFile(path.join(artifactsDir, 'context_pack.txt'), readableReport);
     } catch (err) {
       // Don't fail planning if context fails, just log it
-      console.error('Context generation failed:', err);
+      logger.error('Context generation failed', { error: err });
       // But maybe we should write an error report?
     }
 
