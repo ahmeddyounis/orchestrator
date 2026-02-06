@@ -7,16 +7,24 @@ import { ProviderConfig, ModelRequest, ModelResponse, ProviderCapabilities } fro
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
+/**
+ * Extended config options for GeminiCli provider.
+ * These are passed through ProviderConfigSchema.passthrough().
+ */
+interface GeminiCliConfig extends ProviderConfig {
+  pty?: boolean;
+}
+
 type GeminiCliJson = {
   response?: unknown;
   stats?: unknown;
 };
 
 export class GeminiCliAdapter extends SubprocessProviderAdapter {
-  constructor(config: ProviderConfig) {
+  constructor(config: GeminiCliConfig) {
     const command = config.command ? [config.command] : ['gemini'];
     const args = config.args || [];
-    const pty = (config as unknown as { pty?: boolean }).pty ?? false;
+    const pty = config.pty ?? false;
     const timeoutMs = config.timeoutMs;
 
     // We manage these flags to keep the subprocess output machine-parseable.
