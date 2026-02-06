@@ -58,7 +58,11 @@ export class SemanticSearchService {
   async search(query: string, topK: number, runId: string): Promise<SemanticHit[]> {
     const startTime = Date.now();
 
-    const queryVectors = await this.embedder.embedTexts([query], { normalize: true });
+    const queryVectors = await withTimeout(
+      this.embedder.embedTexts([query], { normalize: true }),
+      EMBED_TIMEOUT_MS,
+      'embedTexts',
+    );
     if (queryVectors.length === 0) return [];
     const queryVector = new Float32Array(queryVectors[0]);
 
