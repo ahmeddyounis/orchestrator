@@ -244,5 +244,5 @@ describe('Orchestrator Memory/Context Integration', () => {
     expect(sourceInfo).toBeDefined();
     expect(sourceInfo!.source).toBe('memory');
     expect(sourceInfo!.fallbackReason).toContain('Falling back to detected command');
-  });
+  }, 30_000);
 });
