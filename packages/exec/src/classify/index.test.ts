@@ -173,6 +173,31 @@ describe('matchesDenylist', () => {
     expect(elapsed).toBeLessThan(1000); // must finish well under 1 second
     expect(typeof result).toBe('boolean');
   });
+
+  describe('handles patterns that would be invalid regex without escaping', () => {
+    it('unclosed bracket "[abc" matches literally', () => {
+      expect(matchesDenylist('[abc run', ['[abc'])).toBe(true);
+    });
+    it('unclosed bracket "[abc" does not match "a"', () => {
+      // Without escaping, /[abc/ would throw; raw char-class would match "a"
+      expect(matchesDenylist('a run', ['[abc'])).toBe(false);
+    });
+    it('unclosed paren "(foo" matches literally', () => {
+      expect(matchesDenylist('(foo run', ['(foo'])).toBe(true);
+    });
+    it('unclosed paren "(foo" does not match "foo"', () => {
+      expect(matchesDenylist('foo run', ['(foo'])).toBe(false);
+    });
+    it('trailing backslash "foo\\" matches literally', () => {
+      expect(matchesDenylist('foo\\ run', ['foo\\'])).toBe(true);
+    });
+    it('unmatched curly "x{" matches literally', () => {
+      expect(matchesDenylist('x{ run', ['x{'])).toBe(true);
+    });
+    it('mixed invalid regex "([" matches literally', () => {
+      expect(matchesDenylist('([ run', ['(['])).toBe(true);
+    });
+  });
 });
 
 describe('matchesAllowlist', () => {
