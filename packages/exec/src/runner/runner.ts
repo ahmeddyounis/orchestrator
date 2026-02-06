@@ -256,6 +256,7 @@ export class SafeCommandRunner {
     let timeoutTimer: NodeJS.Timeout;
 
     return new Promise<ToolRunResult>((resolve, reject) => {
+      let settled = false;
       const child = spawn(bin, args, {
         cwd: req.cwd,
         env,
@@ -326,6 +327,7 @@ export class SafeCommandRunner {
       });
 
       child.on('error', (err) => {
+        settled = true;
         clearTimeout(timeoutTimer);
         stdoutStream.end();
         stderrStream.end();
@@ -333,6 +335,7 @@ export class SafeCommandRunner {
       });
 
       child.on('close', (code) => {
+        settled = true;
         clearTimeout(timeoutTimer);
         stdoutStream.end();
         stderrStream.end();
