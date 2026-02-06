@@ -77,7 +77,13 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
     return Buffer.concat([Buffer.from([FORMAT_VERSION]), salt, iv, authTag, encrypted]);
   };
 
+  /** Minimum byte length: 1 (version) + SALT_LENGTH + IV + authTag + at least 1 byte of ciphertext */
+  const MIN_ENCRYPTED_LENGTH = 1 + SALT_LENGTH + ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH + 1;
+
   const decryptBuffer = (data: Buffer): Buffer => {
+    if (data.length < MIN_ENCRYPTED_LENGTH) {
+      throw new Error(`Encrypted artifact buffer too short (${data.length} bytes, minimum ${MIN_ENCRYPTED_LENGTH})`);
+    }
     let offset = 0;
     const version = data[offset];
     offset += 1;
