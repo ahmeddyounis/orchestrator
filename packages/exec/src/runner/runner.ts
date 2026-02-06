@@ -267,18 +267,20 @@ export class SafeCommandRunner {
 
       // Timeout handling
       timeoutTimer = setTimeout(() => {
-        if (child.pid) {
-          killProcessTree(child.pid, 'SIGTERM');
+        if (!settled) {
+          if (child.pid) {
+            killProcessTree(child.pid, 'SIGTERM');
+          }
+
+          const partialStdout = fs.readFileSync(stdoutPath, 'utf8').slice(0, 1000);
+          const partialStderr = fs.readFileSync(stderrPath, 'utf8').slice(0, 1000);
+
+          reject(
+            new ToolError(`Command timed out after ${policy.timeoutMs}ms`, {
+              details: { partialStdout, partialStderr },
+            }),
+          );
         }
-
-        const partialStdout = fs.readFileSync(stdoutPath, 'utf8').slice(0, 1000);
-        const partialStderr = fs.readFileSync(stderrPath, 'utf8').slice(0, 1000);
-
-        reject(
-          new ToolError(`Command timed out after ${policy.timeoutMs}ms`, {
-            details: { partialStdout, partialStderr },
-          }),
-        );
       }, policy.timeoutMs);
 
       // Output handling
