@@ -385,8 +385,8 @@ export class ProcessManager extends EventEmitter {
     if (this.isPty && this.ptyProcess) {
       try {
         this.ptyProcess.kill(signal);
-        // Logger.debug() used intentionally: low-severity, no structured event needed
       } catch (err) {
+        // debug-level intentional: low-severity, no structured event needed
         this.logger?.debug(
           `PTY kill (signal=${signal}, pid=${this.pid}) failed: ${err instanceof Error ? err.message : String(err)}`,
         );
