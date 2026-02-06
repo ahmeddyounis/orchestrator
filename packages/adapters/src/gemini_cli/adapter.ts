@@ -22,6 +22,10 @@ type GeminiCliJson = {
 
 export class GeminiCliAdapter extends SubprocessProviderAdapter {
   constructor(config: GeminiCliConfig) {
+    if (!config.model) {
+      throw new ConfigError('GeminiCli provider requires a model to be specified in config.model.');
+    }
+
     const command = config.command ? [config.command] : ['gemini'];
     const args = config.args || [];
     const pty = config.pty ?? false;
