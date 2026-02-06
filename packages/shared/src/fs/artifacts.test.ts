@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
+import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { join } from './path';
 import * as os from 'os';
 import {
@@ -8,6 +9,7 @@ import {
   writeManifest,
   Manifest,
   MANIFEST_VERSION,
+  createArtifactCrypto,
 } from './artifacts';
 
 describe('artifacts', () => {
@@ -88,3 +90,126 @@ describe('artifacts', () => {
     expect(parsed).toEqual(manifest);
   });
 });
+
+describe('createArtifactCrypto', () => {
+  const TEST_KEY = 'test-encryption-key-for-unit-tests';
+
+  it('throws if key is empty', () => {
+    expect(() => createArtifactCrypto('')).toThrow('Artifact encryption key is required');
+  });
+
+  describe('new format (v1) round-trip', () => {
+    it('encryptBuffer / decryptBuffer round-trips binary data', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const original = Buffer.from('hello, encrypted world!');
+      const encrypted = crypto.encryptBuffer(original);
+      const decrypted = crypto.decryptBuffer(encrypted);
+      expect(decrypted).toEqual(original);
+    });
+
+    it('encrypt / decrypt round-trips a UTF-8 string', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const plaintext = 'The quick brown fox jumps over the lazy dog 🦊';
+      const ciphertext = crypto.encrypt(plaintext);
+      expect(crypto.decrypt(ciphertext)).toBe(plaintext);
+    });
+
+    it('produces different ciphertext for the same input (random salt+iv)', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const data = Buffer.from('determinism check');
+      const a = crypto.encryptBuffer(data);
+      const b = crypto.encryptBuffer(data);
+      // Both decrypt to the same plaintext
+      expect(crypto.decryptBuffer(a)).toEqual(data);
+      expect(crypto.decryptBuffer(b)).toEqual(data);
+      // But their ciphertext differs (different random salt + IV)
+      expect(a.equals(b)).toBe(false);
+    });
+
+    it('encrypted buffer starts with version byte 0x01', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const encrypted = crypto.encryptBuffer(Buffer.from('version check'));
+      expect(encrypted[0]).toBe(0x01);
+    });
+
+    it('decryption with the wrong key fails', () => {
+      const crypto1 = createArtifactCrypto(TEST_KEY);
+      const crypto2 = createArtifactCrypto('different-key');
+      const encrypted = crypto1.encryptBuffer(Buffer.from('secret'));
+      expect(() => crypto2.decryptBuffer(encrypted)).toThrow();
+    });
+
+    it('round-trips empty buffer', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const original = Buffer.alloc(0);
+      const encrypted = crypto.encryptBuffer(original);
+      const decrypted = crypto.decryptBuffer(encrypted);
+      expect(decrypted).toEqual(original);
+    });
+  });
+
+  describe('legacy format backward compatibility', () => {
+    /**
+     * Produces a buffer in the legacy format (pre-v1):
+     *   [iv (12 bytes), authTag (16 bytes), ciphertext]
+     * Key derivation uses the static salt 'orchestrator-artifact-salt'.
+     */
+    function encryptLegacy(key: string, data: Buffer): Buffer {
+      const LEGACY_SALT = Buffer.from('orchestrator-artifact-salt');
+      const derivedKey = scryptSync(key, LEGACY_SALT, 32);
+      const iv = randomBytes(12);
+      const cipher = createCipheriv('aes-256-gcm', derivedKey, iv);
+      const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      return Buffer.concat([iv, authTag, encrypted]);
+    }
+
+    it('decrypts a legacy-format buffer', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const original = Buffer.from('legacy payload');
+      const legacyBuf = encryptLegacy(TEST_KEY, original);
+      const decrypted = crypto.decryptBuffer(legacyBuf);
+      expect(decrypted).toEqual(original);
+    });
+
+    it('decrypts a legacy-format string via decrypt()', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const plaintext = 'legacy string content';
+      const legacyBuf = encryptLegacy(TEST_KEY, Buffer.from(plaintext, 'utf8'));
+      const ciphertext = legacyBuf.toString('base64');
+      expect(crypto.decrypt(ciphertext)).toBe(plaintext);
+    });
+
+    it('legacy-format decryption works regardless of first byte value', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const original = Buffer.from('compat check');
+      const legacyBuf = encryptLegacy(TEST_KEY, original);
+      const decrypted = crypto.decryptBuffer(legacyBuf);
+      expect(decrypted).toEqual(original);
+    });
+  });
+
+  describe('corrupt / truncated ciphertext rejection', () => {
+    it('rejects a buffer that is too short', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const tooShort = Buffer.alloc(10); // less than IV + authTag + 1
+      expect(() => crypto.decryptBuffer(tooShort)).toThrow(/too short/);
+    });
+
+    it('rejects a v1-format buffer that is truncated after the version byte', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const encrypted = crypto.encryptBuffer(Buffer.from('test'));
+      // Truncate to just version + partial salt (less than MIN_V1_LENGTH)
+      const truncated = encrypted.subarray(0, 20);
+      expect(() => crypto.decryptBuffer(truncated)).toThrow();
+    });
+
+    it('rejects ciphertext with a flipped bit in the auth tag', () => {
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const encrypted = crypto.encryptBuffer(Buffer.from('tamper test'));
+      // v1 layout: [version(1), salt(16), iv(12), authTag(16), ciphertext]
+      // authTag starts at offset 1 + 16 + 12 = 29
+      const corrupted = Buffer.from(encrypted);
+      corrupted[29] ^= 0xff; // flip bits in first byte of authTag
+      expect(() => crypto.decryptBuffer(corrupted)).toThrow();
+    });
