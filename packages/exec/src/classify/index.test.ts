@@ -198,6 +198,49 @@ describe('matchesDenylist', () => {
       expect(matchesDenylist('([ run', ['(['])).toBe(true);
     });
   });
+
+  describe('resilient to adversarial ReDoS input strings', () => {
+    it('handles classic (a+)+$ pattern with long input under 1s', () => {
+      const pattern = '(a+)+$';
+      const adversarialInput = 'a'.repeat(50000) + '!';
+      const start = performance.now();
+      const result = matchesDenylist(adversarialInput, [pattern]);
+      const elapsed = performance.now() - start;
+      expect(elapsed).toBeLessThan(1000);
+      // The pattern is escaped, so it matches literal "(a+)+$", not the input
+      expect(result).toBe(false);
+    });
+
+    it('handles (a|a)*$ pattern with long input under 1s', () => {
+      const pattern = '(a|a)*$';
+      const adversarialInput = 'a'.repeat(50000) + '!';
+      const start = performance.now();
+      const result = matchesDenylist(adversarialInput, [pattern]);
+      const elapsed = performance.now() - start;
+      expect(elapsed).toBeLessThan(1000);
+      expect(result).toBe(false);
+    });
+
+    it('handles (a+){10}$ pattern with long input under 1s', () => {
+      const pattern = '(a+){10}$';
+      const adversarialInput = 'a'.repeat(50000) + '!';
+      const start = performance.now();
+      const result = matchesDenylist(adversarialInput, [pattern]);
+      const elapsed = performance.now() - start;
+      expect(elapsed).toBeLessThan(1000);
+      expect(result).toBe(false);
+    });
+
+    it('handles nested quantifier ([a-z]+)*$ with long input under 1s', () => {
+      const pattern = '([a-z]+)*$';
+      const adversarialInput = 'a'.repeat(50000) + '!';
+      const start = performance.now();
+      const result = matchesDenylist(adversarialInput, [pattern]);
+      const elapsed = performance.now() - start;
+      expect(elapsed).toBeLessThan(1000);
+      expect(result).toBe(false);
+    });
+  });
 });
 
 describe('matchesAllowlist', () => {
