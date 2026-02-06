@@ -12,7 +12,7 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
   constructor(config: ProviderConfig) {
     const command = config.command ? [config.command] : ['claude'];
     const args = config.args || [];
-    const pty = (config as unknown as { pty?: boolean }).pty ?? false;
+    const pty = config.pty ?? false;
     const timeoutMs = config.timeoutMs;
 
     // Prefer non-interactive mode for programmatic use (works well with pipes).
