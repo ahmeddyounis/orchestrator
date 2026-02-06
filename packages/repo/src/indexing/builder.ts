@@ -77,14 +77,10 @@ export class IndexBuilder {
       }
     }
 
-    // TODO: get headSha
-    const headSha = undefined;
-
     return {
       version: '1',
       builtAt: new Date(),
       updatedAt: new Date(),
-      headSha,
       stats,
       files,
       repoRoot,
