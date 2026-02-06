@@ -88,5 +88,32 @@ describe('SemanticSearchService', () => {
     expect(buildSpy).toHaveBeenCalled();
     expect(searchSpy).toHaveBeenCalled();
   });
+
+  it('rejects with a timeout error when embedTexts is too slow', async () => {
+    vi.useFakeTimers();
+
+    // embedTexts returns a promise that never resolves
+    vi.mocked(mockEmbedder.embedTexts).mockImplementation(
+      () => new Promise<number[][]>(() => {}),
+    );
+
+    const service = new SemanticSearchService({
+      store: mockStore,
+      embedder: mockEmbedder,
+      eventBus: mockEventBus,
+    });
+
+    const searchPromise = service.search('slow query', 5, 'run-timeout');
+
+    // Advance timers past the default EMBED_TIMEOUT_MS (30 000 ms)
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    await expect(searchPromise).rejects.toThrow(/timed out after 30000ms/);
+
+    // Event should NOT have been emitted since search failed
+    expect(mockEventBus.emit).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
 });
 
