@@ -94,9 +94,14 @@ export function isNetworkCommand(parsed: ParsedCommand): boolean {
 export function matchesDenylist(command: string, patterns: string[]): boolean {
   return patterns.some((pattern) => {
     if (!pattern) return false;
-    // Match on token boundaries to reduce accidental partial matches
-    // (e.g. deny "rm -rf /" but allow "rm -rf /tmp/safe-dir").
-    return new RegExp(`(?:^|\\s)(?:${escapeRegExp(pattern)})(?:\\s|$)`).test(command);
+    try {
+      // Match on token boundaries to reduce accidental partial matches
+      // (e.g. deny "rm -rf /" but allow "rm -rf /tmp/safe-dir").
+      return new RegExp(`(?:^|\\s)(?:${pattern})(?:\\s|$)`).test(command);
+    } catch {
+      // If it's not a valid regex, fall back to substring matching.
+      return command.includes(pattern);
+    }
   });
 }
 
