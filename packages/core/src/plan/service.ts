@@ -1,4 +1,4 @@
-import { ModelRequest, Config, ProviderError } from '@orchestrator/shared';
+import { ModelRequest, Config, ProviderError, extractJsonObject } from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
   RepoScanner,
@@ -12,6 +12,15 @@ import {
 import { EventBus } from '../registry';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { z } from 'zod';
+import {
+  PLAN_JSON_SCHEMA_VERSION,
+  PLAN_REVIEW_SCHEMA_VERSION,
+  type PlanJson,
+  type PlanNode,
+  type PlanExecutionStep,
+  type PlanReviewResult,
+} from './types';
 
 function stripPlanListPrefix(step: string): string {
   let result = step.trim();
@@ -110,17 +119,46 @@ function normalizePlanSteps(rawSteps: string[]): string[] {
   return normalized;
 }
 
+export interface PlanGenerationOptions {
+  /**
+   * Maximum nesting depth for plan expansion. Depth 1 is the initial outline.
+   * When > 1, each outline step is expanded into substeps recursively.
+   */
+  maxDepth?: number;
+  /**
+   * Maximum number of substeps generated per expanded step.
+   */
+  maxSubstepsPerStep?: number;
+  /**
+   * Maximum total number of plan nodes (outline + all expanded substeps).
+   * Acts as a safety valve to prevent runaway expansion.
+   */
+  maxTotalSteps?: number;
+  /**
+   * If enabled, run a review pass over the outline steps.
+   */
+  reviewPlan?: boolean;
+  /**
+   * If enabled (and review returns revisedSteps), apply the revised outline
+   * before any expansions.
+   */
+  applyReview?: boolean;
+}
+
 export class PlanService {
   constructor(private eventBus: EventBus) {}
 
   async generatePlan(
     goal: string,
-    providers: { planner: ProviderAdapter },
+    providers: { planner: ProviderAdapter; reviewer?: ProviderAdapter },
     ctx: AdapterContext,
     artifactsDir: string,
     repoRoot: string,
     config?: Config,
+    options?: PlanGenerationOptions,
   ): Promise<string[]> {
+    const adapterCtx: AdapterContext = { ...ctx, repoRoot };
+
     await this.eventBus.emit({
       type: 'PlanRequested',
       schemaVersion: 1,
@@ -291,7 +329,7 @@ Critical formatting rules:
       jsonMode: true,
     };
 
-    const response = await providers.planner.generate(request, ctx);
+    const response = await providers.planner.generate(request, adapterCtx);
 
     if (!response.text) {
       throw new ProviderError('Planner provider returned empty response');
@@ -300,7 +338,7 @@ Critical formatting rules:
     const rawText = response.text;
     await fs.writeFile(path.join(artifactsDir, 'plan_raw.txt'), rawText);
 
-    let planSteps: string[] = [];
+    let outlineSteps: string[] = [];
 
     // Attempt 1: Parse JSON (robust to preamble/trailing text)
     const hasStepsArray = (value: unknown): value is { steps: unknown[] } => {
@@ -328,41 +366,41 @@ Critical formatting rules:
     const fencedJsonMatch = rawTrimmed.match(/```json\s*([\s\S]*?)\s*```/i);
     if (fencedJsonMatch) {
       try {
-        planSteps = tryParseJson(fencedJsonMatch[1].trim());
+        outlineSteps = tryParseJson(fencedJsonMatch[1].trim());
       } catch {
         // ignore and fall through
       }
     }
 
-    if (planSteps.length === 0) {
+    if (outlineSteps.length === 0) {
       // Basic cleanup for markdown code blocks if the model includes them despite jsonMode
       const cleanedText = rawTrimmed.replace(/```json\n|\n```/g, '').trim();
 
       // Try parsing whole string first.
       try {
-        planSteps = tryParseJson(cleanedText);
+        outlineSteps = tryParseJson(cleanedText);
       } catch {
         // ignore and fall through
       }
 
       // Try extracting the first JSON object or array from the text.
-      if (planSteps.length === 0) {
+      if (outlineSteps.length === 0) {
         const firstBrace = cleanedText.indexOf('{');
         const lastBrace = cleanedText.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
           try {
-            planSteps = tryParseJson(cleanedText.slice(firstBrace, lastBrace + 1));
+            outlineSteps = tryParseJson(cleanedText.slice(firstBrace, lastBrace + 1));
           } catch {
             // ignore
           }
         }
       }
-      if (planSteps.length === 0) {
+      if (outlineSteps.length === 0) {
         const firstBracket = cleanedText.indexOf('[');
         const lastBracket = cleanedText.lastIndexOf(']');
         if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
           try {
-            planSteps = tryParseJson(cleanedText.slice(firstBracket, lastBracket + 1));
+            outlineSteps = tryParseJson(cleanedText.slice(firstBracket, lastBracket + 1));
           } catch {
             // ignore
           }
@@ -371,28 +409,300 @@ Critical formatting rules:
     }
 
     // Attempt 2: Parse text (bullets/numbers)
-    if (planSteps.length === 0) {
+    if (outlineSteps.length === 0) {
       const parsedPlan = parsePlanFromText(rawText);
       if (parsedPlan && parsedPlan.steps.length > 0) {
-        planSteps = parsedPlan.steps;
+        outlineSteps = parsedPlan.steps;
       }
     }
 
     // Attempt 3: Fallback
-    if (planSteps.length === 0) {
+    if (outlineSteps.length === 0) {
       // We couldn't extract steps, so we leave it empty.
       // The CLI will handle warning the user.
       // Alternatively, we could treat the whole text as one step if it's short?
       // For now, empty array implies unstructured output that couldn't be parsed.
     }
 
-    planSteps = normalizePlanSteps(planSteps);
+    outlineSteps = normalizePlanSteps(outlineSteps);
+
+    const configMaxDepth = config?.planning?.maxDepth;
+    const configMaxSubsteps = config?.planning?.maxSubstepsPerStep;
+    const configMaxTotalSteps = config?.planning?.maxTotalSteps;
+    const configReviewEnabled = config?.planning?.review?.enabled;
+    const configApplyReview = config?.planning?.review?.apply;
+
+    const maxDepthRaw = options?.maxDepth ?? configMaxDepth ?? 1;
+    const maxDepth = Number.isFinite(maxDepthRaw) ? Math.floor(maxDepthRaw) : 1;
+
+    const maxSubstepsRaw = options?.maxSubstepsPerStep ?? configMaxSubsteps ?? 6;
+    const maxSubstepsPerStep = Number.isFinite(maxSubstepsRaw)
+      ? Math.max(1, Math.floor(maxSubstepsRaw))
+      : 6;
+
+    const maxTotalRaw = options?.maxTotalSteps ?? configMaxTotalSteps ?? 200;
+    const maxTotalSteps = Number.isFinite(maxTotalRaw) ? Math.max(1, Math.floor(maxTotalRaw)) : 200;
+
+    const reviewEnabled = options?.reviewPlan ?? configReviewEnabled ?? false;
+    const applyReview = options?.applyReview ?? configApplyReview ?? false;
+
+    const reviewer = providers.reviewer ?? providers.planner;
+
+    const reviewSchema = z.object({
+      verdict: z.enum(['approve', 'revise']),
+      summary: z.string(),
+      issues: z.array(z.string()).default([]),
+      suggestions: z.array(z.string()).default([]),
+      revisedSteps: z.array(z.string()).optional(),
+    });
+
+    let reviewResult: PlanReviewResult | undefined;
+    if (reviewEnabled && outlineSteps.length > 0) {
+      const reviewSystemPrompt = `You are an expert software planning reviewer.
+Your job is to review a proposed plan against the goal for correctness, completeness, and ordering.
+
+Return ONLY JSON matching this schema:
+{
+  "verdict": "approve" | "revise",
+  "summary": string,
+  "issues": string[],
+  "suggestions": string[],
+  "revisedSteps"?: string[]
+}
+
+Rules:
+- Do NOT include numbering/bullets in revisedSteps.
+- If the plan is missing critical steps or has poor ordering, set verdict to "revise" and include revisedSteps as a COMPLETE replacement outline.
+- If the plan is good, set verdict to "approve" and omit revisedSteps.`;
+
+      const reviewUserPrompt = `Goal: ${goal}\n\nProposed plan steps:\n${outlineSteps
+        .map((s) => `- ${s}`)
+        .join('\n')}`;
+
+      const reviewReq: ModelRequest = {
+        messages: [
+          { role: 'system', content: reviewSystemPrompt },
+          { role: 'user', content: reviewUserPrompt },
+        ],
+        jsonMode: true,
+      };
+
+      const reviewResp = await reviewer.generate(reviewReq, adapterCtx);
+      const reviewRaw = (reviewResp.text ?? '').trim();
+      await fs.writeFile(path.join(artifactsDir, 'plan_review_raw.txt'), reviewRaw);
+
+      try {
+        const parsed = extractJsonObject(reviewRaw, 'plan_review');
+        const validated = reviewSchema.parse(parsed);
+        reviewResult = {
+          schemaVersion: PLAN_REVIEW_SCHEMA_VERSION,
+          verdict: validated.verdict,
+          summary: validated.summary,
+          issues: validated.issues ?? [],
+          suggestions: validated.suggestions ?? [],
+          revisedSteps: validated.revisedSteps?.map(String),
+        };
+        await fs.writeFile(
+          path.join(artifactsDir, 'plan_review.json'),
+          JSON.stringify(reviewResult, null, 2),
+        );
+
+        if (applyReview && reviewResult.verdict === 'revise' && reviewResult.revisedSteps?.length) {
+          outlineSteps = normalizePlanSteps(reviewResult.revisedSteps);
+        }
+      } catch (err) {
+        // Non-fatal: review is optional.
+        const msg = err instanceof Error ? err.message : String(err);
+        await fs.writeFile(
+          path.join(artifactsDir, 'plan_review_error.txt'),
+          `Failed to parse plan review output.\n${msg}\n`,
+        );
+      }
+    }
+
+    const makeNode = (id: string, step: string): PlanNode => ({ id, step });
+
+    const tree: PlanNode[] = outlineSteps.map((step, idx) => makeNode(String(idx + 1), step));
+
+    const parseStepsFromModelText = (text: string): string[] => {
+      let parsedSteps: string[] = [];
+      const raw = String(text ?? '').trim();
+      if (!raw) return [];
+
+      // Prefer JSON inside fenced blocks if present.
+      const fencedJsonMatch = raw.match(/```json\s*([\s\S]*?)\s*```/i);
+      const candidates: string[] = [];
+      if (fencedJsonMatch) candidates.push(fencedJsonMatch[1].trim());
+
+      const cleaned = raw.replace(/```json\n|\n```/g, '').trim();
+      candidates.push(cleaned);
+
+      const hasStepsArray = (value: unknown): value is { steps: unknown[] } => {
+        if (!value || typeof value !== 'object') return false;
+        const record = value as Record<string, unknown>;
+        return Array.isArray(record.steps);
+      };
+      const coerceSteps = (value: unknown): string[] => {
+        if (hasStepsArray(value)) return value.steps.map(String);
+        if (Array.isArray(value)) return value.map(String);
+        return [];
+      };
+
+      const tryParse = (candidate: string): string[] => {
+        const parsed = JSON.parse(candidate);
+        return coerceSteps(parsed);
+      };
+
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        try {
+          parsedSteps = tryParse(candidate);
+          if (parsedSteps.length > 0) break;
+        } catch {
+          // ignore
+        }
+      }
+
+      if (parsedSteps.length === 0) {
+        // Try extracting first JSON object/array from the text.
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            parsedSteps = tryParse(cleaned.slice(firstBrace, lastBrace + 1));
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (parsedSteps.length === 0) {
+        const firstBracket = cleaned.indexOf('[');
+        const lastBracket = cleaned.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          try {
+            parsedSteps = tryParse(cleaned.slice(firstBracket, lastBracket + 1));
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      if (parsedSteps.length === 0) {
+        const parsedPlan = parsePlanFromText(raw);
+        if (parsedPlan?.steps?.length) parsedSteps = parsedPlan.steps;
+      }
+
+      return normalizePlanSteps(parsedSteps).slice(0, maxSubstepsPerStep);
+    };
+
+    const expandSystemPrompt = `You are an expert software architecture planner.
+Your goal is to break down a single plan step into smaller, sequential, actionable substeps.
+Return ONLY a JSON object with a "steps" property containing an array of strings.
+
+Critical formatting rules:
+- Do NOT include section headers/categories as steps.
+- Do NOT prefix steps with numbering/bullets (no "1.", "1.1.", "-", etc).
+- Each step must be a single, concise, actionable instruction (imperative voice).
+- Return at most ${maxSubstepsPerStep} steps.
+- If the step is already atomic, return {"steps": []}.`;
+
+    const safeIdForFilename = (id: string): string => id.replace(/[^a-zA-Z0-9_.-]/g, '_');
+
+    let totalNodes = tree.length;
+    const expandNode = async (node: PlanNode, depth: number, ancestors: string[]): Promise<void> => {
+      if (depth >= maxDepth) return;
+      if (totalNodes >= maxTotalSteps) return;
+
+      const expandUserPrompt = `Overall Goal: ${goal}
+Current Step: ${node.step}
+Ancestor Steps: ${ancestors.length > 0 ? ancestors.join(' > ') : '(none)'}
+Target Depth: ${depth + 1} of ${maxDepth}
+
+Provide a short list of substeps to accomplish ONLY the current step.`;
+
+      const req: ModelRequest = {
+        messages: [
+          { role: 'system', content: expandSystemPrompt },
+          { role: 'user', content: expandUserPrompt },
+        ],
+        jsonMode: true,
+      };
+
+      const idSafe = safeIdForFilename(node.id);
+      let substeps: string[] = [];
+      try {
+        const resp = await providers.planner.generate(req, adapterCtx);
+        const raw = (resp.text ?? '').trim();
+        await fs.writeFile(path.join(artifactsDir, `plan_expand_${idSafe}_raw.txt`), raw);
+
+        substeps = parseStepsFromModelText(raw);
+        await fs.writeFile(
+          path.join(artifactsDir, `plan_expand_${idSafe}.json`),
+          JSON.stringify({ steps: substeps }, null, 2),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await fs.writeFile(
+          path.join(artifactsDir, `plan_expand_${idSafe}_error.txt`),
+          `Failed to expand plan step ${node.id}.\n${msg}\n`,
+        );
+        return;
+      }
+
+      if (substeps.length === 0) return;
+
+      const children: PlanNode[] = [];
+      for (let i = 0; i < substeps.length; i++) {
+        if (totalNodes >= maxTotalSteps) break;
+        children.push(makeNode(`${node.id}.${i + 1}`, substeps[i]));
+        totalNodes++;
+      }
+      if (children.length === 0) return;
+
+      node.children = children;
+
+      for (const child of children) {
+        await expandNode(child, depth + 1, [...ancestors, node.step]);
+        if (totalNodes >= maxTotalSteps) break;
+      }
+    };
+
+    if (maxDepth > 1 && tree.length > 0) {
+      for (const node of tree) {
+        await expandNode(node, 1, []);
+        if (totalNodes >= maxTotalSteps) break;
+      }
+    }
+
+    const execution: PlanExecutionStep[] = [];
+    const walk = (node: PlanNode, ancestors: string[]): void => {
+      if (node.children && node.children.length > 0) {
+        const nextAncestors = [...ancestors, node.step];
+        for (const child of node.children) {
+          walk(child, nextAncestors);
+        }
+        return;
+      }
+      execution.push({ id: node.id, step: node.step, ancestors });
+    };
+    for (const node of tree) walk(node, []);
+
+    const planSteps = execution.map((e) => e.step);
+
+    const planJson: PlanJson = {
+      schemaVersion: PLAN_JSON_SCHEMA_VERSION,
+      goal,
+      generatedAt: new Date().toISOString(),
+      maxDepth,
+      steps: planSteps,
+      outline: outlineSteps,
+      tree,
+      execution,
+      review: reviewResult,
+    };
 
     // Write plan.json even if empty steps, as per spec "plan.json (may contain empty steps but valid JSON)"
-    await fs.writeFile(
-      path.join(artifactsDir, 'plan.json'),
-      JSON.stringify({ steps: planSteps }, null, 2),
-    );
+    await fs.writeFile(path.join(artifactsDir, 'plan.json'), JSON.stringify(planJson, null, 2));
 
     await this.eventBus.emit({
       type: 'PlanCreated',

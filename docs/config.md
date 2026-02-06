@@ -99,6 +99,30 @@ defaults:
 thinkLevel: L2 # L0 | L1 | L2 | L3
 ```
 
+## Planning (nested plans + review)
+
+You can optionally expand each plan step into a deeper, multi-step plan, and/or run a review pass over generated plans.
+
+```yaml
+planning:
+  # Maximum nesting depth for plan expansion.
+  # - 1: outline only (default)
+  # - 2+: expand each step into substeps recursively
+  maxDepth: 1
+
+  # Max substeps generated per expanded step.
+  maxSubstepsPerStep: 6
+
+  # Safety limit for total plan nodes (outline + all expanded substeps).
+  maxTotalSteps: 200
+
+  # Optional plan review pass.
+  review:
+    enabled: false
+    # If enabled and the reviewer returns revisedSteps, apply them before expansion.
+    apply: false
+```
+
 ## Tool policy and sandbox
 
 ```yaml

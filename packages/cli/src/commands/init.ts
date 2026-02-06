@@ -18,6 +18,15 @@ defaults:
   executor: openai
   reviewer: openai
 
+# Optional: Planning settings (nested plans + review).
+# planning:
+#   maxDepth: 1
+#   maxSubstepsPerStep: 6
+#   maxTotalSteps: 200
+#   review:
+#     enabled: false
+#     apply: false
+
 # Configuration for different AI providers.
 providers:
   openai:

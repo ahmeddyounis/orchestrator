@@ -912,7 +912,7 @@ END_DIFF
 
     const steps = await planService.generatePlan(
       goal,
-      { planner: providers.planner },
+      { planner: providers.planner, reviewer: providers.reviewer },
       context,
       artifacts.root,
       this.repoRoot,
@@ -2180,7 +2180,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     const steps = await planService.generatePlan(
       goal,
-      { planner: providers.planner },
+      { planner: providers.planner, reviewer: providers.reviewer },
       context,
       artifacts.root,
       this.repoRoot,

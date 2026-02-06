@@ -4,6 +4,7 @@ import {
   ProviderRegistry,
   CostTracker,
   PlanService,
+  type PlanGenerationOptions,
   type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
@@ -34,6 +35,18 @@ export function registerPlanCommand(program: Command) {
     .argument('<goal>', 'The goal to plan')
     .description('Plan a task based on a goal')
     .option('--planner <providerId>', 'Override planner provider')
+    .option('--depth <n>', 'Expand each plan step to substeps up to depth n (integer 1-5)')
+    .option(
+      '--max-substeps <n>',
+      'Max substeps per expanded step (integer 1-20, default 6)',
+    )
+    .option(
+      '--max-total-steps <n>',
+      'Safety limit for total plan nodes (integer 1-500, default 200)',
+    )
+    .option('--review', 'Review the generated plan')
+    .option('--apply-review', 'Apply reviewer revisions (if provided)')
+    .option('--reviewer <providerId>', 'Override reviewer provider for plan review')
     .option('--memory <mode>', 'Memory: on|off')
     .option('--memory-path <path>', 'Override memory storage path')
     .option('--memory-mode <mode>', 'Retrieval mode: lexical, vector, hybrid')
@@ -130,6 +143,38 @@ export function registerPlanCommand(program: Command) {
         throw new ConfigError(`Planner provider '${plannerId}' not found in configuration.`);
       }
 
+      // Planning options (CLI overrides)
+      const planOptions: PlanGenerationOptions = {};
+      if (options.depth !== undefined) {
+        const depth = Number(options.depth);
+        if (!Number.isInteger(depth) || depth < 1 || depth > 5) {
+          throw new UsageError(`Invalid --depth "${options.depth}". Must be an integer 1-5.`);
+        }
+        planOptions.maxDepth = depth;
+      }
+      if (options.maxSubsteps !== undefined) {
+        const n = Number(options.maxSubsteps);
+        if (!Number.isInteger(n) || n < 1 || n > 20) {
+          throw new UsageError(
+            `Invalid --max-substeps "${options.maxSubsteps}". Must be an integer 1-20.`,
+          );
+        }
+        planOptions.maxSubstepsPerStep = n;
+      }
+      if (options.maxTotalSteps !== undefined) {
+        const n = Number(options.maxTotalSteps);
+        if (!Number.isInteger(n) || n < 1 || n > 500) {
+          throw new UsageError(
+            `Invalid --max-total-steps "${options.maxTotalSteps}". Must be an integer 1-500.`,
+          );
+        }
+        planOptions.maxTotalSteps = n;
+      }
+
+      // Only set booleans when explicitly enabled so config defaults still apply.
+      if (options.review === true) planOptions.reviewPlan = true;
+      if (options.applyReview === true) planOptions.applyReview = true;
+
       const runId = Date.now().toString();
       const artifacts = await createRunDir(repoRoot, runId);
       const logger = new JsonlLogger(artifacts.trace);
@@ -154,6 +199,28 @@ export function registerPlanCommand(program: Command) {
 
       const planner = registry.getAdapter(plannerId);
 
+      // Review provider (optional)
+      const reviewEnabledEffective =
+        options.review === true ||
+        options.applyReview === true ||
+        options.reviewer !== undefined ||
+        config.planning?.review?.enabled === true;
+
+      const reviewerId = options.reviewer
+        ? options.reviewer
+        : reviewEnabledEffective
+          ? (config.defaults?.reviewer ?? plannerId)
+          : undefined;
+
+      if (options.reviewer && !config.providers?.[options.reviewer]) {
+        throw new ConfigError(`Reviewer provider '${options.reviewer}' not found in configuration.`);
+      }
+      if (reviewerId && reviewerId !== plannerId && !config.providers?.[reviewerId]) {
+        throw new ConfigError(`Reviewer provider '${reviewerId}' not found in configuration.`);
+      }
+
+      const reviewer = reviewerId ? registry.getAdapter(reviewerId) : undefined;
+
       // Emit ProviderSelected for planner
       await eventBus.emit({
         type: 'ProviderSelected',
@@ -167,6 +234,20 @@ export function registerPlanCommand(program: Command) {
         },
       });
 
+      if (reviewEnabledEffective && reviewer) {
+        await eventBus.emit({
+          type: 'ProviderSelected',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            role: 'reviewer',
+            providerId: reviewerId!,
+            capabilities: reviewer.capabilities(),
+          },
+        });
+      }
+
       const planService = new PlanService(eventBus);
 
       const ctx = {
@@ -177,11 +258,12 @@ export function registerPlanCommand(program: Command) {
 
       const planSteps = await planService.generatePlan(
         goal,
-        { planner },
+        { planner, reviewer },
         ctx,
         artifacts.root,
         repoRoot,
         config,
+        Object.keys(planOptions).length > 0 ? planOptions : undefined,
       );
 
       // plan.json is written by PlanService
@@ -224,6 +306,9 @@ export function registerPlanCommand(program: Command) {
         cost: costSummary,
         nextSteps: [
           `Review the generated plan at: ${planPath}`,
+          ...(reviewEnabledEffective
+            ? [`Review output (if any) at: ${path.join(artifacts.root, 'plan_review.json')}`]
+            : []),
           `To execute the plan, run: orchestrator run "${goal}"`,
         ],
       };

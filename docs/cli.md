@@ -99,6 +99,34 @@ For a complete explanation of the process and the artifacts it produces, see the
 
 ---
 
+### `plan`
+
+Generate a plan for a goal without executing it.
+
+**Usage:**
+
+```bash
+orchestrator plan "<goal>" [options]
+```
+
+**Arguments:**
+
+- `<goal>`: The goal to plan.
+
+**Options:**
+
+- `--planner <providerId>`: Override planner provider ID.
+- `--depth <n>`: Expand each plan step into substeps up to depth `n` (1–5).
+- `--max-substeps <n>`: Max substeps per expanded step (1–20).
+- `--max-total-steps <n>`: Safety limit for total plan nodes (1–500).
+- `--review`: Run a review pass over the generated outline.
+- `--apply-review`: Apply reviewer revisions (if provided) before expansion.
+- `--reviewer <providerId>`: Override reviewer provider ID for the plan review pass.
+
+The command writes plan artifacts under `.orchestrator/runs/<runId>/` (including `plan.json`, `plan_raw.txt`, and optional `plan_review.*` / `plan_expand_*` files).
+
+---
+
 ### `index`
 
 This command manages the orchestrator's index of your codebase. The index is used to provide context for the `run` command.

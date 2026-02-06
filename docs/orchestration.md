@@ -64,7 +64,10 @@ The agent stops immediately. It will produce a summary of what was accomplished 
 
 When you run a command, the Orchestrator generates several artifacts in the `.orchestrator/runs/<runId>` directory:
 
-- **`plan.json`**: The generated plan (L2/L3 only).
+- **`plan.json`**: The generated plan (outline + optional nested expansions + execution steps).
+- **`plan_raw.txt`**: Raw planner output (best-effort).
+- **`plan_review.json`** / **`plan_review_raw.txt`**: Optional plan review artifacts when enabled.
+- **`plan_expand_*.json`** / **`plan_expand_*_raw.txt`**: Optional per-step expansion artifacts when plan depth > 1.
 - **`trace.jsonl`**: A detailed log of every tool call, thought, and result.
 - **`summary.json`**: High-level result of the run.
 - **`effective-config.json`**: The fully resolved configuration used for the run.

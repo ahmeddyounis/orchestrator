@@ -55,6 +55,13 @@ describe('PlanService', () => {
     service = new PlanService(eventBus);
   });
 
+  const readWrittenJson = (filePath: string) => {
+    const calls = (fs.writeFile as unknown as Mock).mock.calls as Array<[string, string]>;
+    const call = calls.find(([p]) => p === filePath);
+    expect(call, `Expected fs.writeFile to be called for ${filePath}`).toBeTruthy();
+    return JSON.parse(call![1]) as Record<string, unknown>;
+  };
+
   it('should generate a plan successfully', async () => {
     const mockSteps = ['Step 1', 'Step 2'];
     (planner.generate as Mock).mockResolvedValue({
@@ -68,10 +75,13 @@ describe('PlanService', () => {
       `${artifactsDir}/plan_raw.txt`,
       JSON.stringify({ steps: mockSteps }),
     );
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      `${artifactsDir}/plan.json`,
-      JSON.stringify({ steps: mockSteps }, null, 2),
-    );
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.steps).toEqual(mockSteps);
+    expect(planJson.outline).toEqual(mockSteps);
+    expect(planJson.tree).toEqual([
+      { id: '1', step: 'Step 1' },
+      { id: '2', step: 'Step 2' },
+    ]);
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'PlanCreated',
@@ -89,10 +99,8 @@ describe('PlanService', () => {
     const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
 
     expect(result).toEqual(mockSteps);
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      `${artifactsDir}/plan.json`,
-      JSON.stringify({ steps: mockSteps }, null, 2),
-    );
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.steps).toEqual(mockSteps);
   });
 
   it('should cleanup markdown code blocks', async () => {
@@ -136,10 +144,8 @@ describe('PlanService', () => {
 
     expect(result).toEqual(['Step One', 'Step Two']);
     expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      `${artifactsDir}/plan.json`,
-      JSON.stringify({ steps: ['Step One', 'Step Two'] }, null, 2),
-    );
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.steps).toEqual(['Step One', 'Step Two']);
   });
 
   it('should drop section headers when falling back to text parsing', async () => {
@@ -180,10 +186,8 @@ describe('PlanService', () => {
 
     expect(result).toEqual(normalizedSteps);
     expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      `${artifactsDir}/plan.json`,
-      JSON.stringify({ steps: normalizedSteps }, null, 2),
-    );
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.steps).toEqual(normalizedSteps);
     expect(eventBus.emit).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'PlanCreated',
@@ -202,10 +206,8 @@ describe('PlanService', () => {
 
     expect(result).toEqual([]);
     expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_raw.txt`, rawText);
-    expect(fs.writeFile).toHaveBeenCalledWith(
-      `${artifactsDir}/plan.json`,
-      JSON.stringify({ steps: [] }, null, 2),
-    );
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.steps).toEqual([]);
   });
 
   it('should emit context events during planning', async () => {
@@ -218,5 +220,109 @@ describe('PlanService', () => {
     expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'RepoScan' }));
     expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'RepoSearch' }));
     expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ContextBuilt' }));
+  });
+
+  it('should expand outline steps when maxDepth > 1', async () => {
+    (planner.generate as Mock)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ steps: ['Top A', 'Top B'] }),
+      } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ steps: ['Add A', 'Test A'] }),
+      } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ steps: ['Add B'] }),
+      } as ModelResponse);
+
+    const result = await service.generatePlan(
+      'my goal',
+      { planner },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      undefined,
+      { maxDepth: 2, maxSubstepsPerStep: 10 },
+    );
+
+    expect(result).toEqual(['Add A', 'Test A', 'Add B']);
+
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.outline).toEqual(['Top A', 'Top B']);
+    expect(planJson.steps).toEqual(['Add A', 'Test A', 'Add B']);
+    expect(planJson.execution).toEqual([
+      { id: '1.1', step: 'Add A', ancestors: ['Top A'] },
+      { id: '1.2', step: 'Test A', ancestors: ['Top A'] },
+      { id: '2.1', step: 'Add B', ancestors: ['Top B'] },
+    ]);
+
+    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_expand_1_raw.txt`, expect.any(String));
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_expand_1.json`,
+      JSON.stringify({ steps: ['Add A', 'Test A'] }, null, 2),
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_expand_2_raw.txt`, expect.any(String));
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_expand_2.json`,
+      JSON.stringify({ steps: ['Add B'] }, null, 2),
+    );
+  });
+
+  it('should review and apply revised outline steps when enabled', async () => {
+    const reviewer = {
+      id: () => 'mock-reviewer',
+      capabilities: () => ({
+        supportsStreaming: false,
+        supportsToolCalling: false,
+        supportsJsonMode: true,
+        modality: 'text',
+        latencyClass: 'medium',
+      }),
+      generate: vi.fn(),
+    } as unknown as ProviderAdapter;
+
+    (planner.generate as Mock).mockResolvedValue({
+      text: JSON.stringify({ steps: ['Old Step'] }),
+    } as ModelResponse);
+
+    (reviewer.generate as Mock).mockResolvedValue({
+      text: JSON.stringify({
+        verdict: 'revise',
+        summary: 'Missing key details.',
+        issues: ['Too vague'],
+        suggestions: ['Be more specific'],
+        revisedSteps: ['New Step 1', 'New Step 2'],
+      }),
+    } as ModelResponse);
+
+    const result = await service.generatePlan(
+      'my goal',
+      { planner, reviewer },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      undefined,
+      { reviewPlan: true, applyReview: true },
+    );
+
+    expect(result).toEqual(['New Step 1', 'New Step 2']);
+
+    const planJson = readWrittenJson(`${artifactsDir}/plan.json`);
+    expect(planJson.outline).toEqual(['New Step 1', 'New Step 2']);
+    expect(planJson.steps).toEqual(['New Step 1', 'New Step 2']);
+    expect(planJson.review).toEqual(
+      expect.objectContaining({
+        verdict: 'revise',
+        summary: 'Missing key details.',
+      }),
+    );
+
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_review_raw.txt`,
+      expect.any(String),
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_review.json`,
+      expect.stringContaining('"verdict": "revise"'),
+    );
   });
 });

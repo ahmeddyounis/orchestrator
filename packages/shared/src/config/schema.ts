@@ -432,6 +432,25 @@ export const PluginsConfigSchema = z.object({
   allowlistIds: z.array(z.string()).optional(),
 });
 
+const PlanningReviewConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  apply: z.boolean().default(false),
+});
+
+const PlanningConfigSchema = z.object({
+  /**
+   * Maximum nesting depth for plan expansion. Depth 1 is the initial outline.
+   * When > 1, each outline step is expanded into substeps recursively.
+   */
+  maxDepth: z.number().int().min(1).max(5).default(1),
+  /** Maximum substeps generated per expanded plan step. */
+  maxSubstepsPerStep: z.number().int().min(1).max(20).default(6),
+  /** Safety limit for total plan nodes (outline + all expanded substeps). */
+  maxTotalSteps: z.number().int().min(1).max(500).default(200),
+  /** Optional review pass for generated plans. */
+  review: PlanningReviewConfigSchema.optional(),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
@@ -483,6 +502,7 @@ export const ConfigSchema = z.object({
         .optional(),
     })
     .optional(),
+  planning: PlanningConfigSchema.optional(),
   commandPolicy: z
     .object({
       allow: z.array(z.string()).optional(),
