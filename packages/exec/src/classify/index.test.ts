@@ -138,6 +138,16 @@ describe('matchesDenylist', () => {
       expect(matchesDenylist('ccccc compile', ['c++'])).toBe(false);
     });
   });
+
+  it('does not hang on pathological ReDoS patterns', () => {
+    const evilPattern = 'a' + ']'.repeat(50);
+    const start = performance.now();
+    // Should return quickly regardless of pattern content
+    const result = matchesDenylist('a]]]]]]] harmless', [evilPattern]);
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(1000); // must finish well under 1 second
+    expect(typeof result).toBe('boolean');
+  });
 });
 
 describe('matchesAllowlist', () => {
