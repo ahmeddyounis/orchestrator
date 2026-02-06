@@ -336,9 +336,13 @@ Critical formatting rules:
     };
 
     const contextStackText = await getSafeContextStack();
+    const contextStackHint =
+      contextStackText && contextStackText.includes('...[TRUNCATED]')
+        ? `NOTE: The context stack excerpt above is truncated.\nYou can read more from ".orchestrator/context_stack.jsonl" (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.\nIf file access isn't available, request more frames to be included.\n`
+        : '';
     const systemPrompt = systemPromptBase;
 
-    let userPrompt = `${contextStackText ? `SO FAR (CONTEXT STACK):\n${contextStackText}\n\n` : ''}Goal: ${goal}`;
+    let userPrompt = `${contextStackText ? `SO FAR (CONTEXT STACK):\n${contextStackText}\n\n${contextStackHint ? `${contextStackHint}\n` : ''}` : ''}Goal: ${goal}`;
 
     // Inject context if available
     if (contextPack && contextPack.items.length > 0) {
@@ -503,9 +507,13 @@ Rules:
 - If the plan is good, set verdict to "approve" and omit revisedSteps.`;
 
       const reviewStack = await getSafeContextStack();
+      const reviewStackHint =
+        reviewStack && reviewStack.includes('...[TRUNCATED]')
+          ? `NOTE: The context stack excerpt above is truncated.\nYou can read more from ".orchestrator/context_stack.jsonl" (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.\nIf file access isn't available, request more frames to be included.\n`
+          : '';
 
       const reviewSystemPrompt = reviewSystemPromptBase;
-      const reviewUserPrompt = `${reviewStack ? `SO FAR (CONTEXT STACK):\n${reviewStack}\n\n` : ''}Goal: ${goal}\n\nProposed plan steps:\n${outlineSteps
+      const reviewUserPrompt = `${reviewStack ? `SO FAR (CONTEXT STACK):\n${reviewStack}\n\n${reviewStackHint ? `${reviewStackHint}\n` : ''}` : ''}Goal: ${goal}\n\nProposed plan steps:\n${outlineSteps
         .map((s) => `- ${s}`)
         .join('\n')}`;
 
@@ -651,9 +659,13 @@ Critical formatting rules:
       if (totalNodes >= maxTotalSteps) return;
 
       const expandStack = await getSafeContextStack();
+      const expandStackHint =
+        expandStack && expandStack.includes('...[TRUNCATED]')
+          ? `NOTE: The context stack excerpt above is truncated.\nYou can read more from ".orchestrator/context_stack.jsonl" (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.\nIf file access isn't available, request more frames to be included.\n`
+          : '';
       const expandSystemPrompt = expandSystemPromptBase;
 
-      const expandUserPrompt = `${expandStack ? `SO FAR (CONTEXT STACK):\n${expandStack}\n\n` : ''}Overall Goal: ${goal}
+      const expandUserPrompt = `${expandStack ? `SO FAR (CONTEXT STACK):\n${expandStack}\n\n${expandStackHint ? `${expandStackHint}\n` : ''}` : ''}Overall Goal: ${goal}
 Current Step: ${node.step}
 Ancestor Steps: ${ancestors.length > 0 ? ancestors.join(' > ') : '(none)'}
 Target Depth: ${depth + 1} of ${maxDepth}

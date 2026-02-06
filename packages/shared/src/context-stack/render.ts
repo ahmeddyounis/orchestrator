@@ -60,7 +60,18 @@ export function renderContextStackForPrompt(
     totalChars += blockWithSep.length;
   }
 
+  const omittedFrames = Math.max(0, newestFirst.length - blocks.length);
+  if (omittedFrames > 0) {
+    const marker = `\n...[TRUNCATED] (+${omittedFrames} older frame${omittedFrames === 1 ? '' : 's'} not shown)`;
+
+    if (totalChars + marker.length > maxChars) {
+      // Best-effort: still append a short marker even if we're out of budget.
+      blocks.push(`\n...[TRUNCATED]`);
+    } else {
+      blocks.push(marker);
+    }
+  }
+
   if (blocks.length === 0) return '';
   return blocks.join('');
 }
-

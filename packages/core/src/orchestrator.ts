@@ -646,8 +646,12 @@ export class Orchestrator {
     }
 
     const stackText = contextStack.getContextStackText();
+    const stackHint =
+      stackText && stackText.includes('...[TRUNCATED]')
+        ? `NOTE: The context stack excerpt above is truncated.\nYou can read more from ".orchestrator/context_stack.jsonl" (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.\nIf file access isn't available, request more frames to be included.\n`
+        : '';
     const context = `
-${stackText ? `SO FAR (CONTEXT STACK):\n${stackText}\n\n` : ''}REPOSITORY STRUCTURE:
+${stackText ? `SO FAR (CONTEXT STACK):\n${stackText}\n\n${stackHint ? `${stackHint}\n` : ''}` : ''}REPOSITORY STRUCTURE:
 ${fileList}
 
 SEARCH RESULTS (for keywords: ${keywords.join(', ')}):

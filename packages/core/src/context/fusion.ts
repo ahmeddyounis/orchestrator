@@ -46,7 +46,7 @@ export class SimpleContextFuser implements ContextFuser {
 
     // 2. So-far context stack
     if (contextStack && contextStack.length > 0 && budgets.maxContextStackChars > 0) {
-      const [stackString, stackMeta] = this.packContextStack(
+      const [stackString, stackMeta, stackTruncated] = this.packContextStack(
         contextStack,
         budgets.maxContextStackChars,
         budgets.maxContextStackFrames,
@@ -54,6 +54,11 @@ export class SimpleContextFuser implements ContextFuser {
       if (stackString) {
         promptSections.push(`SO FAR (CONTEXT STACK):${HEADER_SEPARATOR}${stackString}`);
         metadata.contextStack = stackMeta;
+        if (stackTruncated) {
+          promptSections.push(
+            `CONTEXT STACK (READ MORE):${HEADER_SEPARATOR}The context stack excerpt above is truncated.\nFull stack: .orchestrator/context_stack.jsonl (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.\nIf file access isn't available, request more frames to be included.`,
+          );
+        }
       }
     }
 
@@ -92,7 +97,7 @@ export class SimpleContextFuser implements ContextFuser {
     frames: ContextStackFrame[],
     budgetChars: number,
     maxFrames: number,
-  ): [string, FusedContext['metadata']['contextStack']] {
+  ): [string, FusedContext['metadata']['contextStack'], boolean] {
     const renderBudget = Math.max(0, budgetChars);
     const maxFrameCount = Math.max(0, maxFrames);
 
@@ -100,6 +105,9 @@ export class SimpleContextFuser implements ContextFuser {
       maxChars: renderBudget,
       maxFrames: maxFrameCount,
     });
+
+    const truncatedByFrames = maxFrameCount > 0 ? frames.length > maxFrameCount : frames.length > 0;
+    const truncatedByChars = content.includes('...[TRUNCATED]');
 
     // Apply prompt injection defenses.
     const filtered = filterInjectionPhrases(content);
@@ -125,7 +133,7 @@ export class SimpleContextFuser implements ContextFuser {
       if (meta.length > 0) meta[meta.length - 1] = { ...meta[meta.length - 1], truncated: true };
     }
 
-    return [content, meta];
+    return [content, meta, truncatedByFrames || truncatedByChars];
   }
 
   private packRepoContext(
