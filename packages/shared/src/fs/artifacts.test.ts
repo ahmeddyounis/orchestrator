@@ -187,6 +187,28 @@ describe('createArtifactCrypto', () => {
       const decrypted = crypto.decryptBuffer(legacyBuf);
       expect(decrypted).toEqual(original);
     });
+
+    it('backward-compatibility contract: decrypts a blob keyed with the old static salt', () => {
+      // Manually derive the key exactly as the old code did
+      const OLD_STATIC_SALT = Buffer.from('orchestrator-artifact-salt');
+      const derivedKey = scryptSync(TEST_KEY, OLD_STATIC_SALT, 32);
+
+      // Encrypt a known plaintext using that derived key (old format: no version byte)
+      const plaintext = 'backward-compat contract payload 🔐';
+      const data = Buffer.from(plaintext, 'utf8');
+      const iv = randomBytes(12);
+      const cipher = createCipheriv('aes-256-gcm', derivedKey, iv);
+      const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+
+      // Old layout: [iv (12), authTag (16), ciphertext]
+      const legacyBlob = Buffer.concat([iv, authTag, encrypted]);
+
+      // The current createArtifactCrypto must be able to decrypt this
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const result = crypto.decryptBuffer(legacyBlob);
+      expect(result.toString('utf8')).toBe(plaintext);
+    });
   });
 
   describe('static-salt format round-trip sanity check', () => {
