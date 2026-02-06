@@ -4,6 +4,7 @@ export const minimalConfigForTest: Config = {
   configVersion: 1,
   thinkLevel: 'L1',
   memory: ConfigSchema.parse({}).memory,
+  contextStack: ConfigSchema.parse({}).contextStack,
   verification: {
     enabled: false,
     mode: 'custom',

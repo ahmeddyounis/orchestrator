@@ -10,6 +10,9 @@ import {
   SummaryWriter,
   ConfigError,
   redactObject,
+  ContextStackStore,
+  ContextStackRecorder,
+  renderContextStackForPrompt,
 } from '@orchestrator/shared';
 import {
   ContextSignal,
@@ -160,6 +163,74 @@ export class Orchestrator {
     }
 
     return new Orchestrator(options, loadedPlugins);
+  }
+
+  private async setupContextStackForRun(args: {
+    runId: string;
+    artifactsRoot: string;
+    eventBus: EventBus;
+  }): Promise<{
+    eventBus: EventBus;
+    store?: ContextStackStore;
+    getContextStackText: () => string;
+    snapshotPath?: string;
+  }> {
+    const cfg = this.config.contextStack;
+    const enabled = cfg?.enabled ?? false;
+
+    if (!enabled) {
+      return { eventBus: args.eventBus, getContextStackText: () => '' };
+    }
+
+    const filePath = ContextStackStore.resolvePath(this.repoRoot, this.config);
+    const store = new ContextStackStore({
+      filePath,
+      security: this.config.security,
+      maxFrames: cfg.maxFrames,
+      maxBytes: cfg.maxBytes,
+    });
+
+    try {
+      await store.load();
+    } catch {
+      // Non-fatal: missing/invalid stack should not block a run.
+    }
+
+    const snapshotPath = path.join(args.artifactsRoot, 'context_stack.snapshot.jsonl');
+    try {
+      await store.snapshotTo(snapshotPath);
+    } catch {
+      // Non-fatal: snapshot is best-effort.
+    }
+
+    const recorder = new ContextStackRecorder(store, {
+      repoRoot: this.repoRoot,
+      runId: args.runId,
+      runArtifactsRoot: args.artifactsRoot,
+      enabled: true,
+    });
+
+    const wrappedEventBus: EventBus = {
+      emit: async (e) => {
+        await args.eventBus.emit(e);
+        try {
+          const safe = this.config.security?.redaction?.enabled
+            ? (redactObject(e) as OrchestratorEvent)
+            : e;
+          await recorder.onEvent(safe);
+        } catch {
+          // ignore
+        }
+      },
+    };
+
+    const getContextStackText = (): string =>
+      renderContextStackForPrompt(store.getAllFrames(), {
+        maxChars: cfg.promptBudgetChars,
+        maxFrames: cfg.promptMaxFrames,
+      });
+
+    return { eventBus: wrappedEventBus, store, getContextStackText, snapshotPath };
   }
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
@@ -515,11 +586,18 @@ export class Orchestrator {
     const runContext = await this.initService.initializeRun(runId, goal);
     const { artifacts, logger, eventBus: eventBusObj } = runContext;
 
+    const contextStack = await this.setupContextStackForRun({
+      runId,
+      artifactsRoot: artifacts.root,
+      eventBus: eventBusObj,
+    });
+    const eventBus = contextStack.eventBus;
+
     const emitEvent = async (e: OrchestratorEvent) => {
-      await eventBusObj.emit(e);
+      await eventBus.emit(e);
     };
 
-    await this.initService.emitRunStarted(eventBusObj, runId, goal);
+    await this.initService.emitRunStarted(eventBus, runId, goal);
 
     // Initialize manifest
     await this.initService.initializeManifest(artifacts, runId, goal);
@@ -567,8 +645,9 @@ export class Orchestrator {
       }
     }
 
+    const stackText = contextStack.getContextStackText();
     const context = `
-REPOSITORY STRUCTURE:
+${stackText ? `SO FAR (CONTEXT STACK):\n${stackText}\n\n` : ''}REPOSITORY STRUCTURE:
 ${fileList}
 
 SEARCH RESULTS (for keywords: ${keywords.join(', ')}):
@@ -931,7 +1010,13 @@ END_DIFF
   async runL1(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
     const runContext = await this.initService.initializeRun(runId, goal);
-    const { artifacts, logger, eventBus } = runContext;
+    const { artifacts, logger, eventBus: eventBusObj } = runContext;
+    const contextStack = await this.setupContextStackForRun({
+      runId,
+      artifactsRoot: artifacts.root,
+      eventBus: eventBusObj,
+    });
+    const eventBus = contextStack.eventBus;
     const baseRef = await this.git.getHeadSha();
 
     await this.initService.emitRunStarted(eventBus, runId, goal);
@@ -963,6 +1048,10 @@ END_DIFF
       artifacts.root,
       this.repoRoot,
       this.config,
+      undefined,
+      {
+        getContextStackText: () => contextStack.getContextStackText(),
+      },
     );
 
     if (steps.length === 0) {
@@ -1325,10 +1414,13 @@ END_DIFF
       );
 
       const fuser = new SimpleContextFuser(this.config.security);
+      const stackEnabled = this.config.contextStack?.enabled ?? false;
       const fusionBudgets = {
         maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
         maxMemoryChars: this.config.memory?.maxChars ?? 2000,
         maxSignalsChars: 1000,
+        maxContextStackChars: stackEnabled ? this.config.contextStack.promptBudgetChars : 0,
+        maxContextStackFrames: stackEnabled ? this.config.contextStack.promptMaxFrames : 0,
       };
 
       // TODO: Plumb real signals
@@ -1347,6 +1439,7 @@ END_DIFF
         repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
+        contextStack: contextStack.store?.getAllFrames(),
         budgets: fusionBudgets,
       });
 
@@ -1687,7 +1780,13 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     const startTime = Date.now();
 
     const runContext = await this.initService.initializeRun(runId, goal);
-    const { artifacts, logger, eventBus } = runContext;
+    const { artifacts, logger, eventBus: eventBusObj } = runContext;
+    const contextStack = await this.setupContextStackForRun({
+      runId,
+      artifactsRoot: artifacts.root,
+      eventBus: eventBusObj,
+    });
+    const eventBus = contextStack.eventBus;
 
     // 1. Initial Plan & Execute (L1)
     this.suppressEpisodicMemoryWrite = true;
@@ -1963,10 +2062,17 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         repoPack: { items: [], totalChars: 0, estimatedTokens: 0 }, // No repo context for repairs yet
         memoryHits,
         signals: [],
+        contextStack: contextStack.store?.getAllFrames(),
         budgets: {
           maxRepoContextChars: 0,
           maxMemoryChars: 4000,
           maxSignalsChars: 1000,
+          maxContextStackChars: this.config.contextStack?.enabled
+            ? this.config.contextStack.promptBudgetChars
+            : 0,
+          maxContextStackFrames: this.config.contextStack?.enabled
+            ? this.config.contextStack.promptMaxFrames
+            : 0,
         },
       });
 
@@ -2220,7 +2326,13 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
   async runL3(goal: string, runId: string): Promise<RunResult> {
     const startTime = Date.now();
     const runContext = await this.initService.initializeRun(runId, goal);
-    const { artifacts, logger, eventBus } = runContext;
+    const { artifacts, logger, eventBus: eventBusObj } = runContext;
+    const contextStack = await this.setupContextStackForRun({
+      runId,
+      artifactsRoot: artifacts.root,
+      eventBus: eventBusObj,
+    });
+    const eventBus = contextStack.eventBus;
     const baseRef = await this.git.getHeadSha();
 
     await this.initService.emitRunStarted(eventBus, runId, goal);
@@ -2252,6 +2364,10 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       artifacts.root,
       this.repoRoot,
       this.config,
+      undefined,
+      {
+        getContextStackText: () => contextStack.getContextStackText(),
+      },
     );
 
     if (steps.length === 0) {
@@ -2573,10 +2689,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
         signals,
+        contextStack: contextStack.store?.getAllFrames(),
         budgets: {
           maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
           maxMemoryChars: this.config.memory?.maxChars ?? 2000,
           maxSignalsChars: 1000,
+          maxContextStackChars: this.config.contextStack?.enabled
+            ? this.config.contextStack.promptBudgetChars
+            : 0,
+          maxContextStackFrames: this.config.contextStack?.enabled
+            ? this.config.contextStack.promptMaxFrames
+            : 0,
         },
       });
 
@@ -2877,10 +3000,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
                 repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
                 memoryHits,
                 signals,
+                contextStack: contextStack.store?.getAllFrames(),
                 budgets: {
                   maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
                   maxMemoryChars: this.config.memory?.maxChars ?? 2000,
                   maxSignalsChars: 1000,
+                  maxContextStackChars: this.config.contextStack?.enabled
+                    ? this.config.contextStack.promptBudgetChars
+                    : 0,
+                  maxContextStackFrames: this.config.contextStack?.enabled
+                    ? this.config.contextStack.promptMaxFrames
+                    : 0,
                 },
               });
               stepContext.fusedContext = fusedContext;

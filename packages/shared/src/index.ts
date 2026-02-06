@@ -13,6 +13,7 @@ export * from './config/schema';
 export * from './config/validation';
 export * from './types/memory';
 export * from './security';
+export * from './context-stack';
 
 export * from './types/llm';
 export * from './types/patch';

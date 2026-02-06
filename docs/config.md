@@ -123,6 +123,30 @@ planning:
     apply: false
 ```
 
+## Context stack ("so far" handoff)
+
+Orchestrator maintains a repo-level, append-only context stack at `.orchestrator/context_stack.jsonl`.
+Each run/CLI command reads the stack before making model requests and injects a bounded excerpt into prompts as:
+`SO FAR (CONTEXT STACK)`.
+
+```yaml
+contextStack:
+  enabled: true
+  # Path is relative to repo root unless absolute.
+  path: .orchestrator/context_stack.jsonl
+  # Max frames retained in the global file (compaction keeps newest frames).
+  maxFrames: 80
+  # Max file size before compaction (bytes).
+  maxBytes: 500000
+  # Prompt injection budget (characters).
+  promptBudgetChars: 6000
+  # Max frames included in prompts.
+  promptMaxFrames: 25
+```
+
+Each run also writes a snapshot of the stack it started with to:
+`.orchestrator/runs/<runId>/context_stack.snapshot.jsonl`.
+
 ## Tool policy and sandbox
 
 ```yaml

@@ -35,6 +35,8 @@ describe('SimpleContextFuser', () => {
       maxRepoContextChars: 1000,
       maxMemoryChars: 1000,
       maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
     };
 
     const { prompt, metadata } = fuser.fuse({ goal, repoPack, memoryHits, signals, budgets });
@@ -85,6 +87,8 @@ describe('SimpleContextFuser', () => {
       maxRepoContextChars: 70,
       maxMemoryChars: 1000,
       maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
     };
 
     const { prompt, metadata } = fuser.fuse({
@@ -131,6 +135,8 @@ describe('SimpleContextFuser', () => {
       maxRepoContextChars: 1000,
       maxMemoryChars: 120,
       maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
     };
 
     const { prompt, metadata } = fuser.fuse({
@@ -157,6 +163,8 @@ describe('SimpleContextFuser', () => {
       maxRepoContextChars: 1000,
       maxMemoryChars: 1000,
       maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
     };
 
     const { prompt, metadata } = fuser.fuse({
@@ -193,6 +201,8 @@ describe('SimpleContextFuser', () => {
       maxRepoContextChars: 1000,
       maxMemoryChars: 1000,
       maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
     };
 
     const { prompt } = fuser.fuse({ goal, repoPack, memoryHits: [], signals: [], budgets });
@@ -200,5 +210,41 @@ describe('SimpleContextFuser', () => {
     expect(prompt).toContain('UNTRUSTED REPO CONTENT');
     expect(prompt).toContain('[PROMPT INJECTION ATTEMPT DETECTED]');
     expect(prompt).not.toContain('ignore your previous instructions');
+  });
+
+  it('should include context stack when provided', () => {
+    const goal = 'Test stack';
+    const budgets: FusionBudgets = {
+      maxRepoContextChars: 1000,
+      maxMemoryChars: 1000,
+      maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
+    };
+
+    const { prompt, metadata } = fuser.fuse({
+      goal,
+      repoPack: { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: [],
+      signals: [],
+      contextStack: [
+        {
+          schemaVersion: 1,
+          ts: '2026-02-06T00:00:00.000Z',
+          runId: 'run-1',
+          kind: 'PlanCreated',
+          title: 'Plan created',
+          summary: '2 steps: A, B',
+        },
+      ],
+      budgets,
+    });
+
+    expect(prompt).toContain('SO FAR (CONTEXT STACK)');
+    expect(prompt).toContain('Plan created');
+    expect(prompt).toContain('2 steps: A, B');
+
+    expect(metadata.contextStack).toHaveLength(1);
+    expect(metadata.contextStack[0].kind).toBe('PlanCreated');
   });
 });

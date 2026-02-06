@@ -17,6 +17,10 @@ import {
   type Config,
   ConfigError,
   UsageError,
+  ContextStackRecorder,
+  ContextStackStore,
+  renderContextStackForPrompt,
+  redactObject,
 } from '@orchestrator/shared';
 import {
   OpenAIAdapter,
@@ -191,9 +195,53 @@ export function registerPlanCommand(program: Command) {
       registry.registerFactory('gemini_cli', (cfg) => new GeminiCliAdapter(cfg));
       registry.registerFactory('codex_cli', (cfg) => new CodexCliAdapter(cfg));
 
-      const eventBus = {
+      const baseEventBus = {
         emit: async (event: OrchestratorEvent) => {
           await logger.log(event);
+        },
+      };
+
+      const contextStackEnabled = config.contextStack?.enabled ?? false;
+      const contextStackStore = contextStackEnabled
+        ? new ContextStackStore({
+            filePath: ContextStackStore.resolvePath(repoRoot, config),
+            security: config.security,
+            maxFrames: config.contextStack.maxFrames,
+            maxBytes: config.contextStack.maxBytes,
+          })
+        : undefined;
+
+      if (contextStackStore) {
+        try {
+          await contextStackStore.load();
+        } catch {
+          // ignore
+        }
+        try {
+          await contextStackStore.snapshotTo(path.join(artifacts.root, 'context_stack.snapshot.jsonl'));
+        } catch {
+          // ignore
+        }
+      }
+
+      const contextStackRecorder =
+        contextStackEnabled && contextStackStore
+          ? new ContextStackRecorder(contextStackStore, {
+              repoRoot,
+              runId,
+              runArtifactsRoot: artifacts.root,
+              enabled: true,
+            })
+          : undefined;
+
+      const eventBus = {
+        emit: async (event: OrchestratorEvent) => {
+          await baseEventBus.emit(event);
+          if (!contextStackRecorder) return;
+          const safe = config.security?.redaction?.enabled
+            ? (redactObject(event) as OrchestratorEvent)
+            : event;
+          await contextStackRecorder.onEvent(safe);
         },
       };
 
@@ -264,6 +312,15 @@ export function registerPlanCommand(program: Command) {
         repoRoot,
         config,
         Object.keys(planOptions).length > 0 ? planOptions : undefined,
+        contextStackEnabled && contextStackStore
+          ? {
+              getContextStackText: () =>
+                renderContextStackForPrompt(contextStackStore.getAllFrames(), {
+                  maxChars: config.contextStack.promptBudgetChars,
+                  maxFrames: config.contextStack.promptMaxFrames,
+                }),
+            }
+          : undefined,
       );
 
       // plan.json is written by PlanService

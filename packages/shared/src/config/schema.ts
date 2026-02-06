@@ -451,6 +451,19 @@ const PlanningConfigSchema = z.object({
   review: PlanningReviewConfigSchema.optional(),
 });
 
+const ContextStackConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  path: z.string().default('.orchestrator/context_stack.jsonl'),
+  /** Maximum frames retained in the global stack file (and in memory). */
+  maxFrames: z.number().int().min(1).max(500).default(80),
+  /** Maximum size (bytes) of the global stack file before compaction. */
+  maxBytes: z.number().int().min(10_000).default(500_000),
+  /** Character budget injected into model prompts. */
+  promptBudgetChars: z.number().int().min(0).default(6000),
+  /** Maximum number of frames included in prompts. */
+  promptMaxFrames: z.number().int().min(0).default(25),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
@@ -502,6 +515,7 @@ export const ConfigSchema = z.object({
         .optional(),
     })
     .optional(),
+  contextStack: ContextStackConfigSchema.default(ContextStackConfigSchema.parse({})),
   planning: PlanningConfigSchema.optional(),
   commandPolicy: z
     .object({

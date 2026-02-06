@@ -29,12 +29,14 @@ describe('ConfigLoader', () => {
     it('should load default config when no files exist', () => {
       const memory = ConfigSchema.parse({}).memory;
       const security = ConfigSchema.parse({}).security;
+      const contextStack = ConfigSchema.parse({}).contextStack;
       const config = ConfigLoader.load({ cwd: mockCwd });
       expect(config).toEqual({
         configVersion: 1,
         thinkLevel: 'L1',
         budget: DEFAULT_BUDGET,
         memory,
+        contextStack,
         security,
         verification: {
           enabled: true,

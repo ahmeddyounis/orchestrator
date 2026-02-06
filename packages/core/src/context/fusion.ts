@@ -1,8 +1,9 @@
 import { ContextFuser, FusedContext, FusionBudgets } from './types';
 import { ContextPack, ContextSignal } from '@orchestrator/repo';
 import { MemoryEntry } from '@orchestrator/memory';
-import { Config, SecretScanner, redact } from '@orchestrator/shared';
+import { Config, SecretScanner, redact, renderContextStackForPrompt } from '@orchestrator/shared';
 import { filterInjectionPhrases, wrapUntrustedContent } from '../security/guards';
+import type { ContextStackFrame } from '@orchestrator/shared';
 
 const HEADER_SEPARATOR = `
 ${'-'.repeat(20)}
@@ -20,15 +21,17 @@ export class SimpleContextFuser implements ContextFuser {
   }
 
   fuse(inputs: {
+    goal: string;
     repoPack: ContextPack;
     memoryHits: MemoryEntry[];
     signals: ContextSignal[];
+    contextStack?: ContextStackFrame[];
     budgets: FusionBudgets;
-    goal: string;
   }): FusedContext {
-    const { repoPack, memoryHits, signals, budgets, goal } = inputs;
+    const { repoPack, memoryHits, signals, budgets, goal, contextStack } = inputs;
 
     const metadata: FusedContext['metadata'] = {
+      contextStack: [],
       repoItems: [],
       memoryHits: [],
       signals: [],
@@ -39,6 +42,19 @@ export class SimpleContextFuser implements ContextFuser {
     // 1. Goal
     if (goal) {
       promptSections.push(`GOAL: ${goal}`);
+    }
+
+    // 2. So-far context stack
+    if (contextStack && contextStack.length > 0 && budgets.maxContextStackChars > 0) {
+      const [stackString, stackMeta] = this.packContextStack(
+        contextStack,
+        budgets.maxContextStackChars,
+        budgets.maxContextStackFrames,
+      );
+      if (stackString) {
+        promptSections.push(`SO FAR (CONTEXT STACK):${HEADER_SEPARATOR}${stackString}`);
+        metadata.contextStack = stackMeta;
+      }
     }
 
     // 2. Repo Context
@@ -70,6 +86,46 @@ export class SimpleContextFuser implements ContextFuser {
       prompt,
       metadata,
     };
+  }
+
+  private packContextStack(
+    frames: ContextStackFrame[],
+    budgetChars: number,
+    maxFrames: number,
+  ): [string, FusedContext['metadata']['contextStack']] {
+    const renderBudget = Math.max(0, budgetChars);
+    const maxFrameCount = Math.max(0, maxFrames);
+
+    let content = renderContextStackForPrompt(frames, {
+      maxChars: renderBudget,
+      maxFrames: maxFrameCount,
+    });
+
+    // Apply prompt injection defenses.
+    const filtered = filterInjectionPhrases(content);
+    content = filtered === content ? filtered : wrapUntrustedContent(filtered);
+
+    if (this.redactionEnabled && this.scanner) {
+      const findings = this.scanner.scan(content);
+      if (findings.length > 0) {
+        content = redact(content, findings);
+      }
+    }
+
+    const included = [...frames].reverse().slice(0, maxFrameCount);
+    const meta: FusedContext['metadata']['contextStack'] = included.map((f) => ({
+      kind: f.kind,
+      ts: f.ts,
+      ...(f.runId ? { runId: f.runId } : {}),
+      truncated: false,
+    }));
+
+    if (content.length > renderBudget && renderBudget > 0) {
+      content = content.slice(0, renderBudget) + '\n...[TRUNCATED]';
+      if (meta.length > 0) meta[meta.length - 1] = { ...meta[meta.length - 1], truncated: true };
+    }
+
+    return [content, meta];
   }
 
   private packRepoContext(

@@ -89,6 +89,12 @@ export class ContextBuilderService {
       maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
       maxMemoryChars: this.config.memory?.maxChars ?? 2000,
       maxSignalsChars: 1000,
+      maxContextStackChars: this.config.contextStack?.enabled
+        ? this.config.contextStack.promptBudgetChars
+        : 0,
+      maxContextStackFrames: this.config.contextStack?.enabled
+        ? this.config.contextStack.promptMaxFrames
+        : 0,
     };
 
     const fusedContext = fuser.fuse({

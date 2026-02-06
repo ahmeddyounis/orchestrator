@@ -13,6 +13,7 @@ import { EventBus } from '../registry';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { z } from 'zod';
+import { filterInjectionPhrases, wrapUntrustedContent } from '../security/guards';
 import {
   PLAN_JSON_SCHEMA_VERSION,
   PLAN_REVIEW_SCHEMA_VERSION,
@@ -145,6 +146,14 @@ export interface PlanGenerationOptions {
   applyReview?: boolean;
 }
 
+export interface PlanPromptContext {
+  /**
+   * Returns the current "so far" context stack, already rendered as plain text.
+   * This is treated as untrusted content (it may contain user-provided strings).
+   */
+  getContextStackText?: () => Promise<string> | string;
+}
+
 export class PlanService {
   constructor(private eventBus: EventBus) {}
 
@@ -156,6 +165,7 @@ export class PlanService {
     repoRoot: string,
     config?: Config,
     options?: PlanGenerationOptions,
+    promptContext?: PlanPromptContext,
   ): Promise<string[]> {
     const adapterCtx: AdapterContext = { ...ctx, repoRoot };
 
@@ -302,7 +312,7 @@ export class PlanService {
       // But maybe we should write an error report?
     }
 
-    const systemPrompt = `You are an expert software architecture planner.
+    const systemPromptBase = `You are an expert software architecture planner.
 Your goal is to break down a high-level user goal into a sequence of clear, actionable implementation steps.
 Return ONLY a JSON object with a "steps" property containing an array of strings.
 
@@ -317,7 +327,18 @@ Critical formatting rules:
 - Do NOT prefix steps with numbering/bullets (no "1.", "1.1.", "-", etc).
 - Each step must be a single, concise, actionable instruction (imperative voice).`;
 
-    let userPrompt = `Goal: ${goal}`;
+    const getSafeContextStack = async (): Promise<string> => {
+      const raw = await promptContext?.getContextStackText?.();
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (!text) return '';
+      const filtered = filterInjectionPhrases(text);
+      return filtered === text ? filtered : wrapUntrustedContent(filtered);
+    };
+
+    const contextStackText = await getSafeContextStack();
+    const systemPrompt = systemPromptBase;
+
+    let userPrompt = `${contextStackText ? `SO FAR (CONTEXT STACK):\n${contextStackText}\n\n` : ''}Goal: ${goal}`;
 
     // Inject context if available
     if (contextPack && contextPack.items.length > 0) {
@@ -464,7 +485,7 @@ Critical formatting rules:
 
     let reviewResult: PlanReviewResult | undefined;
     if (reviewEnabled && outlineSteps.length > 0) {
-      const reviewSystemPrompt = `You are an expert software planning reviewer.
+      const reviewSystemPromptBase = `You are an expert software planning reviewer.
 Your job is to review a proposed plan against the goal for correctness, completeness, and ordering.
 
 Return ONLY JSON matching this schema:
@@ -481,7 +502,10 @@ Rules:
 - If the plan is missing critical steps or has poor ordering, set verdict to "revise" and include revisedSteps as a COMPLETE replacement outline.
 - If the plan is good, set verdict to "approve" and omit revisedSteps.`;
 
-      const reviewUserPrompt = `Goal: ${goal}\n\nProposed plan steps:\n${outlineSteps
+      const reviewStack = await getSafeContextStack();
+
+      const reviewSystemPrompt = reviewSystemPromptBase;
+      const reviewUserPrompt = `${reviewStack ? `SO FAR (CONTEXT STACK):\n${reviewStack}\n\n` : ''}Goal: ${goal}\n\nProposed plan steps:\n${outlineSteps
         .map((s) => `- ${s}`)
         .join('\n')}`;
 
@@ -601,7 +625,7 @@ Rules:
       return normalizePlanSteps(parsedSteps).slice(0, maxSubstepsPerStep);
     };
 
-    const expandSystemPrompt = `You are an expert software architecture planner.
+    const expandSystemPromptBase = `You are an expert software architecture planner.
 Your goal is to break down a single plan step into smaller, sequential, actionable substeps.
 Return ONLY a JSON object with a "steps" property containing an array of strings.
 
@@ -626,7 +650,10 @@ Critical formatting rules:
       if (depth >= maxDepth) return;
       if (totalNodes >= maxTotalSteps) return;
 
-      const expandUserPrompt = `Overall Goal: ${goal}
+      const expandStack = await getSafeContextStack();
+      const expandSystemPrompt = expandSystemPromptBase;
+
+      const expandUserPrompt = `${expandStack ? `SO FAR (CONTEXT STACK):\n${expandStack}\n\n` : ''}Overall Goal: ${goal}
 Current Step: ${node.step}
 Ancestor Steps: ${ancestors.length > 0 ? ancestors.join(' > ') : '(none)'}
 Target Depth: ${depth + 1} of ${maxDepth}

@@ -6,11 +6,12 @@ This document explains how this fusion process works and where you can find the 
 
 ## Information Sources
 
-The fused context is assembled from three primary sources:
+The fused context is assembled from four primary sources:
 
 1.  **Repository Context:** This includes information extracted directly from your codebase. It comprises file contents, file paths, and symbol information (classes, functions, etc.) that are deemed relevant to the current task. Relevance is determined by a combination of heuristics and the indexing service.
 2.  **Memory:** The Orchestrator's long-term memory provides historical context from past interactions. This includes previously successful commands, edited files, and other learned knowledge.
 3.  **Signals:** These are dynamic, in-the-moment cues that provide immediate context. The most important signal is the user's prompt, but it can also include clipboard content, open files in the IDE, and other real-time information.
+4.  **Context Stack ("So Far"):** A repo-level stack of high-level run events (e.g., plan created, step finished, verification results) stored in `.orchestrator/context_stack.jsonl`. A bounded excerpt is injected into prompts as `SO FAR (CONTEXT STACK)` to preserve cross-step and cross-run continuity.
 
 ## The Fusion Process
 

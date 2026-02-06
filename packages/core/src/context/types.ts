@@ -1,13 +1,22 @@
 import { ContextPack, ContextSignal } from '@orchestrator/repo';
 import { MemoryEntry } from '@orchestrator/memory';
+import type { ContextStackFrame } from '@orchestrator/shared';
 
 export interface FusionBudgets {
   maxRepoContextChars: number;
   maxMemoryChars: number;
   maxSignalsChars: number;
+  maxContextStackChars: number;
+  maxContextStackFrames: number;
 }
 
 export interface FusedContextMetadata {
+  contextStack: {
+    kind: string;
+    ts: string;
+    runId?: string;
+    truncated: boolean;
+  }[];
   repoItems: {
     path: string;
     startLine: number;
@@ -31,9 +40,11 @@ export interface FusedContext {
 
 export interface ContextFuser {
   fuse(inputs: {
+    goal: string;
     repoPack: ContextPack;
     memoryHits: MemoryEntry[];
     signals: ContextSignal[];
+    contextStack?: ContextStackFrame[];
     budgets: FusionBudgets;
   }): FusedContext;
 }
