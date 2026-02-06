@@ -5,6 +5,9 @@ import { SemanticHit } from './types';
 import { VectorIndex } from './vector-index';
 import type { Chunk } from '../store/types';
 
+/** Timeout (ms) for embedding API calls. Override via environment variable. */
+const EMBED_TIMEOUT_MS = Number(process.env.EMBED_TIMEOUT_MS) || 30_000;
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
