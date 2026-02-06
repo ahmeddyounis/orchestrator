@@ -12,6 +12,7 @@ import {
   createArtifactCrypto,
   writeArtifact,
   readArtifact,
+  appendArtifact,
 } from './artifacts';
 
 describe('artifacts', () => {
@@ -295,3 +296,28 @@ describe('createArtifactCrypto', () => {
       expect(result).toBe(content);
     });
   });
+
+  describe('appendArtifact with encryption', () => {
+    let tmpDir: string;
+
+    afterEach(async () => {
+      if (tmpDir) {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes initial content, appends more, and reads back the concatenated result', async () => {
+      tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-artifact-append-'));
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const filePath = join(tmpDir, 'append-test.txt');
+      const initial = 'first chunk | ';
+      const appended = 'second chunk 🔗';
+
+      await writeArtifact(filePath, initial, crypto);
+      await appendArtifact(filePath, appended, crypto);
+
+      const result = await readArtifact(filePath, crypto);
+      expect(result).toBe(initial + appended);
+    });
+  });
+});
