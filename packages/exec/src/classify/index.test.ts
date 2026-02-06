@@ -105,8 +105,10 @@ describe('matchesDenylist', () => {
   it('matches exact strings', () => {
     expect(matchesDenylist('rm -rf /', ['rm -rf /'])).toBe(true);
   });
-  it('matches regex', () => {
-    expect(matchesDenylist('rm -rf /', ['rm .* /'])).toBe(true);
+  it('treats patterns as literal strings, not regex', () => {
+    // After escaping, "rm .* /" matches only the literal string "rm .* /", not "rm -rf /"
+    expect(matchesDenylist('rm -rf /', ['rm .* /'])).toBe(false);
+    expect(matchesDenylist('rm .* / something', ['rm .* /'])).toBe(true);
   });
   it('does not match safe commands', () => {
     expect(matchesDenylist('ls -la', ['rm .*'])).toBe(false);
