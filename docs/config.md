@@ -151,6 +151,11 @@ Each run also writes a snapshot of the stack it started with to:
 
 ```yaml
 execution:
+  # Optional: review each generated patch and ask the executor to revise it
+  # before applying.
+  reviewLoop:
+    enabled: false
+    maxReviews: 2
   tools:
     enabled: true
     requireConfirmation: true

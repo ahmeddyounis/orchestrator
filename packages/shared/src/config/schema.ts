@@ -464,6 +464,12 @@ const ContextStackConfigSchema = z.object({
   promptMaxFrames: z.number().int().min(0).default(25),
 });
 
+const PatchReviewLoopConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Maximum review+revise cycles per patch (per plan step / repair). */
+  maxReviews: z.number().int().min(1).max(10).default(2),
+});
+
 export const ConfigSchema = z.object({
   configVersion: z.literal(1).default(1),
   thinkLevel: z.enum(['L0', 'L1', 'L2', 'L3']).default('L1'),
@@ -550,6 +556,11 @@ export const ConfigSchema = z.object({
        * malformed diff fragments (e.g. missing file headers) before retrying.
        */
       autoRepairPatchFragments: z.boolean().default(true),
+      /**
+       * If enabled, each generated patch is iteratively reviewed and revised
+       * by the reviewer and executor before being applied.
+       */
+      reviewLoop: PatchReviewLoopConfigSchema.default(PatchReviewLoopConfigSchema.parse({})),
       tools: ToolPolicySchema.default(ToolPolicySchema.parse({})),
       sandbox: SandboxConfigSchema.default(SandboxConfigSchema.parse({})),
     })

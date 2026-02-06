@@ -48,6 +48,8 @@ export function registerRunCommand(program: Command) {
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
+    .option('--review-loop', 'Enable patch review + revise loop before applying patches')
+    .option('--review-loop-max <n>', 'Maximum review rounds (integer >= 1)')
     .option('--sandbox <mode>', 'Sandbox mode: none, docker, devcontainer')
     .option('--allow-large-diff', 'Allow large diffs without confirmation')
     .option('--no-tools', 'Force tools disabled')
@@ -188,6 +190,22 @@ export function registerRunCommand(program: Command) {
         l3.bestOfN = bestOfN;
       }
 
+      // Patch review loop flags
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reviewLoop: any = {};
+      if (options.reviewLoopMax !== undefined) {
+        const maxReviews = Number(options.reviewLoopMax);
+        if (!Number.isInteger(maxReviews) || maxReviews < 1) {
+          throw new UsageError(
+            `Invalid --review-loop-max "${options.reviewLoopMax}". Must be an integer >= 1.`,
+          );
+        }
+        reviewLoop.maxReviews = maxReviews;
+      }
+      if (options.reviewLoop || options.reviewLoopMax !== undefined) {
+        reviewLoop.enabled = true;
+      }
+
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
         flags: {
@@ -203,6 +221,7 @@ export function registerRunCommand(program: Command) {
             ? { maxFilesChanged: Infinity, maxLinesChanged: Infinity, allowBinary: false }
             : undefined,
           execution: {
+            reviewLoop: Object.keys(reviewLoop).length > 0 ? reviewLoop : undefined,
             tools: {
               enabled: options.tools === false ? false : undefined,
               autoApprove: options.yes,

@@ -40,6 +40,7 @@ import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
 import { ExecutionService } from './exec/service';
 import { extractUnifiedDiff } from './exec/diff_extractor';
+import { runPatchReviewLoop } from './exec/review_loop';
 import { UserInterface } from '@orchestrator/exec';
 import { VerificationRunner } from './verify/runner';
 import { VerificationProfile } from './verify/types';
@@ -1568,7 +1569,35 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         const patchPath = await patchStore.saveSelected(stepIndex, diffContent);
         if (attempt === 1) patchPaths.push(patchPath);
 
-        const result = await executionService.applyPatch(diffContent, step);
+        let patchToApply = diffContent;
+        try {
+          const reviewLoopResult = await runPatchReviewLoop({
+            goal,
+            step,
+            stepId,
+            ancestors,
+            fusedContextText: contextText,
+            initialPatch: patchToApply,
+            providers: { executor: providers.executor, reviewer: providers.reviewer },
+            adapterCtx: { runId, logger, repoRoot: this.repoRoot },
+            repoRoot: this.repoRoot,
+            artifactsRoot: artifacts.root,
+            manifestPath: artifacts.manifest,
+            config: this.config,
+            label: { kind: 'step', index: stepIndex, slug: stepSlug },
+          });
+          if (reviewLoopResult.patch.trim().length > 0) {
+            patchToApply = reviewLoopResult.patch;
+          }
+        } catch {
+          // Non-fatal: review loop is best-effort and should never block execution.
+        }
+
+        if (patchToApply.trim() !== diffContent.trim()) {
+          await patchStore.saveSelected(stepIndex, patchToApply);
+        }
+
+        const result = await executionService.applyPatch(patchToApply, step);
 
         if (result.success) {
           success = true;
@@ -1924,6 +1953,8 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     const touchedFiles = new Set(l1Result.filesChanged);
     const executorId = this.config.defaults?.executor || 'openai';
     const executor = this.registry.getAdapter(executorId);
+    const reviewerId = this.config.defaults?.reviewer || executorId;
+    const reviewer = this.registry.getAdapter(reviewerId);
 
     while (iterations < maxIterations) {
       iterations++;
@@ -2146,6 +2177,35 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       const patchPath = await patchStore.saveSelected(100 + iterations, diffContent);
       patchPaths.push(patchPath);
 
+      let patchToApply = diffContent;
+      try {
+        const reviewLoopResult = await runPatchReviewLoop({
+          goal,
+          step: `Fix verification failures (iteration ${iterations})`,
+          stepId: undefined,
+          ancestors: [],
+          fusedContextText: fusedContext.prompt,
+          initialPatch: patchToApply,
+          providers: { executor, reviewer },
+          adapterCtx: { runId, logger, repoRoot: this.repoRoot },
+          repoRoot: this.repoRoot,
+          artifactsRoot: artifacts.root,
+          manifestPath: artifacts.manifest,
+          config: this.config,
+          dryRunApplyOptions: { maxFilesChanged: 5 },
+          label: { kind: 'repair', index: iterations, slug: `iter_${iterations}` },
+        });
+        if (reviewLoopResult.patch.trim().length > 0) {
+          patchToApply = reviewLoopResult.patch;
+        }
+      } catch {
+        // Non-fatal
+      }
+
+      if (patchToApply.trim() !== diffContent.trim()) {
+        await patchStore.saveSelected(100 + iterations, patchToApply);
+      }
+
       await eventBus.emit({
         type: 'RepairAttempted',
         schemaVersion: 1,
@@ -2155,7 +2215,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       });
 
       const applier = new PatchApplier();
-      const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
+      const patchTextWithNewline = patchToApply.endsWith('\n') ? patchToApply : patchToApply + '\n';
 
       const applyResult = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
         maxFilesChanged: 5,
