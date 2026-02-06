@@ -813,10 +813,37 @@ END_DIFF
       return { status: 'failure', runId, summary: msg };
     }
 
+    let patchToApply = diffContent;
+    try {
+      const reviewer = this.registry.getAdapter(
+        this.config.defaults?.reviewer || this.config.defaults?.executor || 'openai',
+      );
+      const reviewLoopResult = await runPatchReviewLoop({
+        goal,
+        step: goal,
+        stepId: undefined,
+        ancestors: [],
+        fusedContextText: context,
+        initialPatch: patchToApply,
+        providers: { executor, reviewer },
+        adapterCtx: { runId, logger, repoRoot: this.repoRoot },
+        repoRoot: this.repoRoot,
+        artifactsRoot: artifacts.root,
+        manifestPath: artifacts.manifest,
+        config: this.config,
+        label: { kind: 'step', index: 0, slug: goal },
+      });
+      if (reviewLoopResult.patch.trim().length > 0) {
+        patchToApply = reviewLoopResult.patch;
+      }
+    } catch {
+      // Non-fatal
+    }
+
     // 5. Apply Patch
     const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-    const patchPath = await patchStore.saveSelected(0, diffContent);
-    const finalDiffPath = await patchStore.saveFinalDiff(diffContent);
+    const patchPath = await patchStore.saveSelected(0, patchToApply);
+    const finalDiffPath = await patchStore.saveFinalDiff(patchToApply);
 
     await emitEvent({
       type: 'PatchProposed',
@@ -824,13 +851,13 @@ END_DIFF
       timestamp: new Date().toISOString(),
       runId,
       payload: {
-        diffPreview: diffContent,
+        diffPreview: patchToApply,
         filePaths: [],
       },
     });
 
     const applier = new PatchApplier();
-    const patchTextWithNewline = diffContent.endsWith('\n') ? diffContent : diffContent + '\n';
+    const patchTextWithNewline = patchToApply.endsWith('\n') ? patchToApply : patchToApply + '\n';
     const result = await applier.applyUnifiedDiff(this.repoRoot, patchTextWithNewline, {
       maxFilesChanged: this.config.patch?.maxFilesChanged,
       maxLinesTouched: this.config.patch?.maxLinesChanged,
