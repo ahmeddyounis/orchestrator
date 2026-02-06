@@ -308,7 +308,7 @@ export class PlanService {
       await fs.writeFile(path.join(artifactsDir, 'context_pack.txt'), readableReport);
     } catch (err) {
       // Don't fail planning if context fails, just log it
-      logger.error('Context generation failed', { error: err });
+      logger.error(err instanceof Error ? err : new Error(String(err)), 'Context generation failed');
     }
 
     const systemPromptBase = `You are an expert software architecture planner.
