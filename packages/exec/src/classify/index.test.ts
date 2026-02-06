@@ -137,6 +137,31 @@ describe('matchesDenylist', () => {
     it('plus does not act as quantifier', () => {
       expect(matchesDenylist('ccccc compile', ['c++'])).toBe(false);
     });
+    it('escapes pipe – pattern "a|b" matches literally', () => {
+      expect(matchesDenylist('a|b run', ['a|b'])).toBe(true);
+    });
+    it('pipe does not act as alternation', () => {
+      // Without escaping, /a|b/ would match bare "b"
+      expect(matchesDenylist('b run', ['a|b'])).toBe(false);
+    });
+    it('escapes curly braces – pattern "x{2}" matches literally', () => {
+      expect(matchesDenylist('x{2} run', ['x{2}'])).toBe(true);
+    });
+    it('curly braces do not act as quantifiers', () => {
+      expect(matchesDenylist('xx run', ['x{2}'])).toBe(false);
+    });
+    it('escapes caret and dollar – pattern "^start$" matches literally', () => {
+      expect(matchesDenylist('^start$ run', ['^start$'])).toBe(true);
+    });
+    it('caret/dollar do not act as anchors', () => {
+      expect(matchesDenylist('start run', ['^start$'])).toBe(false);
+    });
+    it('escapes question mark – pattern "file?.txt" matches literally', () => {
+      expect(matchesDenylist('file?.txt run', ['file?.txt'])).toBe(true);
+    });
+    it('question mark does not act as optional quantifier', () => {
+      expect(matchesDenylist('filetxt run', ['file?.txt'])).toBe(false);
+    });
   });
 
   it('does not hang on pathological ReDoS patterns', () => {
