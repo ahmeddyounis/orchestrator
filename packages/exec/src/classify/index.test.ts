@@ -111,6 +111,33 @@ describe('matchesDenylist', () => {
   it('does not match safe commands', () => {
     expect(matchesDenylist('ls -la', ['rm .*'])).toBe(false);
   });
+
+  describe('escapes special regex characters in patterns', () => {
+    it('escapes dots – pattern "node.js" should not match "nodexjs"', () => {
+      expect(matchesDenylist('nodexjs build', ['node.js'])).toBe(false);
+    });
+    it('matches literal dot – pattern "node.js" matches "node.js"', () => {
+      expect(matchesDenylist('node.js build', ['node.js'])).toBe(true);
+    });
+    it('escapes parentheses – pattern "cmd(1)" matches literally', () => {
+      expect(matchesDenylist('cmd(1) --help', ['cmd(1)'])).toBe(true);
+    });
+    it('parentheses do not act as capture groups', () => {
+      expect(matchesDenylist('cmd1 --help', ['cmd(1)'])).toBe(false);
+    });
+    it('escapes square brackets – pattern "[test]" matches literally', () => {
+      expect(matchesDenylist('[test] run', ['[test]'])).toBe(true);
+    });
+    it('square brackets do not act as character classes', () => {
+      expect(matchesDenylist('t run', ['[test]'])).toBe(false);
+    });
+    it('escapes plus – pattern "c++" matches literally', () => {
+      expect(matchesDenylist('c++ compile', ['c++'])).toBe(true);
+    });
+    it('plus does not act as quantifier', () => {
+      expect(matchesDenylist('ccccc compile', ['c++'])).toBe(false);
+    });
+  });
 });
 
 describe('matchesAllowlist', () => {
