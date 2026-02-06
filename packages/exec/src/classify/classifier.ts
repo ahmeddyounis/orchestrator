@@ -1,11 +1,6 @@
 import * as path from 'path';
 import { ParsedCommand, ToolClassification } from './types';
 
-/** Escape all regex-special characters so the string can be safely interpolated into a RegExp. */
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function normalizeBin(bin: string): string {
   if (!bin) return '';
   const base = bin.replace(/\\/g, '/').split('/').pop() ?? bin;

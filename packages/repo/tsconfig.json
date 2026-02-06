@@ -6,7 +6,7 @@
     "composite": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/__fixtures__", "**/*.test.ts"],
+  "exclude": ["node_modules", "dist", "src/__fixtures__", "src/**/fixtures", "**/*.test.ts"],
   "references": [
     { "path": "../shared" },
     { "path": "../adapters" },
