@@ -309,7 +309,6 @@ export class PlanService {
     } catch (err) {
       // Don't fail planning if context fails, just log it
       logger.error('Context generation failed', { error: err });
-      // But maybe we should write an error report?
     }
 
     const systemPromptBase = `You are an expert software architecture planner.
