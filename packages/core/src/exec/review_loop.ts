@@ -60,25 +60,44 @@ function safeSlug(input: string): string {
   return trimmed.slice(0, 40).replace(/[^a-z0-9]/gi, '_');
 }
 
-function renderHistory(history: PatchReview[]): string {
-  if (history.length === 0) return '';
-  const lines: string[] = [];
-  lines.push('REVIEW HISTORY (oldest → newest):');
-  history.forEach((r, i) => {
-    const parts: string[] = [`Round ${i + 1}: verdict=${r.verdict}`, `confidence=${r.confidence}`];
-    if (r.summary) parts.push(`summary=${r.summary}`);
-    lines.push(`- ${parts.join(' | ')}`);
-    if (r.requiredChanges?.length) {
-      lines.push(`  requiredChanges: ${r.requiredChanges.slice(0, 6).join('; ')}${r.requiredChanges.length > 6 ? ' …' : ''}`);
-    }
-    if (r.issues?.length) {
-      lines.push(`  issues: ${r.issues.slice(0, 6).join('; ')}${r.issues.length > 6 ? ' …' : ''}`);
-    }
-    if (r.riskFlags?.length) {
-      lines.push(`  riskFlags: ${r.riskFlags.slice(0, 6).join('; ')}${r.riskFlags.length > 6 ? ' …' : ''}`);
-    }
-  });
-  return lines.join('\n');
+function buildContextStackHint(config: Config): string {
+  const rawPath = config.contextStack?.path || '.orchestrator/context_stack.jsonl';
+  return `If you need more run context/history and you have filesystem access, read "${rawPath}" (JSONL; one frame per line; newest frames are at the bottom).\nFrame keys: ts, runId?, kind, title, summary, details?, artifacts?.`;
+}
+
+function buildPatchHint(patchPath: string): string {
+  return `If the patch below appears truncated and you have filesystem access, read the full patch at "${patchPath}".`;
+}
+
+function buildPlanContextLines(args: {
+  goal: string;
+  step: string;
+  stepId?: string;
+  ancestors: string[];
+}): string[] {
+  return [
+    `OVERALL GOAL: ${args.goal}`,
+    `CURRENT LEAF STEP: ${args.step}`,
+    ...(args.stepId ? [`STEP ID: ${args.stepId}`] : []),
+    ...(args.ancestors.length
+      ? [`ANCESTORS (outer → inner):`, ...args.ancestors.map((a) => `- ${a}`)]
+      : []),
+  ];
+}
+
+function excerptText(text: string, maxChars: number): string {
+  const normalized = (text ?? '').trim();
+  if (!normalized) return '';
+  if (maxChars <= 0) return '';
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars)}\n...[TRUNCATED]`;
+}
+
+function contextExcerptMaxCharsForPatch(patchText: string): number {
+  const len = (patchText ?? '').length;
+  if (len >= 20_000) return 0;
+  if (len >= 12_000) return 500;
+  return 2000;
 }
 
 async function bestEffortUpdateManifest(manifestPath: string, artifactPaths: string[]): Promise<void> {
@@ -98,8 +117,10 @@ function buildReviewerRequest(args: {
   stepId?: string;
   ancestors: string[];
   fusedContextText: string;
+  contextExcerptMaxChars: number;
+  contextStackHint: string;
+  patchHint: string;
   patch: string;
-  historyText: string;
 }): ModelRequest {
   const systemPrompt = `You are an expert software engineer acting as a rigorous code reviewer.
 Your job is to review a proposed unified diff for the current LEAF plan step.
@@ -122,29 +143,32 @@ Rules:
 - Prefer citing file paths from the diff when describing issues.
 - Do not include any non-JSON output.`;
 
-  const planContextLines = [
-    `OVERALL GOAL: ${args.goal}`,
-    `CURRENT LEAF STEP: ${args.step}`,
-    ...(args.stepId ? [`STEP ID: ${args.stepId}`] : []),
-    ...(args.ancestors.length ? [`ANCESTORS (outer → inner):`, ...args.ancestors.map((a) => `- ${a}`)] : []),
-  ];
+  const planContextLines = buildPlanContextLines(args);
 
-  const userPrompt = `${planContextLines.join('\n')}
-
-${args.historyText ? `${args.historyText}\n\n` : ''}CONTEXT:
-${args.fusedContextText}
-
-PROPOSED PATCH (unified diff):
-${args.patch}`;
+  const contextExcerpt = excerptText(args.fusedContextText, args.contextExcerptMaxChars);
 
   return {
     messages: [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      {
+        role: 'user',
+        content: `${planContextLines.join('\n')}\n\n${args.contextStackHint}\n${args.patchHint}${contextExcerpt ? `\n\nCONTEXT (excerpt):\n${contextExcerpt}` : ''}`,
+      },
+      { role: 'user', content: `PROPOSED PATCH (unified diff):\n${args.patch}` },
     ],
     jsonMode: true,
     temperature: 0.1,
   };
+}
+
+function containsDiffMarkers(text: string): { hasBegin: boolean; hasEnd: boolean } {
+  const normalized = (text ?? '').toLowerCase();
+  const hasBegin = normalized.includes('begin_diff') || normalized.includes('<begin_diff>');
+  const hasEnd =
+    normalized.includes('end_diff') ||
+    normalized.includes('<end_diff>') ||
+    normalized.includes('</end_diff>');
+  return { hasBegin, hasEnd };
 }
 
 function buildExecutorRequest(args: {
@@ -153,9 +177,12 @@ function buildExecutorRequest(args: {
   stepId?: string;
   ancestors: string[];
   fusedContextText: string;
+  contextExcerptMaxChars: number;
+  contextStackHint: string;
+  patchHint: string;
   patch: string;
   review: PatchReview;
-  historyText: string;
+  retryNote?: string;
 }): ModelRequest {
   const systemPrompt = `You are an expert software engineer.
 You will revise a proposed patch based on reviewer feedback.
@@ -172,24 +199,22 @@ INSTRUCTIONS:
 3. Keep scope aligned to THIS LEAF STEP ONLY (do not try to complete the whole ancestor plan in one patch).
 4. Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 5. The diff must be valid for \`git apply\`: every file MUST have a \`diff --git\` header and \`---\`/\`+++\` headers before any \`@@\` hunks.
+6. IMPORTANT: Ensure the output includes the END_DIFF marker; do not truncate the diff.
 `;
 
-  const userPrompt = `${args.historyText ? `${args.historyText}\n\n` : ''}CONTEXT:
-${args.fusedContextText}
-
-CURRENT PATCH:
-${args.patch}
-
-REVIEW FEEDBACK (JSON):
-${JSON.stringify(args.review, null, 2)}
-
-Revise the patch accordingly.`;
+  const planContextLines = buildPlanContextLines(args);
+  const contextExcerpt = excerptText(args.fusedContextText, args.contextExcerptMaxChars);
 
   return {
     messages: [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      {
+        role: 'user',
+        content: `${planContextLines.join('\n')}\n\n${args.contextStackHint}\n${args.patchHint}${args.retryNote ? `\n\nPREVIOUS ATTEMPT ISSUE:\n${args.retryNote}` : ''}${contextExcerpt ? `\n\nCONTEXT (excerpt):\n${contextExcerpt}` : ''}\n\nREVIEW FEEDBACK (JSON):\n${JSON.stringify(args.review, null, 2)}`,
+      },
+      { role: 'user', content: `CURRENT PATCH:\n${args.patch}\n\nRevise the patch accordingly.` },
     ],
+    maxTokens: 4096,
   };
 }
 
@@ -235,7 +260,6 @@ export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<P
   await fs.mkdir(loopRoot, { recursive: true });
 
   let patch = input.initialPatch;
-  const history: PatchReview[] = [];
   const artifactPaths: string[] = [];
 
   let approved = false;
@@ -251,6 +275,9 @@ export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<P
     await fs.writeFile(inputPatchPath, patch);
     artifactPaths.push(inputPatchPath);
 
+    const contextStackHint = buildContextStackHint(input.config);
+    const patchHint = buildPatchHint(inputPatchPath);
+
     // 1) Review
     const reviewReq = buildReviewerRequest({
       goal: input.goal,
@@ -258,8 +285,10 @@ export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<P
       stepId: input.stepId,
       ancestors: input.ancestors,
       fusedContextText: input.fusedContextText,
+      contextExcerptMaxChars: contextExcerptMaxCharsForPatch(patch),
+      contextStackHint,
+      patchHint,
       patch,
-      historyText: renderHistory(history),
     });
 
     const reviewResp = await input.providers.reviewer.generate(reviewReq, input.adapterCtx);
@@ -281,7 +310,6 @@ export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<P
     }
 
     lastReview = review;
-    history.push(review);
 
     const reviewJsonPath = path.join(roundDir, 'review.json');
     await fs.writeFile(reviewJsonPath, JSON.stringify(review, null, 2));
@@ -293,40 +321,65 @@ export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<P
     }
 
     // 2) Revise
-    const execReq = buildExecutorRequest({
-      goal: input.goal,
-      step: input.step,
-      stepId: input.stepId,
-      ancestors: input.ancestors,
-      fusedContextText: input.fusedContextText,
-      patch,
-      review,
-      historyText: renderHistory(history),
-    });
+    const maxExecutorAttempts = 2;
+    let revised: string | null = null;
+    let lastExecError = '';
 
-    const execResp = await input.providers.executor.generate(execReq, input.adapterCtx);
-    const execRaw = execResp.text ?? '';
-    const execRawPath = path.join(roundDir, 'executor_raw.txt');
-    await fs.writeFile(execRawPath, execRaw);
-    artifactPaths.push(execRawPath);
+    for (let attempt = 1; attempt <= maxExecutorAttempts; attempt++) {
+      const execReq = buildExecutorRequest({
+        goal: input.goal,
+        step: input.step,
+        stepId: input.stepId,
+        ancestors: input.ancestors,
+        fusedContextText: input.fusedContextText,
+        contextExcerptMaxChars: attempt === 1 ? contextExcerptMaxCharsForPatch(patch) : 0,
+        contextStackHint,
+        patchHint,
+        patch,
+        review,
+        ...(attempt > 1 && lastExecError ? { retryNote: lastExecError } : {}),
+      });
 
-    const revised = extractUnifiedDiff(execRaw);
-    if (!revised || revised.trim().length === 0) {
-      const errPath = path.join(roundDir, 'executor_diff_extract_error.txt');
-      await fs.writeFile(errPath, 'Failed to extract a revised unified diff from executor output.');
-      artifactPaths.push(errPath);
+      const execResp = await input.providers.executor.generate(execReq, input.adapterCtx);
+      const execRaw = execResp.text ?? '';
+      const execRawPath = path.join(roundDir, `executor_attempt_${attempt}_raw.txt`);
+      await fs.writeFile(execRawPath, execRaw);
+      artifactPaths.push(execRawPath);
+
+      const markers = containsDiffMarkers(execRaw);
+      if (!markers.hasBegin || !markers.hasEnd) {
+        lastExecError =
+          'Executor output must include BEGIN_DIFF and END_DIFF markers (output may have been truncated).';
+        continue;
+      }
+
+      const extracted = extractUnifiedDiff(execRaw);
+      if (!extracted || extracted.trim().length === 0) {
+        lastExecError = 'Failed to extract a revised unified diff from executor output.';
+        continue;
+      }
+
+      const dryRun = await bestEffortDryRunApply(
+        input.repoRoot,
+        extracted,
+        input.config,
+        input.dryRunApplyOptions,
+      );
+      if (!dryRun.ok) {
+        lastExecError = dryRun.message;
+        continue;
+      }
+
+      revised = extracted;
       break;
     }
 
-    const dryRun = await bestEffortDryRunApply(
-      input.repoRoot,
-      revised,
-      input.config,
-      input.dryRunApplyOptions,
-    );
-    if (!dryRun.ok) {
-      const errPath = path.join(roundDir, 'executor_diff_dry_run_error.txt');
-      await fs.writeFile(errPath, dryRun.message);
+    if (!revised) {
+      const errPath = path.join(roundDir, 'executor_diff_extract_error.txt');
+      await fs.writeFile(
+        errPath,
+        lastExecError || 'Failed to extract a revised unified diff from executor output.',
+      );
       artifactPaths.push(errPath);
       break;
     }
