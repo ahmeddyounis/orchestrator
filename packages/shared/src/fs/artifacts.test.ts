@@ -10,6 +10,8 @@ import {
   Manifest,
   MANIFEST_VERSION,
   createArtifactCrypto,
+  writeArtifact,
+  readArtifact,
 } from './artifacts';
 
 describe('artifacts', () => {
@@ -269,3 +271,27 @@ describe('createArtifactCrypto', () => {
       corrupted[29] ^= 0xff; // flip bits in first byte of authTag
       expect(() => crypto.decryptBuffer(corrupted)).toThrow();
     });
+  });
+
+  describe('writeArtifact / readArtifact round-trip', () => {
+    let tmpDir: string;
+
+    afterEach(async () => {
+      if (tmpDir) {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes encrypted content and reads it back with the same crypto instance', async () => {
+      tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-artifact-rw-'));
+      const crypto = createArtifactCrypto(TEST_KEY);
+      const content = 'writeArtifact / readArtifact round-trip payload 🔒';
+      const filePath = join(tmpDir, 'test-artifact.txt');
+
+      const writtenPath = await writeArtifact(filePath, content, crypto);
+      expect(writtenPath).toBe(filePath + '.enc');
+
+      const result = await readArtifact(filePath, crypto);
+      expect(result).toBe(content);
+    });
+  });
