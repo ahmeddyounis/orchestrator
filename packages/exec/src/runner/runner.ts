@@ -257,13 +257,22 @@ export class SafeCommandRunner {
 
     return new Promise<ToolRunResult>((resolve, reject) => {
       let settled = false;
-      const child = spawn(bin, args, {
-        cwd: req.cwd,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: useShell,
-        detached: true,
-      });
+      let child;
+      try {
+        child = spawn(bin, args, {
+          cwd: req.cwd,
+          env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          shell: useShell,
+          detached: true,
+        });
+      } catch (err) {
+        stdoutStream.end();
+        stderrStream.end();
+        clearTimeout(timeoutTimer);
+        reject(err instanceof Error ? new ToolError(`Failed to spawn process: ${err.message}`) : err);
+        return;
+      }
 
       // Timeout handling
       timeoutTimer = setTimeout(() => {
