@@ -34,6 +34,17 @@ orchestrator run "<your task description>" [options]
 - `--think <level>`: Think level: `L0`, `L1`, `L2`, `L3`, or `auto` (default: `auto`).
 - `--budget <limits>`: Budget limits (e.g. `cost=5,iter=6,tool=10,time=20m`).
 - `--planner/--executor/--reviewer <providerId>`: Override provider IDs.
+- `--plan-research`: Enable multi-researcher pass before planning.
+- `--plan-research-count <n>`: Number of planning researchers (1–5).
+- `--plan-research-provider <providerId...>`: Provider IDs for planning research calls.
+- `--plan-research-max-queries <n>`: Max follow-up repo searches from planning research (0–20).
+- `--plan-research-no-synth`: Disable synthesis pass for planning research.
+- `--exec-research`: Enable multi-researcher pass before execution.
+- `--exec-research-count <n>`: Number of execution researchers (1–5).
+- `--exec-research-provider <providerId...>`: Provider IDs for execution research calls.
+- `--exec-research-scope <scope>`: Execution research scope: `goal` or `step`.
+- `--exec-research-max-queries <n>`: Max repoSearchQueries kept in execution research (0–20).
+- `--exec-research-no-synth`: Disable synthesis pass for execution research.
 - `--best-of <N>`: (L3) Generate `N` candidates and pick the best.
 - `--verify <mode>`: `on`, `off`, or `auto`.
 - `--verify-scope <scope>`: `targeted` or `full`.
@@ -116,6 +127,11 @@ orchestrator plan "<goal>" [options]
 **Options:**
 
 - `--planner <providerId>`: Override planner provider ID.
+- `--research`: Run a multi-researcher pass before planning.
+- `--research-count <n>`: Number of researchers (1–5).
+- `--research-provider <providerId...>`: Provider IDs for research calls.
+- `--research-max-queries <n>`: Max follow-up repo searches from research (0–20).
+- `--research-no-synth`: Disable synthesis pass for research.
 - `--depth <n>`: Expand each plan step into substeps up to depth `n` (1–5).
 - `--max-substeps <n>`: Max substeps per expanded step (1–20).
 - `--max-total-steps <n>`: Safety limit for total plan nodes (1–500).

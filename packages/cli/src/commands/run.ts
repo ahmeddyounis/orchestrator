@@ -48,6 +48,17 @@ export function registerRunCommand(program: Command) {
     .option('--planner <providerId>', 'Override planner provider')
     .option('--executor <providerId>', 'Override executor provider')
     .option('--reviewer <providerId>', 'Override reviewer provider')
+    .option('--plan-research', 'Enable multi-researcher pass before planning')
+    .option('--plan-research-count <n>', 'Number of planning researchers (integer 1-5)')
+    .option('--plan-research-provider <providerId...>', 'Provider IDs to use for planning research calls')
+    .option('--plan-research-max-queries <n>', 'Max follow-up repo searches from planning research (integer 0-20)')
+    .option('--plan-research-no-synth', 'Disable synthesis pass for planning research')
+    .option('--exec-research', 'Enable multi-researcher pass before execution')
+    .option('--exec-research-count <n>', 'Number of execution researchers (integer 1-5)')
+    .option('--exec-research-provider <providerId...>', 'Provider IDs to use for execution research calls')
+    .option('--exec-research-scope <scope>', 'Execution research scope: goal or step')
+    .option('--exec-research-max-queries <n>', 'Max repoSearchQueries kept in execution research (integer 0-20)')
+    .option('--exec-research-no-synth', 'Disable synthesis pass for execution research')
     .option('--review-loop', 'Enable patch review + revise loop before applying patches')
     .option('--review-loop-max <n>', 'Maximum review rounds (integer >= 1)')
     .option('--sandbox <mode>', 'Sandbox mode: none, docker, devcontainer')
@@ -122,6 +133,78 @@ export function registerRunCommand(program: Command) {
       if (Object.keys(autoVerification).length > 0) {
         verification.auto = autoVerification;
       }
+
+      // Planning research flags
+      const planning: DeepPartial<Config['planning']> = {};
+      const planningResearch: DeepPartial<NonNullable<Config['planning']>['research']> = {};
+      if (options.planResearch === true) planningResearch.enabled = true;
+      if (options.planResearchCount !== undefined) {
+        const n = Number(options.planResearchCount);
+        if (!Number.isInteger(n) || n < 1 || n > 5) {
+          throw new UsageError(
+            `Invalid --plan-research-count "${options.planResearchCount}". Must be an integer 1-5.`,
+          );
+        }
+        planningResearch.count = n;
+      }
+      if (options.planResearchProvider !== undefined) {
+        const ids = Array.isArray(options.planResearchProvider)
+          ? options.planResearchProvider.map(String)
+          : [String(options.planResearchProvider)];
+        planningResearch.providerIds = ids;
+      }
+      if (options.planResearchMaxQueries !== undefined) {
+        const n = Number(options.planResearchMaxQueries);
+        if (!Number.isInteger(n) || n < 0 || n > 20) {
+          throw new UsageError(
+            `Invalid --plan-research-max-queries "${options.planResearchMaxQueries}". Must be an integer 0-20.`,
+          );
+        }
+        planningResearch.maxQueries = n;
+      }
+      if (options.planResearchNoSynth === true) planningResearch.synthesize = false;
+      if (Object.keys(planningResearch).length > 0) {
+        planning.research = planningResearch as NonNullable<Config['planning']>['research'];
+      }
+
+      // Execution research flags
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const execResearch: any = {};
+      if (options.execResearch === true) execResearch.enabled = true;
+      if (options.execResearchCount !== undefined) {
+        const n = Number(options.execResearchCount);
+        if (!Number.isInteger(n) || n < 1 || n > 5) {
+          throw new UsageError(
+            `Invalid --exec-research-count "${options.execResearchCount}". Must be an integer 1-5.`,
+          );
+        }
+        execResearch.count = n;
+      }
+      if (options.execResearchProvider !== undefined) {
+        const ids = Array.isArray(options.execResearchProvider)
+          ? options.execResearchProvider.map(String)
+          : [String(options.execResearchProvider)];
+        execResearch.providerIds = ids;
+      }
+      if (options.execResearchScope !== undefined) {
+        const scope = String(options.execResearchScope);
+        if (scope !== 'goal' && scope !== 'step') {
+          throw new UsageError(
+            `Invalid --exec-research-scope "${options.execResearchScope}". Must be goal or step.`,
+          );
+        }
+        execResearch.scope = scope;
+      }
+      if (options.execResearchMaxQueries !== undefined) {
+        const n = Number(options.execResearchMaxQueries);
+        if (!Number.isInteger(n) || n < 0 || n > 20) {
+          throw new UsageError(
+            `Invalid --exec-research-max-queries "${options.execResearchMaxQueries}". Must be an integer 0-20.`,
+          );
+        }
+        execResearch.maxQueries = n;
+      }
+      if (options.execResearchNoSynth === true) execResearch.synthesize = false;
 
       const memory: DeepPartial<Config['memory']> = {};
       if (options.memory) {
@@ -212,6 +295,7 @@ export function registerRunCommand(program: Command) {
           thinkLevel,
           l3: Object.keys(l3).length > 0 ? l3 : undefined,
           budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
+          planning: Object.keys(planning).length > 0 ? (planning as any) : undefined,
           defaults: {
             planner: options.planner,
             executor: options.executor,
@@ -222,6 +306,7 @@ export function registerRunCommand(program: Command) {
             : undefined,
           execution: {
             reviewLoop: Object.keys(reviewLoop).length > 0 ? reviewLoop : undefined,
+            research: Object.keys(execResearch).length > 0 ? execResearch : undefined,
             tools: {
               enabled: options.tools === false ? false : undefined,
               autoApprove: options.yes,

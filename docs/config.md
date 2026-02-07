@@ -121,6 +121,21 @@ planning:
     enabled: false
     # If enabled and the reviewer returns revisedSteps, apply them before expansion.
     apply: false
+
+  # Optional: multi-researcher pass before generating the initial outline.
+  # The research brief is injected into the planner prompt as advisory context.
+  # If maxQueries > 0, Orchestrator will run bounded follow-up repo searches
+  # for suggested literal strings and re-pack context for planning.
+  research:
+    enabled: false
+    count: 3 # 1-5
+    # providerIds: [openai, anthropic] # optional; defaults to planner provider
+    # focuses: ["...", "..."] # optional; per-researcher focus strings
+    synthesize: true
+    maxBriefChars: 4000
+    maxQueries: 4 # 0-20
+    fixedStringsSearch: true
+    maxMatchesPerFile: 3
 ```
 
 ## Context stack ("so far" handoff)
@@ -151,6 +166,18 @@ Each run also writes a snapshot of the stack it started with to:
 
 ```yaml
 execution:
+  # Optional: multi-researcher pass before executor patch generation.
+  # The research brief is injected into executor prompts as advisory context.
+  # Note: execution research currently does not run follow-up repo searches.
+  research:
+    enabled: false
+    scope: step # goal | step
+    count: 2 # 1-5
+    # providerIds: [openai] # optional; defaults to executor provider
+    synthesize: true
+    maxBriefChars: 4000
+    maxQueries: 4 # 0-20
+
   # Optional: review each generated patch and ask the executor to revise it
   # before applying.
   reviewLoop:

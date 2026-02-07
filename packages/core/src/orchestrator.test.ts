@@ -232,6 +232,54 @@ describe('Orchestrator', () => {
     expect(ExecutionService).toHaveBeenCalled();
   });
 
+  it('injects execution research brief into executor prompts when enabled', async () => {
+    const executorGenerate = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          schemaVersion: 1,
+          focus: 'files',
+          summary: 'Research summary',
+          findings: [],
+          fileHints: [],
+          repoSearchQueries: [],
+          risks: [],
+          openQuestions: [],
+        }),
+      })
+      .mockResolvedValueOnce({ text: 'BEGIN_DIFF\ndiff...\nEND_DIFF' });
+
+    mockRegistry.resolveRoleProviders.mockResolvedValue({
+      planner: { generate: vi.fn() },
+      executor: { generate: executorGenerate, id: () => 'mock-executor' },
+      reviewer: {},
+    });
+
+    const configWithResearch: Config = {
+      ...config,
+      execution: {
+        research: { enabled: true, count: 1, scope: 'step', synthesize: false, maxQueries: 0 },
+      } as any,
+    };
+
+    orchestrator = new Orchestrator({
+      config: configWithResearch,
+      git: mockGit as unknown as GitService,
+      registry: mockRegistry as unknown as ProviderRegistry,
+      repoRoot,
+    });
+
+    await orchestrator.runL1('goal', runId);
+
+    const diffCall = executorGenerate.mock.calls.find((c) =>
+      String(c?.[0]?.messages?.[0]?.content ?? '').includes('BEGIN_DIFF'),
+    );
+    expect(diffCall, 'Expected an executor call containing diff instructions').toBeTruthy();
+    const systemPrompt = diffCall![0].messages[0].content;
+    expect(systemPrompt).toContain('RESEARCH BRIEF');
+    expect(systemPrompt).toContain('Research summary');
+  });
+
   it('should search when keywords are present', async () => {
     const goal = 'update user profile controller';
     await orchestrator.runL0(goal, runId);

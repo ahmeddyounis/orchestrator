@@ -5,9 +5,10 @@ import { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
 import { ModelResponse } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 
-vi.mock('fs/promises', () => ({
-  writeFile: vi.fn(),
-}));
+vi.mock('fs/promises', () => {
+  const writeFile = vi.fn();
+  return { writeFile, default: { writeFile } };
+});
 
 vi.mock('@orchestrator/repo', () => ({
   RepoScanner: class {
@@ -87,6 +88,73 @@ describe('PlanService', () => {
         type: 'PlanCreated',
         payload: { planSteps: mockSteps },
       }),
+    );
+  });
+
+  it('should run planning research when enabled and inject a brief', async () => {
+    (planner.generate as Mock)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          schemaVersion: 1,
+          focus: 'files',
+          summary: 'R1 summary',
+          findings: ['F1'],
+          fileHints: [{ path: 'packages/core/src/plan/service.ts', reason: 'planning entrypoint' }],
+          repoSearchQueries: [],
+          risks: [],
+          openQuestions: [],
+        }),
+      } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          schemaVersion: 1,
+          focus: 'prompts',
+          summary: 'R2 summary',
+          findings: ['F2'],
+          fileHints: [{ path: 'packages/core/src/orchestrator.ts', reason: 'execution prompts' }],
+          repoSearchQueries: [],
+          risks: [],
+          openQuestions: [],
+        }),
+      } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ steps: ['Step 1'] }),
+      } as ModelResponse);
+
+    const config = {
+      planning: {
+        research: {
+          enabled: true,
+          count: 2,
+          synthesize: false,
+          maxQueries: 0,
+          maxBriefChars: 2000,
+        },
+      },
+    } as any;
+
+    const result = await service.generatePlan(
+      'my goal',
+      { planner },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      config,
+    );
+
+    expect(result).toEqual(['Step 1']);
+    expect(planner.generate).toHaveBeenCalledTimes(3);
+
+    // Planner prompt includes the research brief.
+    const lastReq = (planner.generate as Mock).mock.calls.at(-1)![0];
+    const userPrompt = lastReq.messages.find((m: any) => m.role === 'user')?.content ?? '';
+    expect(userPrompt).toContain('RESEARCH BRIEF');
+    expect(userPrompt).toContain('R1 summary');
+
+    // Research artifacts are written.
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/research_plan_brief.txt`,
+      expect.any(String),
     );
   });
 

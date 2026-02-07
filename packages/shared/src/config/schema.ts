@@ -439,6 +439,46 @@ const PlanningReviewConfigSchema = z.object({
   apply: z.boolean().default(false),
 });
 
+const ResearchConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  /**
+   * Number of researcher calls to run before planning/execution.
+   * Higher values can improve relevance but increase latency/cost.
+   */
+  count: z.number().int().min(1).max(5).default(3),
+  /**
+   * Optional list of provider IDs to use for research calls.
+   * If omitted, the planner/executor provider is used.
+   */
+  providerIds: z.array(z.string()).min(1).optional(),
+  /**
+   * Optional list of per-researcher focus instructions.
+   * If fewer than `count`, remaining researchers use built-in defaults.
+   */
+  focuses: z.array(z.string()).min(1).optional(),
+  /**
+   * If enabled, run a synthesizer pass to produce a single brief.
+   * Falls back to best-effort local synthesis if the model output is invalid.
+   */
+  synthesize: z.boolean().default(true),
+  /** Maximum length (chars) of the injected research brief. */
+  maxBriefChars: z.number().int().min(0).max(20_000).default(4000),
+  /**
+   * Maximum number of follow-up repo search queries to run from researcher suggestions.
+   * Planning currently supports follow-up searches; execution currently uses research as advisory only.
+   */
+  maxQueries: z.number().int().min(0).max(20).default(4),
+  /** If true, run follow-up repo searches as fixed-string (non-regex) matches. */
+  fixedStringsSearch: z.boolean().default(true),
+  /** Max matches per file for follow-up repo searches. */
+  maxMatchesPerFile: z.number().int().min(1).max(20).default(3),
+});
+
+const ExecutionResearchConfigSchema = ResearchConfigSchema.extend({
+  /** Whether to run research once per goal or per plan step. */
+  scope: z.enum(['goal', 'step']).default('step'),
+});
+
 const PlanningConfigSchema = z.object({
   /**
    * Maximum nesting depth for plan expansion. Depth 1 is the initial outline.
@@ -451,6 +491,8 @@ const PlanningConfigSchema = z.object({
   maxTotalSteps: z.number().int().min(1).max(500).default(200),
   /** Optional review pass for generated plans. */
   review: PlanningReviewConfigSchema.optional(),
+  /** Optional research pass before generating the initial outline. */
+  research: ResearchConfigSchema.optional(),
 });
 
 const ContextStackConfigSchema = z.object({
@@ -558,6 +600,8 @@ export const ConfigSchema = z.object({
        * malformed diff fragments (e.g. missing file headers) before retrying.
        */
       autoRepairPatchFragments: z.boolean().default(true),
+      /** Optional research pass before executor patch generation. */
+      research: ExecutionResearchConfigSchema.optional(),
       /**
        * If enabled, each generated patch is iteratively reviewed and revised
        * by the reviewer and executor before being applied.

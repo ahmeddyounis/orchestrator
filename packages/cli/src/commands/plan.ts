@@ -29,6 +29,7 @@ import {
   GeminiCliAdapter,
   CodexCliAdapter,
 } from '@orchestrator/adapters';
+import type { ProviderAdapter } from '@orchestrator/adapters';
 import { OutputRenderer, type OutputResult } from '../output/renderer';
 import * as fs from 'fs/promises';
 import path from 'path';
@@ -39,6 +40,11 @@ export function registerPlanCommand(program: Command) {
     .argument('<goal>', 'The goal to plan')
     .description('Plan a task based on a goal')
     .option('--planner <providerId>', 'Override planner provider')
+    .option('--research', 'Run a multi-researcher pass before planning')
+    .option('--research-count <n>', 'Number of researchers (integer 1-5)')
+    .option('--research-provider <providerId...>', 'Provider IDs to use for research calls')
+    .option('--research-max-queries <n>', 'Max follow-up repo searches from research (integer 0-20)')
+    .option('--research-no-synth', 'Disable synthesis pass for research')
     .option('--depth <n>', 'Expand each plan step to substeps up to depth n (integer 1-5)')
     .option(
       '--max-substeps <n>',
@@ -124,6 +130,40 @@ export function registerPlanCommand(program: Command) {
         memory.vector = vector;
       }
 
+      // Planning research flags
+      const planning: DeepPartial<Config['planning']> = {};
+      const research: DeepPartial<NonNullable<Config['planning']>['research']> = {};
+      if (options.research === true) research.enabled = true;
+      if (options.researchCount !== undefined) {
+        const n = Number(options.researchCount);
+        if (!Number.isInteger(n) || n < 1 || n > 5) {
+          throw new UsageError(
+            `Invalid --research-count "${options.researchCount}". Must be an integer 1-5.`,
+          );
+        }
+        research.count = n;
+      }
+      if (options.researchProvider !== undefined) {
+        const ids = Array.isArray(options.researchProvider)
+          ? options.researchProvider.map(String)
+          : [String(options.researchProvider)];
+        research.providerIds = ids;
+      }
+      if (options.researchMaxQueries !== undefined) {
+        const n = Number(options.researchMaxQueries);
+        if (!Number.isInteger(n) || n < 0 || n > 20) {
+          throw new UsageError(
+            `Invalid --research-max-queries "${options.researchMaxQueries}". Must be an integer 0-20.`,
+          );
+        }
+        research.maxQueries = n;
+      }
+      if (options.researchNoSynth === true) research.synthesize = false;
+
+      if (Object.keys(research).length > 0) {
+        planning.research = research as NonNullable<Config['planning']>['research'];
+      }
+
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
         flags: {
@@ -132,6 +172,7 @@ export function registerPlanCommand(program: Command) {
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
+          planning: Object.keys(planning).length > 0 ? (planning as any) : undefined,
         },
       });
 
@@ -269,6 +310,22 @@ export function registerPlanCommand(program: Command) {
 
       const reviewer = reviewerId ? registry.getAdapter(reviewerId) : undefined;
 
+      // Research providers (optional)
+      let researchers: ProviderAdapter[] | undefined;
+      if (config.planning?.research?.enabled) {
+        const ids = config.planning.research.providerIds;
+        if (ids && ids.length > 0) {
+          for (const id of ids) {
+            if (!config.providers?.[id]) {
+              throw new ConfigError(`Research provider '${id}' not found in configuration.`);
+            }
+          }
+          researchers = ids.map((id) => registry.getAdapter(id));
+        } else {
+          researchers = [planner];
+        }
+      }
+
       // Emit ProviderSelected for planner
       await eventBus.emit({
         type: 'ProviderSelected',
@@ -306,7 +363,7 @@ export function registerPlanCommand(program: Command) {
 
       const planSteps = await planService.generatePlan(
         goal,
-        { planner, reviewer },
+        { planner, reviewer, researchers },
         ctx,
         artifacts.root,
         repoRoot,
