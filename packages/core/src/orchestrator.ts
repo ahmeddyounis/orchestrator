@@ -70,6 +70,7 @@ import {
   ContextBuilderService,
   VerificationService,
   shouldAllowEmptyDiffForStep,
+  shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
   buildPatchApplyRetryContext,
   extractPatchErrorKind,
 } from './orchestrator/services';
@@ -1586,6 +1587,42 @@ END_DIFF
       const researchBrief =
         execResearchCfg?.enabled && execResearchCfg.scope === 'goal' ? goalResearchBrief : stepResearchBrief;
 
+      // If the step appears already satisfied (and we can verify it), treat it as a no-op success.
+      const noopAcceptance = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
+        step,
+        repoRoot: this.repoRoot,
+        rgPath: this.config.context?.rgPath,
+        contextText,
+      });
+      if (noopAcceptance.allow) {
+        await eventBus.emit({
+          type: 'PatchApplied',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            description: `No-op step (already satisfied): ${step}`,
+            filesChanged: [],
+            success: true,
+          },
+        });
+
+        await fs.writeFile(
+          path.join(artifacts.root, `step_${stepIndex}_${stepSlug}_noop.txt`),
+          noopAcceptance.reason ?? 'Step already satisfied; no changes required.',
+        );
+
+        stepsSucceeded++;
+        await eventBus.emit({
+          type: 'StepFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { step, success: true },
+        });
+        continue;
+      }
+
       let attempt = 0;
       let success = false;
       let lastError = '';
@@ -2945,6 +2982,45 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
       await fs.writeFile(fusedTxtPath, fusedContext.prompt);
       contextPaths.push(fusedJsonPath, fusedTxtPath);
+
+      const noopAcceptance = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
+        step,
+        repoRoot: this.repoRoot,
+        rgPath: this.config.context?.rgPath,
+        contextText: fusedContext.prompt,
+      });
+      if (noopAcceptance.allow) {
+        consecutiveInvalidDiffs = 0;
+        consecutiveApplyFailures = 0;
+        lastApplyErrorHash = '';
+
+        await eventBus.emit({
+          type: 'PatchApplied',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: {
+            description: `No-op step (already satisfied): ${step}`,
+            filesChanged: [],
+            success: true,
+          },
+        });
+
+        await fs.writeFile(
+          path.join(artifacts.root, `step_${stepsCompleted}_${stepSlug}_noop.txt`),
+          noopAcceptance.reason ?? 'Step already satisfied; no changes required.',
+        );
+
+        stepsCompleted++;
+        await eventBus.emit({
+          type: 'StepFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { step, success: true },
+        });
+        continue;
+      }
 
       let stepResearchBrief = '';
       if (researchService && execResearchCfg?.enabled && execResearchCfg.scope !== 'goal') {

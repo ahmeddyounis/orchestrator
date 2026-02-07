@@ -232,6 +232,48 @@ describe('Orchestrator', () => {
     expect(ExecutionService).toHaveBeenCalled();
   });
 
+  it('treats already-satisfied PHP import steps as no-op success', async () => {
+    const step =
+      'Add the SettingsInterface import to AdminServiceProvider.php (WhatsAppCommerceHub\\\\Contracts\\\\Services\\\\SettingsInterface).';
+
+    // Make the plan contain the target step.
+    const planServiceMock = PlanService as unknown as { prototype: { generatePlan: ReturnType<typeof vi.fn> } };
+    planServiceMock.prototype.generatePlan.mockResolvedValueOnce([step]);
+
+    // Make repo search find the existing import line in the target file.
+    const searchServiceMock = SearchService as unknown as { prototype: { search: ReturnType<typeof vi.fn> } };
+    searchServiceMock.prototype.search.mockImplementation(async (opts: any) => {
+      if (opts?.query === 'WhatsAppCommerceHub\\Contracts\\Services\\SettingsInterface') {
+        return {
+          matches: [
+            {
+              path: 'app/Providers/AdminServiceProvider.php',
+              line: 35,
+              column: 1,
+              matchText: opts.query,
+              lineText: 'use WhatsAppCommerceHub\\Contracts\\Services\\SettingsInterface;',
+            },
+          ],
+        };
+      }
+      return { matches: [] };
+    });
+
+    const executorGenerate = vi.fn();
+    mockRegistry.resolveRoleProviders.mockResolvedValue({
+      planner: { generate: vi.fn() },
+      executor: { generate: executorGenerate, id: () => 'mock-executor' },
+      reviewer: {},
+    });
+
+    const result = await orchestrator.runL1('goal', runId);
+    expect(result.status).toBe('success');
+    expect(executorGenerate).toHaveBeenCalledTimes(0);
+
+    // Reset search behavior to default for other tests.
+    searchServiceMock.prototype.search.mockResolvedValue({ matches: [] });
+  });
+
   it('injects execution research brief into executor prompts when enabled', async () => {
     const executorGenerate = vi
       .fn()

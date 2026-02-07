@@ -1,5 +1,110 @@
 import { PatchError, PatchErrorKind } from '@orchestrator/shared';
+import { SearchService } from '@orchestrator/repo';
 import { collectHunkFailures, readFileContext } from '../patch_utils';
+import path from 'path';
+
+export interface NoopAcceptanceResult {
+  allow: boolean;
+  reason?: string;
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeSlashes(s: string): string {
+  return s.replace(/\\/g, '/');
+}
+
+function extractPhpImportTargets(step: string): { file: string; fqcn: string } | null {
+  const text = String(step ?? '').trim();
+  if (!text) return null;
+
+  // Only attempt this heuristic for import-like steps.
+  if (!/\b(import|use)\b/i.test(text)) return null;
+
+  const fileMatch = text.match(/\b([A-Za-z0-9_./-]+\.php)\b/);
+  const fqcnMatch = text.match(/\b[A-Za-z_][A-Za-z0-9_]*(?:\\+[A-Za-z_][A-Za-z0-9_]*){2,}\b/);
+  if (!fileMatch || !fqcnMatch) return null;
+
+  // Collapse escaped backslashes (e.g. `Foo\\Bar`) to the canonical `Foo\Bar`.
+  const fqcn = fqcnMatch[0].replace(/\\+/g, '\\');
+  return { file: fileMatch[1], fqcn };
+}
+
+function matchFilePath(candidate: string, matchPath: string): boolean {
+  const c = normalizeSlashes(candidate);
+  const p = normalizeSlashes(matchPath);
+  if (c.includes('/')) return p.endsWith(c);
+  return path.posix.basename(p) === c;
+}
+
+function looksLikePhpUseImportLine(lineText: string, fqcn: string): boolean {
+  const line = String(lineText ?? '').trim();
+  if (!line) return false;
+  const re = new RegExp(
+    `^use\\s+${escapeRegExp(fqcn)}(?:\\s+as\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*;\\s*$`,
+  );
+  return re.test(line);
+}
+
+/**
+ * For certain steps, an empty diff can be treated as success if we can verify
+ * the step is already satisfied by the current repo state.
+ *
+ * This is intentionally conservative: it only supports a narrow heuristic for
+ * PHP import ("use ...;") steps to avoid skipping real work.
+ */
+export async function shouldAcceptEmptyDiffAsNoopForSatisfiedStep(args: {
+  step: string;
+  repoRoot: string;
+  rgPath?: string;
+  contextText?: string;
+}): Promise<NoopAcceptanceResult> {
+  const targets = extractPhpImportTargets(args.step);
+  if (!targets) return { allow: false };
+
+  const { file, fqcn } = targets;
+
+  // Fast path: if the fused context contains the target file and a matching use-import line.
+  const ctx = String(args.contextText ?? '');
+  if (ctx && ctx.includes(file)) {
+    const ctxRe = new RegExp(
+      `^\\s*use\\s+${escapeRegExp(fqcn)}(?:\\s+as\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*;\\s*$`,
+      'm',
+    );
+    if (ctxRe.test(ctx)) {
+      return {
+        allow: true,
+        reason: `Found PHP import in fused context: use ${fqcn}; (file hint: ${file})`,
+      };
+    }
+  }
+
+  // Repo search: look for the FQCN and verify it appears as a `use` import in the target file.
+  try {
+    const searchService = new SearchService(args.rgPath);
+    const res = await searchService.search({
+      query: fqcn,
+      cwd: args.repoRoot,
+      maxMatchesPerFile: 10,
+      fixedStrings: true,
+    });
+
+    for (const m of res.matches) {
+      if (!matchFilePath(file, m.path)) continue;
+      if (!looksLikePhpUseImportLine(m.lineText, fqcn)) continue;
+      return {
+        allow: true,
+        reason: `Found existing PHP import in repo: ${m.path}:${m.line} (${m.lineText.trim()})`,
+      };
+    }
+  } catch {
+    // ignore - noop acceptance is best-effort
+  }
+
+  return { allow: false };
+}
 
 /**
  * Check if a step should allow an empty diff as success (diagnostic steps)
