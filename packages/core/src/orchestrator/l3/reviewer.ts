@@ -128,7 +128,8 @@ Instructions:
 5.  **Suggest improvements**: If a candidate is promising but flawed, specify the required fixes.
 6.  **Recommend tests**: Propose specific unit, integration, or e2e tests to validate the changes.
 7.  **State confidence**: Indicate your overall confidence (low, medium, high) in the review.
-8.  **Output JSON**: Ensure your output strictly adheres to the provided JSON schema. Do not include any other text or explanations.
+8.  **Stay in scope**: This is NOT a planning task. Do NOT request reordering/combining/splitting plan steps. Required fixes must be concrete code changes to the candidate patch.
+9.  **Output JSON**: Ensure your output strictly adheres to the provided JSON schema. Do not include any other text or explanations.
 `;
   }
 }

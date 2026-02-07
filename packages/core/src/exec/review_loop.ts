@@ -138,6 +138,9 @@ Return ONLY JSON matching this schema:
 }
 
 Rules:
+- This is NOT a planning task. Do NOT request reordering, combining, or splitting plan steps; do NOT defer work to “another step”.
+- Forbidden examples (do NOT write these): "combine Step 1 and Step 2", "reorder so X happens first", "apply both steps together".
+- If you believe the patch would break the repo unless additional work is done, translate that into concrete code changes required in THIS patch (e.g., backwards-compatible APIs, updating call sites), not plan advice.
 - If changes are required before applying, verdict MUST be "revise" and requiredChanges must be specific and actionable.
 - If the patch exceeds the step scope, verdict MUST be "revise" and requiredChanges must specify what to remove/split.
 - Prefer citing file paths from the diff when describing issues.
