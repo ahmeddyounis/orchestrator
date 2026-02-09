@@ -15,7 +15,7 @@
   },
   "devDependencies": {
     "@orchestrator/memory": "workspace:*",
-    "@types/node": "^25.1.0",
+    "@types/node": "^25.2.2",
     "memfs": "^4.56.10",
     "tree-sitter": "^0.22.4",
     "tree-sitter-go": "^0.23.4",
