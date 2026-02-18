@@ -1,7 +1,9 @@
 import { verification_pass, file_contains, script_exit, CriterionResult } from './criteria';
 import { RunSummary } from '@orchestrator/shared';
+import { SafeCommandRunner } from '@orchestrator/exec';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { vi } from 'vitest';
 
 describe('Success Criteria Evaluators', () => {
   const mockSummary: RunSummary = {
@@ -97,6 +99,34 @@ describe('Success Criteria Evaluators', () => {
   });
 
   describe('script_exit', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should fail if details are missing or not an object', async () => {
+      const result = await script_exit(mockSummary, undefined);
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Missing command or expectedExitCode');
+
+      const result2 = await script_exit(mockSummary, 'not-object');
+      expect(result2.passed).toBe(false);
+      expect(result2.message).toContain('Missing command or expectedExitCode');
+    });
+
+    it('should fail if details types are invalid', async () => {
+      const result = await script_exit(mockSummary, {
+        command: 123,
+        expectedExitCode: 0,
+      });
+      expect(result.passed).toBe(false);
+
+      const result2 = await script_exit(mockSummary, {
+        command: 'node -e "process.exit(0)"',
+        expectedExitCode: '0',
+      });
+      expect(result2.passed).toBe(false);
+    });
+
     it('should pass if script exits with expected code', async () => {
       const result = await script_exit(mockSummary, {
         command: 'node -e "process.exit(0)"',
@@ -120,6 +150,18 @@ describe('Success Criteria Evaluators', () => {
       });
       expect(result.passed).toBe(false);
       expect(result.message).toContain('Command matched denylist pattern');
+    }, 10000);
+
+    it('should stringify non-Error thrown values', async () => {
+      vi.spyOn(SafeCommandRunner.prototype, 'run').mockRejectedValueOnce('nope');
+
+      const result = await script_exit(mockSummary, {
+        command: 'node -e "process.exit(0)"',
+        expectedExitCode: 0,
+      });
+
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('Failed to run script: nope');
     }, 10000);
   });
 });
