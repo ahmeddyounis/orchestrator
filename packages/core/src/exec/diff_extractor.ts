@@ -29,7 +29,9 @@ export function extractUnifiedDiff(outputText: string | undefined): string | nul
       (line, idx) => idx > fenceStartIdx && line.trim() === '```',
     );
     if (fenceEndIdx !== -1 && fenceEndIdx > fenceStartIdx) {
-      const extracted = extractUnifiedDiffFromText(lines.slice(fenceStartIdx + 1, fenceEndIdx).join('\n'));
+      const extracted = extractUnifiedDiffFromText(
+        lines.slice(fenceStartIdx + 1, fenceEndIdx).join('\n'),
+      );
       return extracted ?? trimDiff(lines.slice(fenceStartIdx + 1, fenceEndIdx).join('\n'));
     }
   }

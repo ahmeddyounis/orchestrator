@@ -8,7 +8,12 @@ import {
   type JudgeInvocationReason,
 } from './types';
 import { type ProviderAdapter, type AdapterContext } from '@orchestrator/adapters';
-import { type ModelRequest, type Logger, type EventBus, extractJsonObject } from '@orchestrator/shared';
+import {
+  type ModelRequest,
+  type Logger,
+  type EventBus,
+  extractJsonObject,
+} from '@orchestrator/shared';
 
 const judgeOutputSchema = z.object({
   winnerCandidateId: z.string(),

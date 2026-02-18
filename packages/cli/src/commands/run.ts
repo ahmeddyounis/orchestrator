@@ -50,14 +50,26 @@ export function registerRunCommand(program: Command) {
     .option('--reviewer <providerId>', 'Override reviewer provider')
     .option('--plan-research', 'Enable multi-researcher pass before planning')
     .option('--plan-research-count <n>', 'Number of planning researchers (integer 1-5)')
-    .option('--plan-research-provider <providerId...>', 'Provider IDs to use for planning research calls')
-    .option('--plan-research-max-queries <n>', 'Max follow-up repo searches from planning research (integer 0-20)')
+    .option(
+      '--plan-research-provider <providerId...>',
+      'Provider IDs to use for planning research calls',
+    )
+    .option(
+      '--plan-research-max-queries <n>',
+      'Max follow-up repo searches from planning research (integer 0-20)',
+    )
     .option('--plan-research-no-synth', 'Disable synthesis pass for planning research')
     .option('--exec-research', 'Enable multi-researcher pass before execution')
     .option('--exec-research-count <n>', 'Number of execution researchers (integer 1-5)')
-    .option('--exec-research-provider <providerId...>', 'Provider IDs to use for execution research calls')
+    .option(
+      '--exec-research-provider <providerId...>',
+      'Provider IDs to use for execution research calls',
+    )
     .option('--exec-research-scope <scope>', 'Execution research scope: goal or step')
-    .option('--exec-research-max-queries <n>', 'Max repoSearchQueries kept in execution research (integer 0-20)')
+    .option(
+      '--exec-research-max-queries <n>',
+      'Max repoSearchQueries kept in execution research (integer 0-20)',
+    )
     .option('--exec-research-no-synth', 'Disable synthesis pass for execution research')
     .option('--review-loop', 'Enable patch review + revise loop before applying patches')
     .option('--review-loop-max <n>', 'Maximum review rounds (integer >= 1)')

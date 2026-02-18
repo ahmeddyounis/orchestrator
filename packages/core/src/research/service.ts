@@ -120,7 +120,9 @@ function normalizeSearchQueries(items: string[] | undefined, maxItems: number): 
   const result: string[] = [];
   const seen = new Set<string>();
   for (const raw of items ?? []) {
-    const s = sanitizeAdvisoryText(String(raw ?? '')).replace(/\s+/g, ' ').trim();
+    const s = sanitizeAdvisoryText(String(raw ?? ''))
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!s) continue;
     if (s.length < 3 || s.length > 120) continue;
     if (s.includes('\n') || s.includes('\r')) continue;
@@ -255,7 +257,8 @@ export class ResearchService {
       userPromptParts.push(`Goal: ${input.goal}`);
       if (stepBlock) userPromptParts.push(`\nSTEP:\n${stepBlock}`);
       userPromptParts.push(`\nFocus: ${focus || '(general)'}`);
-      if (contextStack) userPromptParts.push(`\nSO FAR (CONTEXT STACK, UNTRUSTED):\n${contextStack}`);
+      if (contextStack)
+        userPromptParts.push(`\nSO FAR (CONTEXT STACK, UNTRUSTED):\n${contextStack}`);
       if (contextPayload)
         userPromptParts.push(`\nCONTEXT (UNTRUSTED REPO CONTENT):\n${contextPayload}`);
 
@@ -319,8 +322,14 @@ export class ResearchService {
       Math.max(0, Math.min(20, maxQueries > 0 ? maxQueries : 20)),
     );
 
-    const combinedRisks = normalizeStrings(results.flatMap((r) => r.risks), 12);
-    const combinedQuestions = normalizeStrings(results.flatMap((r) => r.openQuestions), 12);
+    const combinedRisks = normalizeStrings(
+      results.flatMap((r) => r.risks),
+      12,
+    );
+    const combinedQuestions = normalizeStrings(
+      results.flatMap((r) => r.openQuestions),
+      12,
+    );
     const combinedFileHints = results
       .flatMap((r) => r.fileHints)
       .filter((h) => !!h.path)
@@ -408,7 +417,7 @@ ${JSON.stringify(results, null, 2)}`,
       const parts: string[] = [];
       for (const r of results) {
         const title = r.focus ? `Focus: ${r.focus}` : `Researcher (${r.providerId})`;
-        const line = r.summary ? r.summary : r.findings[0] ?? '';
+        const line = r.summary ? r.summary : (r.findings[0] ?? '');
         if (line) parts.push(`- ${title}: ${line}`);
       }
       if (combinedFileHints.length > 0) {
@@ -452,4 +461,3 @@ ${JSON.stringify(results, null, 2)}`,
     };
   }
 }
-

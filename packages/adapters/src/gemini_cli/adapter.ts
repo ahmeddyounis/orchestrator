@@ -3,7 +3,12 @@ import {
   parseUnifiedDiffFromText,
   parsePlanFromText,
 } from '../subprocess';
-import { ProviderConfig, ModelRequest, ModelResponse, ProviderCapabilities } from '@orchestrator/shared';
+import {
+  ProviderConfig,
+  ModelRequest,
+  ModelResponse,
+  ProviderCapabilities,
+} from '@orchestrator/shared';
 import { AdapterContext } from '../types';
 import { ConfigError } from '../errors';
 
@@ -73,7 +78,11 @@ export class GeminiCliAdapter extends SubprocessProviderAdapter {
       configRequirements: {
         forbiddenArgs: ['-o', '--output-format', '-m', '--model', '-p', '--prompt'],
         supportedFields: {
-          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+          pty: {
+            description: 'Spawn subprocess in a pseudo-terminal',
+            type: 'boolean',
+            default: false,
+          },
         },
       },
     };
@@ -173,7 +182,12 @@ export function parseGeminiCliJson(text: string): GeminiCliJson | null {
   try {
     return JSON.parse(text.slice(firstBrace, lastBrace + 1)) as GeminiCliJson;
   } catch (err) {
-    console.debug('[GeminiCliAdapter] Failed to parse JSON from output:', err, 'slice:', text.slice(firstBrace, Math.min(firstBrace + 200, lastBrace + 1)));
+    console.debug(
+      '[GeminiCliAdapter] Failed to parse JSON from output:',
+      err,
+      'slice:',
+      text.slice(firstBrace, Math.min(firstBrace + 200, lastBrace + 1)),
+    );
     return null;
   }
 }

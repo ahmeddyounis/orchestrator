@@ -95,7 +95,9 @@ describe('runPatchReviewLoop', () => {
   });
 
   it('stops after approval without calling executor', async () => {
-    const config = ConfigSchema.parse({ execution: { reviewLoop: { enabled: true, maxReviews: 3 } } });
+    const config = ConfigSchema.parse({
+      execution: { reviewLoop: { enabled: true, maxReviews: 3 } },
+    });
 
     (reviewer.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
       text: JSON.stringify({
@@ -126,7 +128,9 @@ describe('runPatchReviewLoop', () => {
   });
 
   it('revises patch until approved (bounded by maxReviews)', async () => {
-    const config = ConfigSchema.parse({ execution: { reviewLoop: { enabled: true, maxReviews: 3 } } });
+    const config = ConfigSchema.parse({
+      execution: { reviewLoop: { enabled: true, maxReviews: 3 } },
+    });
 
     (reviewer.generate as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -154,7 +158,8 @@ describe('runPatchReviewLoop', () => {
         }),
       });
 
-    const revisedPatch = 'diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-old\n+new\n';
+    const revisedPatch =
+      'diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-old\n+new\n';
     (executor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
       text: `BEGIN_DIFF\n${revisedPatch}\nEND_DIFF`,
     });
@@ -174,4 +179,3 @@ describe('runPatchReviewLoop', () => {
     expect(shared.updateManifest).toHaveBeenCalled();
   });
 });
-

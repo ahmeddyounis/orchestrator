@@ -31,7 +31,7 @@ providers:
 
 ### Configuration Options
 
-| Option      | Description                                              | Default    |
+| Option      | Description                                              | Default  |
 | :---------- | :------------------------------------------------------- | :------- |
 | `type`      | Must be `gemini_cli`.                                    | Required |
 | `model`     | Gemini model name passed to `gemini --model`.            | Required |
@@ -56,13 +56,13 @@ produces a JSON object on stdout. The adapter extracts two top-level fields:
     "models": {
       "<model-name>": {
         "tokens": {
-          "prompt": 120,      // or "input"
+          "prompt": 120, // or "input"
           "candidates": 350,
-          "total": 470
-        }
-      }
-    }
-  }
+          "total": 470,
+        },
+      },
+    },
+  },
 }
 ```
 
@@ -77,12 +77,12 @@ not a string, the adapter falls back to the raw stdout text.
 An optional object that carries token-usage telemetry. The adapter walks
 `stats.models` and sums token counts across all reported models:
 
-| Token field    | Meaning                         |
-| :------------- | :------------------------------ |
-| `prompt`       | Input/prompt tokens (primary)   |
-| `input`        | Input tokens (fallback alias)   |
-| `candidates`   | Output/candidate tokens         |
-| `total`        | Total tokens (computed if absent) |
+| Token field  | Meaning                           |
+| :----------- | :-------------------------------- |
+| `prompt`     | Input/prompt tokens (primary)     |
+| `input`      | Input tokens (fallback alias)     |
+| `candidates` | Output/candidate tokens           |
+| `total`      | Total tokens (computed if absent) |
 
 If every token counter is zero (or absent), the adapter treats usage as
 unavailable and falls back to any usage data returned by the base subprocess

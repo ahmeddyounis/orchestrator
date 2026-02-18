@@ -113,9 +113,10 @@ export function shouldAllowEmptyDiffForStep(step: string): boolean {
   const s = step.toLowerCase();
 
   // If the step also asks for code changes, an empty diff should be treated as failure.
-  const mentionsCodeChange = /\b(fix|implement|add|remove|replace|refactor|update|change|wire|integrate|support|resolve)\b/.test(
-    s,
-  );
+  const mentionsCodeChange =
+    /\b(fix|implement|add|remove|replace|refactor|update|change|wire|integrate|support|resolve)\b/.test(
+      s,
+    );
   if (mentionsCodeChange) return false;
 
   // Explicit command-like steps: treat empty diff as "no-op" success so diagnostic steps don't fail.
@@ -224,7 +225,13 @@ export function buildPatchApplyRetryContext(
       lines.push(`Failed hunks:\n${failureList}`);
 
       for (const failure of selected) {
-        const context = readFileContext(repoRoot, failure.filePath, failure.line, windowSize, maxFileContextChars);
+        const context = readFileContext(
+          repoRoot,
+          failure.filePath,
+          failure.line,
+          windowSize,
+          maxFileContextChars,
+        );
         if (!context) continue;
         lines.push('');
         lines.push(`File: ${failure.filePath}:${failure.line}\n${context}`);
@@ -238,7 +245,9 @@ export function buildPatchApplyRetryContext(
   return full.slice(0, maxTotalChars) + '\n... (truncated)';
 }
 
-export function extractPatchErrorKind(patchError: PatchError | undefined): PatchErrorKind | undefined {
+export function extractPatchErrorKind(
+  patchError: PatchError | undefined,
+): PatchErrorKind | undefined {
   if (!patchError) return undefined;
 
   if (patchError.type === 'validation') return 'INVALID_PATCH';

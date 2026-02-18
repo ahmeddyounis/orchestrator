@@ -61,7 +61,10 @@ export class ContextStackStore {
 
     try {
       const raw = await fs.readFile(this.filePath, 'utf8');
-      const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const lines = raw
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
 
       for (const line of lines) {
         try {
@@ -94,7 +97,8 @@ export class ContextStackStore {
 
   async snapshotTo(snapshotPath: string): Promise<void> {
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
-    const content = this.frames.map((f) => JSON.stringify(f)).join('\n') + (this.frames.length ? '\n' : '');
+    const content =
+      this.frames.map((f) => JSON.stringify(f)).join('\n') + (this.frames.length ? '\n' : '');
     await fs.writeFile(snapshotPath, content, 'utf8');
   }
 

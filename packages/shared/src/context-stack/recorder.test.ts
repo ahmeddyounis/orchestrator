@@ -81,4 +81,3 @@ describe('ContextStackRecorder', () => {
     expect(frames[1].summary).toContain('exitCode=0');
   });
 });
-

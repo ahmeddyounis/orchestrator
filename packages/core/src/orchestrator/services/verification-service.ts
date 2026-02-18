@@ -39,16 +39,8 @@ export class VerificationService {
   /**
    * Run verification with the configured profile
    */
-  async verify(
-    touchedFiles: string[],
-    runId: string,
-  ): Promise<VerificationReport> {
-    return this.runner.run(
-      this.profile,
-      this.profile.mode,
-      { touchedFiles },
-      { runId },
-    );
+  async verify(touchedFiles: string[], runId: string): Promise<VerificationReport> {
+    return this.runner.run(this.profile, this.profile.mode, { touchedFiles }, { runId });
   }
 
   /**

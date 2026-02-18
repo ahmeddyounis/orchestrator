@@ -237,11 +237,15 @@ describe('Orchestrator', () => {
       'Add the SettingsInterface import to AdminServiceProvider.php (WhatsAppCommerceHub\\\\Contracts\\\\Services\\\\SettingsInterface).';
 
     // Make the plan contain the target step.
-    const planServiceMock = PlanService as unknown as { prototype: { generatePlan: ReturnType<typeof vi.fn> } };
+    const planServiceMock = PlanService as unknown as {
+      prototype: { generatePlan: ReturnType<typeof vi.fn> };
+    };
     planServiceMock.prototype.generatePlan.mockResolvedValueOnce([step]);
 
     // Make repo search find the existing import line in the target file.
-    const searchServiceMock = SearchService as unknown as { prototype: { search: ReturnType<typeof vi.fn> } };
+    const searchServiceMock = SearchService as unknown as {
+      prototype: { search: ReturnType<typeof vi.fn> };
+    };
     searchServiceMock.prototype.search.mockImplementation(async (opts: any) => {
       if (opts?.query === 'WhatsAppCommerceHub\\Contracts\\Services\\SettingsInterface') {
         return {
@@ -377,7 +381,9 @@ describe('Orchestrator', () => {
 
   it('should allow no-op steps that intentionally produce an empty diff', async () => {
     // Plan step that runs tests but does not require code changes.
-    (PlanService as unknown as ReturnType<typeof vi.fn>).prototype.generatePlan.mockResolvedValueOnce([
+    (
+      PlanService as unknown as ReturnType<typeof vi.fn>
+    ).prototype.generatePlan.mockResolvedValueOnce([
       'Run full test suite to establish baseline (pnpm test).',
     ]);
 
@@ -471,7 +477,9 @@ describe('Orchestrator', () => {
 
       (ExecutionService as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
         return {
-          applyPatch: vi.fn().mockResolvedValue({ success: false, error: 'Same Error', patchError }),
+          applyPatch: vi
+            .fn()
+            .mockResolvedValue({ success: false, error: 'Same Error', patchError }),
         };
       });
 

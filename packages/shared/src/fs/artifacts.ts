@@ -88,7 +88,9 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
 
   const decryptBuffer = (data: Buffer): Buffer => {
     if (data.length < MIN_LEGACY_LENGTH) {
-      throw new Error(`Encrypted artifact buffer too short (${data.length} bytes, minimum ${MIN_LEGACY_LENGTH})`);
+      throw new Error(
+        `Encrypted artifact buffer too short (${data.length} bytes, minimum ${MIN_LEGACY_LENGTH})`,
+      );
     }
 
     // Detect legacy format: no version byte prefix, buffer starts directly with IV.
@@ -99,7 +101,10 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
       // Legacy format – derive key using the old static salt
       const legacyKey = scryptSync(key, LEGACY_ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
       const iv = data.subarray(0, ARTIFACT_IV_LENGTH);
-      const authTag = data.subarray(ARTIFACT_IV_LENGTH, ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+      const authTag = data.subarray(
+        ARTIFACT_IV_LENGTH,
+        ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH,
+      );
       const encrypted = data.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
       const decipher = createDecipheriv(ARTIFACT_ALGORITHM, legacyKey, iv);
       decipher.setAuthTag(authTag);
@@ -108,7 +113,9 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
 
     // V1 format
     if (data.length < MIN_V1_LENGTH) {
-      throw new Error(`Encrypted artifact buffer too short for v1 format (${data.length} bytes, minimum ${MIN_V1_LENGTH})`);
+      throw new Error(
+        `Encrypted artifact buffer too short for v1 format (${data.length} bytes, minimum ${MIN_V1_LENGTH})`,
+      );
     }
     let offset = 1; // skip version byte
     const salt = data.subarray(offset, offset + SALT_LENGTH);
@@ -145,14 +152,14 @@ export async function writeArtifact(
   crypto?: ArtifactCrypto,
 ): Promise<string> {
   const data = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
-  
+
   if (crypto) {
     const encrypted = crypto.encryptBuffer(data);
     const encryptedPath = filePath + ENCRYPTED_EXTENSION;
     await fs.writeFile(encryptedPath, encrypted);
     return encryptedPath;
   }
-  
+
   await fs.writeFile(filePath, data);
   return filePath;
 }
@@ -160,22 +167,21 @@ export async function writeArtifact(
 /**
  * Reads an artifact file with optional decryption
  */
-export async function readArtifact(
-  filePath: string,
-  crypto?: ArtifactCrypto,
-): Promise<string> {
+export async function readArtifact(filePath: string, crypto?: ArtifactCrypto): Promise<string> {
   // Check for encrypted version first
   const encryptedPath = filePath + ENCRYPTED_EXTENSION;
   const useEncrypted = existsSync(encryptedPath);
-  
+
   if (useEncrypted) {
     if (!crypto) {
-      throw new Error(`Encrypted artifact found at ${encryptedPath} but no decryption key provided`);
+      throw new Error(
+        `Encrypted artifact found at ${encryptedPath} but no decryption key provided`,
+      );
     }
     const data = await fs.readFile(encryptedPath);
     return crypto.decryptBuffer(data).toString('utf8');
   }
-  
+
   const data = await fs.readFile(filePath, 'utf8');
   return data;
 }

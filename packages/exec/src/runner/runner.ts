@@ -270,7 +270,9 @@ export class SafeCommandRunner {
         stdoutStream.end();
         stderrStream.end();
         clearTimeout(timeoutTimer);
-        reject(err instanceof Error ? new ToolError(`Failed to spawn process: ${err.message}`) : err);
+        reject(
+          err instanceof Error ? new ToolError(`Failed to spawn process: ${err.message}`) : err,
+        );
         return;
       }
 

@@ -115,4 +115,3 @@ describe('RipgrepSearch', () => {
     expect(result.matches[0].path).toBe('file.ts');
   });
 });
-

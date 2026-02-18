@@ -31,12 +31,12 @@ orchestrator run "Fix bug Y" --budget cost=10,iter=8,tool=20,time=30m
 
 ### Budget Keys
 
-| Key    | Description                          | Default | Example Values     |
-|--------|--------------------------------------|---------|-------------------|
-| `cost` | Maximum estimated cost in USD        | None    | `cost=5`, `cost=0.50` |
-| `iter` | Maximum LLM iteration cycles         | 4       | `iter=6`, `iter=10` |
-| `tool` | Maximum tool/command executions      | 6       | `tool=10`, `tool=20` |
-| `time` | Maximum wall clock time              | 10m     | `time=5m`, `time=1h`, `time=30s` |
+| Key    | Description                     | Default | Example Values                   |
+| ------ | ------------------------------- | ------- | -------------------------------- |
+| `cost` | Maximum estimated cost in USD   | None    | `cost=5`, `cost=0.50`            |
+| `iter` | Maximum LLM iteration cycles    | 4       | `iter=6`, `iter=10`              |
+| `tool` | Maximum tool/command executions | 6       | `tool=10`, `tool=20`             |
+| `time` | Maximum wall clock time         | 10m     | `time=5m`, `time=1h`, `time=30s` |
 
 ### Time Format
 
@@ -56,9 +56,9 @@ Budget defaults can also be set in `.orchestrator.yaml`:
 configVersion: 1
 
 budget:
-  cost: 10      # $10 maximum
-  iter: 8       # 8 iterations maximum
-  tool: 15      # 15 tool runs maximum
+  cost: 10 # $10 maximum
+  iter: 8 # 8 iterations maximum
+  tool: 15 # 15 tool runs maximum
   time: 1200000 # 20 minutes in milliseconds
 ```
 
@@ -88,8 +88,8 @@ providers:
     model: gpt-4o
     api_key_env: OPENAI_API_KEY
     pricing:
-      inputPerMTokUsd: 2.50    # $2.50 per million input tokens
-      outputPerMTokUsd: 10.00  # $10.00 per million output tokens
+      inputPerMTokUsd: 2.50 # $2.50 per million input tokens
+      outputPerMTokUsd: 10.00 # $10.00 per million output tokens
 
   anthropic:
     type: anthropic
@@ -316,4 +316,4 @@ orchestrator export-bundle --runs 10 --output costs.zip
 These are example prices for reference. **Always verify current pricing
 with your provider.**
 
-| Provider  | Model              | Input $/MTok | Output $/MTok |
+| Provider | Model | Input $/MTok | Output $/MTok |

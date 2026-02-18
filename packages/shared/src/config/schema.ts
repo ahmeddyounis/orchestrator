@@ -185,7 +185,11 @@ export const MemoryHardeningSchema = z.object({
   enabled: z.boolean().default(false),
   defaultSensitivity: SensitivityLevelSchema.default('internal'),
   retentionPolicies: z.array(RetentionPolicySchema).optional(),
-  purgeIntervalMs: z.number().min(60000).default(6 * 60 * 60 * 1000).describe('Purge check interval (minimum 60s)'),
+  purgeIntervalMs: z
+    .number()
+    .min(60000)
+    .default(6 * 60 * 60 * 1000)
+    .describe('Purge check interval (minimum 60s)'),
   purgeOnStartup: z.boolean().default(false),
 });
 

@@ -197,7 +197,10 @@ function inferHeaderModeFromFirstHunk(lines: string[]): 'modify' | 'new' | 'dele
   return 'modify';
 }
 
-function inferSingleFilePathFromHint(stepHint: string | undefined, repoRoot: string): string | null {
+function inferSingleFilePathFromHint(
+  stepHint: string | undefined,
+  repoRoot: string,
+): string | null {
   if (!stepHint) return null;
 
   const candidates = extractFilePathCandidates(stepHint);
@@ -222,4 +225,3 @@ function extractFilePathCandidates(text: string): string[] {
   }
   return Array.from(new Set(out));
 }
-

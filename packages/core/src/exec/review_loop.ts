@@ -100,7 +100,10 @@ function contextExcerptMaxCharsForPatch(patchText: string): number {
   return 2000;
 }
 
-async function bestEffortUpdateManifest(manifestPath: string, artifactPaths: string[]): Promise<void> {
+async function bestEffortUpdateManifest(
+  manifestPath: string,
+  artifactPaths: string[],
+): Promise<void> {
   if (artifactPaths.length === 0) return;
   try {
     await updateManifest(manifestPath, (manifest) => {
@@ -243,7 +246,9 @@ async function bestEffortDryRunApply(
   return { ok: false, message: result.error?.message || 'Patch failed dry-run apply' };
 }
 
-export async function runPatchReviewLoop(input: PatchReviewLoopInput): Promise<PatchReviewLoopOutput> {
+export async function runPatchReviewLoop(
+  input: PatchReviewLoopInput,
+): Promise<PatchReviewLoopOutput> {
   const reviewLoopCfg = input.config.execution?.reviewLoop;
   const enabled = reviewLoopCfg?.enabled ?? false;
   if (!enabled) {

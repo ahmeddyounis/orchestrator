@@ -323,12 +323,18 @@ describe('PlanService', () => {
       { id: '2.1', step: 'Add B', ancestors: ['Top B'] },
     ]);
 
-    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_expand_1_raw.txt`, expect.any(String));
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_expand_1_raw.txt`,
+      expect.any(String),
+    );
     expect(fs.writeFile).toHaveBeenCalledWith(
       `${artifactsDir}/plan_expand_1.json`,
       JSON.stringify({ steps: ['Add A', 'Test A'] }, null, 2),
     );
-    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_expand_2_raw.txt`, expect.any(String));
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_expand_2_raw.txt`,
+      expect.any(String),
+    );
     expect(fs.writeFile).toHaveBeenCalledWith(
       `${artifactsDir}/plan_expand_2.json`,
       JSON.stringify({ steps: ['Add B'] }, null, 2),

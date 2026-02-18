@@ -75,7 +75,10 @@ export class ContextStackRecorder {
         const artifacts: string[] = [];
         if (this.options.runArtifactsRoot) {
           artifacts.push(
-            path.relative(this.options.repoRoot, path.join(this.options.runArtifactsRoot, 'plan.json')),
+            path.relative(
+              this.options.repoRoot,
+              path.join(this.options.runArtifactsRoot, 'plan.json'),
+            ),
           );
         }
         return {
@@ -102,7 +105,7 @@ export class ContextStackRecorder {
           title: `Patch ${event.payload.success ? 'applied' : 'failed'}`,
           summary: event.payload.filesChanged?.length
             ? summarizeList(event.payload.filesChanged, 10)
-            : event.payload.description ?? 'No file list',
+            : (event.payload.description ?? 'No file list'),
         };
       case 'VerificationFinished':
         return {
@@ -165,4 +168,3 @@ export class ContextStackRecorder {
     }
   }
 }
-

@@ -43,13 +43,13 @@ export function registerPlanCommand(program: Command) {
     .option('--research', 'Run a multi-researcher pass before planning')
     .option('--research-count <n>', 'Number of researchers (integer 1-5)')
     .option('--research-provider <providerId...>', 'Provider IDs to use for research calls')
-    .option('--research-max-queries <n>', 'Max follow-up repo searches from research (integer 0-20)')
+    .option(
+      '--research-max-queries <n>',
+      'Max follow-up repo searches from research (integer 0-20)',
+    )
     .option('--research-no-synth', 'Disable synthesis pass for research')
     .option('--depth <n>', 'Expand each plan step to substeps up to depth n (integer 1-5)')
-    .option(
-      '--max-substeps <n>',
-      'Max substeps per expanded step (integer 1-20, default 6)',
-    )
+    .option('--max-substeps <n>', 'Max substeps per expanded step (integer 1-20, default 6)')
     .option(
       '--max-total-steps <n>',
       'Safety limit for total plan nodes (integer 1-500, default 200)',
@@ -259,7 +259,9 @@ export function registerPlanCommand(program: Command) {
           // ignore
         }
         try {
-          await contextStackStore.snapshotTo(path.join(artifacts.root, 'context_stack.snapshot.jsonl'));
+          await contextStackStore.snapshotTo(
+            path.join(artifacts.root, 'context_stack.snapshot.jsonl'),
+          );
         } catch {
           // ignore
         }
@@ -302,7 +304,9 @@ export function registerPlanCommand(program: Command) {
           : undefined;
 
       if (options.reviewer && !config.providers?.[options.reviewer]) {
-        throw new ConfigError(`Reviewer provider '${options.reviewer}' not found in configuration.`);
+        throw new ConfigError(
+          `Reviewer provider '${options.reviewer}' not found in configuration.`,
+        );
       }
       if (reviewerId && reviewerId !== plannerId && !config.providers?.[reviewerId]) {
         throw new ConfigError(`Reviewer provider '${reviewerId}' not found in configuration.`);

@@ -33,7 +33,10 @@ function findNextDiffStart(lines: string[], fromIndex: number): number {
   return -1;
 }
 
-function extractDiffBlock(lines: string[], startLine: number): { blockLines: string[]; endLine: number; sawHunk: boolean } {
+function extractDiffBlock(
+  lines: string[],
+  startLine: number,
+): { blockLines: string[]; endLine: number; sawHunk: boolean } {
   const blockLines: string[] = [];
   let inHeader = true;
   let inHunk = false;
@@ -175,7 +178,8 @@ function parseWithMarker(sanitized: string): DiffExtractionResult {
   const markerMatch = sanitized.match(markerRegex);
   if (markerMatch) {
     const extracted = extractUnifiedDiffFromText(markerMatch[1]);
-    if (extracted && isValidDiffStructure(extracted)) return { diffText: extracted, confidence: 1.0 };
+    if (extracted && isValidDiffStructure(extracted))
+      return { diffText: extracted, confidence: 1.0 };
   }
   return null;
 }
@@ -185,7 +189,8 @@ function parseWithFence(sanitized: string): DiffExtractionResult {
   const fenceMatch = sanitized.match(fenceRegex);
   if (fenceMatch) {
     const extracted = extractUnifiedDiffFromText(fenceMatch[1]);
-    if (extracted && isValidDiffStructure(extracted)) return { diffText: extracted, confidence: 0.9 };
+    if (extracted && isValidDiffStructure(extracted))
+      return { diffText: extracted, confidence: 0.9 };
   }
   return null;
 }

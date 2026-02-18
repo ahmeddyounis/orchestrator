@@ -34,20 +34,14 @@ export interface SandboxPrepareResult {
 }
 
 export interface SandboxProvider {
-  prepare(
-    repoRoot: string,
-    runId: string,
-  ): Promise<SandboxPrepareResult>;
+  prepare(repoRoot: string, runId: string): Promise<SandboxPrepareResult>;
 }
 
 /**
  * No-op sandbox provider - runs commands directly on the host
  */
 export class NoneSandboxProvider implements SandboxProvider {
-  async prepare(
-    repoRoot: string,
-    _runId: string,
-  ): Promise<SandboxPrepareResult> {
+  async prepare(repoRoot: string, _runId: string): Promise<SandboxPrepareResult> {
     return { cwd: repoRoot };
   }
 }
@@ -70,10 +64,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     };
   }
 
-  async prepare(
-    repoRoot: string,
-    runId: string,
-  ): Promise<SandboxPrepareResult> {
+  async prepare(repoRoot: string, runId: string): Promise<SandboxPrepareResult> {
     // Verify Docker is available
     try {
       spawnSync('docker', ['--version'], { stdio: 'ignore' });
@@ -82,7 +73,7 @@ export class DockerSandboxProvider implements SandboxProvider {
     }
 
     const containerName = `orchestrator-sandbox-${runId}`;
-    
+
     // Build docker run arguments for security hardening
     const dockerArgs = this.buildDockerArgs(repoRoot, containerName);
 
@@ -106,12 +97,18 @@ export class DockerSandboxProvider implements SandboxProvider {
   private buildDockerArgs(repoRoot: string, containerName: string): string[] {
     const args: string[] = [
       '--rm',
-      '--name', containerName,
-      '--network', this.config.networkMode,
-      '--memory', this.config.memoryLimit,
-      '--cpus', String(this.config.cpuLimit),
-      '-v', `${repoRoot}:/workspace:rw`,
-      '-w', '/workspace',
+      '--name',
+      containerName,
+      '--network',
+      this.config.networkMode,
+      '--memory',
+      this.config.memoryLimit,
+      '--cpus',
+      String(this.config.cpuLimit),
+      '-v',
+      `${repoRoot}:/workspace:rw`,
+      '-w',
+      '/workspace',
     ];
 
     // Security options
@@ -128,7 +125,7 @@ export class DockerSandboxProvider implements SandboxProvider {
 
     // Drop all capabilities and only add back what's needed
     args.push('--cap-drop', 'ALL');
-    
+
     // Prevent privilege escalation
     args.push('--security-opt', 'no-new-privileges');
 
@@ -152,12 +149,9 @@ export class DevcontainerSandboxProvider implements SandboxProvider {
     };
   }
 
-  async prepare(
-    repoRoot: string,
-    runId: string,
-  ): Promise<SandboxPrepareResult> {
+  async prepare(repoRoot: string, runId: string): Promise<SandboxPrepareResult> {
     const configPath = join(repoRoot, this.config.configPath);
-    
+
     if (!existsSync(configPath)) {
       throw new Error(`Devcontainer config not found at ${configPath}`);
     }
@@ -170,18 +164,14 @@ export class DevcontainerSandboxProvider implements SandboxProvider {
     }
 
     const containerName = `orchestrator-devcontainer-${runId}`;
-    
+
     return {
       cwd: '/workspaces/' + repoRoot.split('/').pop(),
       envOverrides: {
         ORCHESTRATOR_SANDBOX: 'devcontainer',
         ORCHESTRATOR_SANDBOX_CONTAINER: containerName,
       },
-      execPrefix: [
-        'devcontainer',
-        'exec',
-        '--workspace-folder', repoRoot,
-      ],
+      execPrefix: ['devcontainer', 'exec', '--workspace-folder', repoRoot],
       cleanup: async () => {
         try {
           spawnSync('devcontainer', ['down', '--workspace-folder', repoRoot], { stdio: 'ignore' });

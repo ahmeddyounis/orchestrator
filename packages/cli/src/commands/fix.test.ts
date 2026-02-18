@@ -25,9 +25,9 @@ describe('registerFixCommand', () => {
     program.exitOverride(); // prevent commander from exiting the process
     registerFixCommand(program);
 
-    await expect(program.parseAsync(['node', 'fix', 'fix', 'goal', '--think', 'L9'])).rejects.toThrow(
-      /Invalid think level/i,
-    );
+    await expect(
+      program.parseAsync(['node', 'fix', 'fix', 'goal', '--think', 'L9']),
+    ).rejects.toThrow(/Invalid think level/i);
   });
 
   it('throws UsageError for invalid --memory-topk-lexical', async () => {
@@ -50,4 +50,3 @@ describe('registerFixCommand', () => {
     ).rejects.toThrow(/Invalid --memory-vector-backend/i);
   });
 });
-

@@ -82,7 +82,7 @@ export const DEFAULT_TIMEOUTS_BY_CLASSIFICATION: Record<ToolClassification, Tool
  */
 export const DEFAULT_TOOL_TIMEOUTS: ToolTimeoutConfigMap = {
   // LLM CLI tools need very long timeouts
-  'claude': {
+  claude: {
     timeoutMs: 6_000_000, // 100 minutes
     gracePeriodMs: 60_000,
   },
@@ -90,67 +90,67 @@ export const DEFAULT_TOOL_TIMEOUTS: ToolTimeoutConfigMap = {
     timeoutMs: 6_000_000, // 100 minutes
     gracePeriodMs: 60_000,
   },
-  'codex': {
+  codex: {
     timeoutMs: 6_000_000, // 100 minutes
     gracePeriodMs: 60_000,
   },
-  'gemini': {
+  gemini: {
     timeoutMs: 6_000_000, // 100 minutes
     gracePeriodMs: 60_000,
   },
 
   // Package managers
-  'npm': {
+  npm: {
     timeoutMs: 600_000, // 10 minutes
     gracePeriodMs: 30_000,
   },
-  'pnpm': {
+  pnpm: {
     timeoutMs: 600_000, // 10 minutes
     gracePeriodMs: 30_000,
   },
-  'yarn': {
+  yarn: {
     timeoutMs: 600_000, // 10 minutes
     gracePeriodMs: 30_000,
   },
 
   // Build tools
-  'tsc': {
+  tsc: {
     timeoutMs: 300_000, // 5 minutes
     gracePeriodMs: 15_000,
   },
-  'turbo': {
+  turbo: {
     timeoutMs: 900_000, // 15 minutes
     gracePeriodMs: 30_000,
   },
-  'vite': {
+  vite: {
     timeoutMs: 300_000, // 5 minutes
     gracePeriodMs: 15_000,
   },
-  'webpack': {
+  webpack: {
     timeoutMs: 600_000, // 10 minutes
     gracePeriodMs: 30_000,
   },
 
   // Test runners
-  'vitest': {
+  vitest: {
     timeoutMs: 900_000, // 15 minutes
     gracePeriodMs: 30_000,
   },
-  'jest': {
+  jest: {
     timeoutMs: 900_000, // 15 minutes
     gracePeriodMs: 30_000,
   },
-  'mocha': {
+  mocha: {
     timeoutMs: 900_000, // 15 minutes
     gracePeriodMs: 30_000,
   },
 
   // Linters
-  'eslint': {
+  eslint: {
     timeoutMs: 300_000, // 5 minutes
     gracePeriodMs: 15_000,
   },
-  'prettier': {
+  prettier: {
     timeoutMs: 120_000, // 2 minutes
     gracePeriodMs: 10_000,
   },

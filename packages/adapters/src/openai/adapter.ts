@@ -9,11 +9,7 @@ import {
   ProviderConfig,
   ToolCall,
 } from '@orchestrator/shared';
-import {
-  ProviderAdapter,
-  AdapterContext,
-  ConfigError,
-} from '../index';
+import { ProviderAdapter, AdapterContext, ConfigError } from '../index';
 import { BaseProviderAdapter, ErrorTypeConfig, APIErrorLike } from '../base-adapter';
 import { executeProviderRequest } from '../common';
 
@@ -38,8 +34,7 @@ export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapte
     this.errorConfig = {
       isAPIError: (error: unknown): error is APIErrorLike =>
         error instanceof APIError && typeof error.status === 'number',
-      isTimeoutError: (error: unknown): boolean =>
-        error instanceof APIConnectionTimeoutError,
+      isTimeoutError: (error: unknown): boolean => error instanceof APIConnectionTimeoutError,
     };
   }
 

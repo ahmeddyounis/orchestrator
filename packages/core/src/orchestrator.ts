@@ -1050,7 +1050,10 @@ END_DIFF
           const id = (entry as Record<string, unknown>).id;
           const ancestorsRaw = (entry as Record<string, unknown>).ancestors;
           const ancestors = Array.isArray(ancestorsRaw)
-            ? ancestorsRaw.map(String).map((s) => s.trim()).filter(Boolean)
+            ? ancestorsRaw
+                .map(String)
+                .map((s) => s.trim())
+                .filter(Boolean)
             : [];
 
           result.push({
@@ -1108,7 +1111,9 @@ END_DIFF
 
     const planningResearchCfg = this.config.planning?.research;
     const planningResearchers =
-      planningResearchCfg?.enabled && planningResearchCfg.providerIds && planningResearchCfg.providerIds.length > 0
+      planningResearchCfg?.enabled &&
+      planningResearchCfg.providerIds &&
+      planningResearchCfg.providerIds.length > 0
         ? planningResearchCfg.providerIds.map((id) => this.registry.getAdapter(id))
         : planningResearchCfg?.enabled
           ? [providers.planner]
@@ -1116,7 +1121,11 @@ END_DIFF
 
     const steps = await planService.generatePlan(
       goal,
-      { planner: providers.planner, reviewer: providers.reviewer, researchers: planningResearchers },
+      {
+        planner: providers.planner,
+        reviewer: providers.reviewer,
+        researchers: planningResearchers,
+      },
       context,
       artifacts.root,
       this.repoRoot,
@@ -1286,7 +1295,9 @@ END_DIFF
     const execResearchCfg = this.config.execution?.research;
     const researchService = execResearchCfg?.enabled ? new ResearchService() : undefined;
     const researchProviders =
-      execResearchCfg?.enabled && execResearchCfg.providerIds && execResearchCfg.providerIds.length > 0
+      execResearchCfg?.enabled &&
+      execResearchCfg.providerIds &&
+      execResearchCfg.providerIds.length > 0
         ? execResearchCfg.providerIds.map((id) => this.registry.getAdapter(id))
         : execResearchCfg?.enabled
           ? [providers.executor]
@@ -1295,7 +1306,10 @@ END_DIFF
     let goalResearchBrief = '';
     if (researchService && execResearchCfg?.enabled && execResearchCfg.scope === 'goal') {
       try {
-        const planLines = steps.slice(0, 25).map((s) => `- ${s}`).join('\n');
+        const planLines = steps
+          .slice(0, 25)
+          .map((s) => `- ${s}`)
+          .join('\n');
         const goalResearch = await researchService.run({
           mode: 'execution',
           goal,
@@ -1585,7 +1599,9 @@ END_DIFF
       }
 
       const researchBrief =
-        execResearchCfg?.enabled && execResearchCfg.scope === 'goal' ? goalResearchBrief : stepResearchBrief;
+        execResearchCfg?.enabled && execResearchCfg.scope === 'goal'
+          ? goalResearchBrief
+          : stepResearchBrief;
 
       // If the step appears already satisfied (and we can verify it), treat it as a no-op success.
       const noopAcceptance = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
@@ -1817,7 +1833,9 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         .join('\n');
       return finish(
         'failure',
-        failedSteps.some((f) => f.stopReason === 'invalid_output') ? 'invalid_output' : 'repeated_failure',
+        failedSteps.some((f) => f.stopReason === 'invalid_output')
+          ? 'invalid_output'
+          : 'repeated_failure',
         `L1 Plan completed with failures. Succeeded: ${stepsSucceeded}/${executionSteps.length}. Failed: ${failedSteps.length}.\n${summaryLines}`,
       );
     }
@@ -2049,10 +2067,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     const profile = verificationService.getProfile();
 
     // 3. Initial Verification
-    let verification = await verificationService.verify(
-      l1Result.filesChanged || [],
-      runId,
-    );
+    let verification = await verificationService.verify(l1Result.filesChanged || [], runId);
 
     const initialReportPath = path.join(artifacts.root, 'verification_report_initial.json');
     await fs.writeFile(initialReportPath, JSON.stringify(verification, null, 2));
@@ -2414,10 +2429,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       }
 
       // Verify again
-      verification = await verificationService.verify(
-        Array.from(touchedFiles),
-        runId,
-      );
+      verification = await verificationService.verify(Array.from(touchedFiles), runId);
 
       const reportPath = path.join(artifacts.root, `verification_report_iter_${iterations}.json`);
       await fs.writeFile(reportPath, JSON.stringify(verification, null, 2));
@@ -2585,7 +2597,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     const planningResearchCfg = this.config.planning?.research;
     const planningResearchers =
-      planningResearchCfg?.enabled && planningResearchCfg.providerIds && planningResearchCfg.providerIds.length > 0
+      planningResearchCfg?.enabled &&
+      planningResearchCfg.providerIds &&
+      planningResearchCfg.providerIds.length > 0
         ? planningResearchCfg.providerIds.map((id) => this.registry.getAdapter(id))
         : planningResearchCfg?.enabled
           ? [providers.planner]
@@ -2593,7 +2607,11 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     const steps = await planService.generatePlan(
       goal,
-      { planner: providers.planner, reviewer: providers.reviewer, researchers: planningResearchers },
+      {
+        planner: providers.planner,
+        reviewer: providers.reviewer,
+        researchers: planningResearchers,
+      },
       context,
       artifacts.root,
       this.repoRoot,
@@ -2738,7 +2756,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     const execResearchCfg = this.config.execution?.research;
     const researchService = execResearchCfg?.enabled ? new ResearchService() : undefined;
     const researchProviders =
-      execResearchCfg?.enabled && execResearchCfg.providerIds && execResearchCfg.providerIds.length > 0
+      execResearchCfg?.enabled &&
+      execResearchCfg.providerIds &&
+      execResearchCfg.providerIds.length > 0
         ? execResearchCfg.providerIds.map((id) => this.registry.getAdapter(id))
         : execResearchCfg?.enabled
           ? [providers.executor]
@@ -2747,7 +2767,10 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     let goalResearchBrief = '';
     if (researchService && execResearchCfg?.enabled && execResearchCfg.scope === 'goal') {
       try {
-        const planLines = steps.slice(0, 25).map((s) => `- ${s}`).join('\n');
+        const planLines = steps
+          .slice(0, 25)
+          .map((s) => `- ${s}`)
+          .join('\n');
         const goalResearch = await researchService.run({
           mode: 'execution',
           goal,
@@ -3043,7 +3066,9 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       }
 
       const researchBrief =
-        execResearchCfg?.enabled && execResearchCfg.scope === 'goal' ? goalResearchBrief : stepResearchBrief;
+        execResearchCfg?.enabled && execResearchCfg.scope === 'goal'
+          ? goalResearchBrief
+          : stepResearchBrief;
 
       // --- L3 Candidate Generation ---
       const candidateGenerator = new CandidateGenerator();

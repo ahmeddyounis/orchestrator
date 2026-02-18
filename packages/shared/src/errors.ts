@@ -293,12 +293,12 @@ export class PluginPermissionError extends AppError {
   /** Permissions that were missing */
   public readonly missingPermissions: string[];
 
-  constructor(
-    pluginName: string,
-    missingPermissions: string[],
-    options: AppErrorOptions = {},
-  ) {
-    super('PluginError', `Plugin "${pluginName}" missing permissions: ${missingPermissions.join(', ')}`, options);
+  constructor(pluginName: string, missingPermissions: string[], options: AppErrorOptions = {}) {
+    super(
+      'PluginError',
+      `Plugin "${pluginName}" missing permissions: ${missingPermissions.join(', ')}`,
+      options,
+    );
     this.pluginName = pluginName;
     this.missingPermissions = missingPermissions;
   }

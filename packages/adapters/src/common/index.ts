@@ -203,7 +203,7 @@ export async function executeProviderRequest<T>(
       if (!retriable || attempts >= maxRetries) {
         break;
       }
-      
+
       // Note: Retry metrics are captured in the ProviderRequestFinished event below
 
       attempts++;

@@ -20,7 +20,10 @@ import { SQLiteVectorBackend } from './sqlite/sqlite-backend';
 export { VectorBackendConfig } from './backend';
 
 // Re-export error classes for backward compatibility
-export { VectorBackendNotImplementedError, RemoteBackendNotAllowedError } from '@orchestrator/shared';
+export {
+  VectorBackendNotImplementedError,
+  RemoteBackendNotAllowedError,
+} from '@orchestrator/shared';
 
 const REMOTE_BACKENDS = ['qdrant', 'chroma', 'pgvector'];
 

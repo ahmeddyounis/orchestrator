@@ -77,8 +77,22 @@ describe('Reviewer', () => {
     (mockReviewerAdapter.generate as ReturnType<typeof vi.fn>).mockResolvedValue(mockResponse);
 
     const candidates: Candidate[] = [
-      { index: 0, valid: true, patch: 'diff --git a/a.ts b/a.ts\n+clean', rawOutput: '', providerId: 'test', durationMs: 100 },
-      { index: 1, valid: true, patch: 'diff --git a/a.ts b/a.ts\n+messy', rawOutput: '', providerId: 'test', durationMs: 100 },
+      {
+        index: 0,
+        valid: true,
+        patch: 'diff --git a/a.ts b/a.ts\n+clean',
+        rawOutput: '',
+        providerId: 'test',
+        durationMs: 100,
+      },
+      {
+        index: 1,
+        valid: true,
+        patch: 'diff --git a/a.ts b/a.ts\n+messy',
+        rawOutput: '',
+        providerId: 'test',
+        durationMs: 100,
+      },
     ];
 
     const input: ReviewerInput = {
@@ -131,7 +145,9 @@ describe('Reviewer', () => {
       logger: mockLogger,
     };
 
-    await expect(reviewer.review(input, context)).rejects.toThrow('Reviewer returned empty response.');
+    await expect(reviewer.review(input, context)).rejects.toThrow(
+      'Reviewer returned empty response.',
+    );
   });
 
   it('should throw an error when response has no JSON', async () => {

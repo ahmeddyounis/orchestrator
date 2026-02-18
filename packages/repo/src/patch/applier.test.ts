@@ -280,13 +280,7 @@ describe('PatchApplier', () => {
   });
 
   it('rejects hunks without file headers (patch fragments)', async () => {
-    const diffText =
-      [
-        '@@ -1 +1 @@',
-        '-Hello World',
-        '+Hello Universe',
-        '',
-      ].join('\n') + '\n';
+    const diffText = ['@@ -1 +1 @@', '-Hello World', '+Hello Universe', ''].join('\n') + '\n';
 
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
@@ -305,13 +299,7 @@ describe('PatchApplier', () => {
   });
 
   it('rejects "+++ ..." headers without preceding "--- ..." header', async () => {
-    const diffText =
-      [
-        '+++ b/test.txt',
-        '@@ -0,0 +1 @@',
-        '+Hello',
-        '',
-      ].join('\n') + '\n';
+    const diffText = ['+++ b/test.txt', '@@ -0,0 +1 @@', '+Hello', ''].join('\n') + '\n';
 
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
@@ -321,11 +309,7 @@ describe('PatchApplier', () => {
 
   it('rejects diff --git blocks that never include file headers', async () => {
     const diffText =
-      [
-        'diff --git a/test.txt b/test.txt',
-        'index 0000000..1111111 100644',
-        '',
-      ].join('\n') + '\n';
+      ['diff --git a/test.txt b/test.txt', 'index 0000000..1111111 100644', ''].join('\n') + '\n';
 
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);

@@ -117,8 +117,16 @@ export class CodexCliAdapter extends SubprocessProviderAdapter {
       configRequirements: {
         forbiddenArgs: ['exec', '-m', '--model', '--json', '--output-schema', '-'],
         supportedFields: {
-          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
-          ossMode: { description: 'Enable OSS mode with local model provider', type: 'boolean', default: false },
+          pty: {
+            description: 'Spawn subprocess in a pseudo-terminal',
+            type: 'boolean',
+            default: false,
+          },
+          ossMode: {
+            description: 'Enable OSS mode with local model provider',
+            type: 'boolean',
+            default: false,
+          },
         },
       },
     };

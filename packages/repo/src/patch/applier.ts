@@ -98,12 +98,9 @@ export class PatchApplier {
     }
   }
 
-  private validateDiff(
-    diffText: string,
-    limits: DiffLimits,
-  ): PatchError | undefined {
+  private validateDiff(diffText: string, limits: DiffLimits): PatchError | undefined {
     const lines = diffText.split('\n');
-    
+
     // Step 1: Check for empty diff
     const emptyError = this.validateNotEmpty(diffText);
     if (emptyError) return emptyError;
@@ -161,7 +158,10 @@ export class PatchApplier {
   private validateDiffStructure(
     lines: string[],
     allowBinary: boolean,
-  ): { error?: PatchError; stats: { fileCount: number; addedLines: number; removedLines: number } } {
+  ): {
+    error?: PatchError;
+    stats: { fileCount: number; addedLines: number; removedLines: number };
+  } {
     const stats = { fileCount: 0, addedLines: 0, removedLines: 0 };
 
     // Track whether we've seen valid file headers for the current file block.
@@ -190,7 +190,7 @@ export class PatchApplier {
           currentDiffGitHasFileHeaders,
         );
         if (blockError) return { error: blockError, stats };
-        
+
         currentDiffGitStartLine = lineNumber;
         currentDiffGitHasFileHeaders = false;
         resetCurrentFile();
@@ -209,7 +209,7 @@ export class PatchApplier {
       // Handle "+++ " headers
       if (line.startsWith('+++ ')) {
         if (currentDiffGitStartLine !== undefined) currentDiffGitHasFileHeaders = true;
-        
+
         if (!currentHasOldHeader) {
           return {
             error: this.makeValidationError(
@@ -228,7 +228,7 @@ export class PatchApplier {
         if (line.startsWith('+++ b/')) {
           stats.fileCount++;
           const filePath = line.substring(6).trim();
-          
+
           const securityError = this.validateFileInDiff(filePath, allowBinary);
           if (securityError) return { error: securityError, stats };
         }
@@ -338,11 +338,7 @@ export class PatchApplier {
   /**
    * Creates a validation error with consistent structure
    */
-  private makeValidationError(
-    message: string,
-    line?: number,
-    suggestion?: string,
-  ): PatchError {
+  private makeValidationError(message: string, line?: number, suggestion?: string): PatchError {
     return {
       type: 'validation',
       message,
@@ -367,7 +363,7 @@ export class PatchApplier {
    * - Null byte injection
    * - Double encoding attacks
    * - Suspicious patterns that could indicate symlink attacks
-   * 
+   *
    * @returns Error message if path is unsafe, undefined if safe
    */
   private validatePathSecurity(filePath: string): string | undefined {
@@ -382,7 +378,7 @@ export class PatchApplier {
     let previousPath = '';
     let iterations = 0;
     const maxIterations = 5; // Prevent infinite loops from malformed input
-    
+
     while (decodedPath !== previousPath && iterations < maxIterations) {
       previousPath = decodedPath;
       try {
@@ -399,9 +395,9 @@ export class PatchApplier {
 
     // Check for path traversal in both original and decoded forms
     const traversalPatterns = [
-      '../',           // Standard Unix traversal
-      '..\\',          // Windows traversal (before normalization)
-      '..',            // Just ".." could be dangerous at path boundaries
+      '../', // Standard Unix traversal
+      '..\\', // Windows traversal (before normalization)
+      '..', // Just ".." could be dangerous at path boundaries
     ];
 
     for (const pattern of traversalPatterns) {
@@ -543,7 +539,9 @@ export class PatchApplier {
 
     for (const line of lines) {
       // Malformed patch: "patch fragment without header"
-      const fragmentMatch = line.match(/^error: patch fragment without header at line (\d+)(?::\s*(.*))?/);
+      const fragmentMatch = line.match(
+        /^error: patch fragment without header at line (\d+)(?::\s*(.*))?/,
+      );
       if (fragmentMatch) {
         const lineNo = parseInt(fragmentMatch[1] || '0', 10);
         const fragment = fragmentMatch[2]?.trim();

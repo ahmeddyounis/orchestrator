@@ -1,4 +1,10 @@
-import { ModelRequest, Config, ProviderError, extractJsonObject, logger } from '@orchestrator/shared';
+import {
+  ModelRequest,
+  Config,
+  ProviderError,
+  extractJsonObject,
+  logger,
+} from '@orchestrator/shared';
 import { ProviderAdapter, AdapterContext, parsePlanFromText } from '@orchestrator/adapters';
 import {
   RepoScanner,
@@ -160,7 +166,11 @@ export class PlanService {
 
   async generatePlan(
     goal: string,
-    providers: { planner: ProviderAdapter; reviewer?: ProviderAdapter; researchers?: ProviderAdapter[] },
+    providers: {
+      planner: ProviderAdapter;
+      reviewer?: ProviderAdapter;
+      researchers?: ProviderAdapter[];
+    },
     ctx: AdapterContext,
     artifactsDir: string,
     repoRoot: string,
@@ -309,7 +319,10 @@ export class PlanService {
       await fs.writeFile(path.join(artifactsDir, 'context_pack.txt'), readableReport);
     } catch (err) {
       // Don't fail planning if context fails, just log it
-      logger.error(err instanceof Error ? err : new Error(String(err)), 'Context generation failed');
+      logger.error(
+        err instanceof Error ? err : new Error(String(err)),
+        'Context generation failed',
+      );
     }
 
     const systemPromptBase = `You are an expert software architecture planner.
@@ -415,7 +428,9 @@ Critical formatting rules:
 
           if (followupMatches.length > 0) {
             const extractor = new SnippetExtractor();
-            const followupSnippets = await extractor.extractSnippets(followupMatches, { cwd: repoRoot });
+            const followupSnippets = await extractor.extractSnippets(followupMatches, {
+              cwd: repoRoot,
+            });
 
             const key = (s: Snippet) => `${s.path}:${s.startLine}-${s.endLine}`;
             const existingKeys = new Set(candidates.map(key));
@@ -439,7 +454,10 @@ Critical formatting rules:
                   goal,
                   followupQueries,
                   pack: contextPack,
-                  stats: { candidatesFound: candidates.length, itemsSelected: contextPack.items.length },
+                  stats: {
+                    candidatesFound: candidates.length,
+                    itemsSelected: contextPack.items.length,
+                  },
                 },
                 null,
                 2,
@@ -768,7 +786,11 @@ Critical formatting rules:
     const safeIdForFilename = (id: string): string => id.replace(/[^a-zA-Z0-9_.-]/g, '_');
 
     let totalNodes = tree.length;
-    const expandNode = async (node: PlanNode, depth: number, ancestors: string[]): Promise<void> => {
+    const expandNode = async (
+      node: PlanNode,
+      depth: number,
+      ancestors: string[],
+    ): Promise<void> => {
       if (depth >= maxDepth) return;
       if (totalNodes >= maxTotalSteps) return;
 

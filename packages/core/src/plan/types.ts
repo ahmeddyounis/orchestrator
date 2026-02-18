@@ -56,4 +56,3 @@ export interface PlanJson {
   /** Optional review output when plan review is enabled. */
   review?: PlanReviewResult;
 }
-

@@ -12,12 +12,13 @@ Dependencies are categorized by their criticality and update frequency requireme
 
 These dependencies directly interact with external APIs and require careful version management:
 
-| Package | Min Version | Update Policy |
-|---------|-------------|---------------|
-| `@anthropic-ai/sdk` | ^0.71.0 | Review changelogs for breaking changes before updating. Test adapter compatibility. |
-| `openai` | ^6.17.0 | Review changelogs for breaking changes before updating. Test adapter compatibility. |
+| Package             | Min Version | Update Policy                                                                       |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------- |
+| `@anthropic-ai/sdk` | ^0.71.0     | Review changelogs for breaking changes before updating. Test adapter compatibility. |
+| `openai`            | ^6.17.0     | Review changelogs for breaking changes before updating. Test adapter compatibility. |
 
 **Update Process for Provider SDKs:**
+
 1. Review the SDK changelog for breaking changes
 2. Check for API compatibility changes
 3. Run adapter smoke tests (`pnpm adapters:smoke`)
@@ -26,9 +27,9 @@ These dependencies directly interact with external APIs and require careful vers
 
 ### Schema Validation (Zod)
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `zod` | ^4.3.6 | Used across multiple packages. Must be consistent. |
+| Package | Version | Notes                                              |
+| ------- | ------- | -------------------------------------------------- |
+| `zod`   | ^4.3.6  | Used across multiple packages. Must be consistent. |
 
 **Important:** All packages using Zod must use the same major version to ensure schema compatibility.
 
@@ -43,17 +44,18 @@ Development dependencies are managed via Dependabot with automatic minor/patch u
 
 ### Build Tools
 
-| Package | Version | Update Policy |
-|---------|---------|---------------|
-| `turbo` | ^2.x | Major updates require review |
-| `esbuild` | ^0.x | Minor updates allowed |
-| `husky` | ^9.x | Minor updates allowed |
+| Package   | Version | Update Policy                |
+| --------- | ------- | ---------------------------- |
+| `turbo`   | ^2.x    | Major updates require review |
+| `esbuild` | ^0.x    | Minor updates allowed        |
+| `husky`   | ^9.x    | Minor updates allowed        |
 
 ## Automated Dependency Management
 
 ### Dependabot
 
 Dependabot is configured to:
+
 - Run weekly on Mondays
 - Group dev dependencies together
 - Ignore major version updates (require manual review)

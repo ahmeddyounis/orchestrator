@@ -1,5 +1,11 @@
 import { ProviderAdapter } from '@orchestrator/adapters';
-import { EventBus, Logger, ModelRequest, updateManifest, extractJsonObject } from '@orchestrator/shared';
+import {
+  EventBus,
+  Logger,
+  ModelRequest,
+  updateManifest,
+  extractJsonObject,
+} from '@orchestrator/shared';
 import { CostTracker } from '../../cost/tracker';
 import { FusedContext } from '../../context';
 import { Candidate } from './candidate_generator';

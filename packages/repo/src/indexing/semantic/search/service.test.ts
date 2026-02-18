@@ -44,7 +44,11 @@ describe('SemanticSearchService', () => {
     ]);
 
     const linearSpy = vi.spyOn(VectorIndex, 'linearSearch');
-    const service = new SemanticSearchService({ store: mockStore, embedder: mockEmbedder, eventBus: mockEventBus });
+    const service = new SemanticSearchService({
+      store: mockStore,
+      embedder: mockEmbedder,
+      eventBus: mockEventBus,
+    });
 
     const hits = await service.search('query', 10, 'run-123');
 
@@ -82,7 +86,11 @@ describe('SemanticSearchService', () => {
     const buildSpy = vi.spyOn(VectorIndex.prototype, 'build');
     const searchSpy = vi.spyOn(VectorIndex.prototype, 'search');
 
-    const service = new SemanticSearchService({ store: mockStore, embedder: mockEmbedder, eventBus: mockEventBus });
+    const service = new SemanticSearchService({
+      store: mockStore,
+      embedder: mockEmbedder,
+      eventBus: mockEventBus,
+    });
     await service.search('query', 5, 'run-456');
 
     expect(buildSpy).toHaveBeenCalled();
@@ -93,9 +101,7 @@ describe('SemanticSearchService', () => {
     vi.useFakeTimers();
 
     // embedTexts returns a promise that never resolves
-    vi.mocked(mockEmbedder.embedTexts).mockImplementation(
-      () => new Promise<number[][]>(() => {}),
-    );
+    vi.mocked(mockEmbedder.embedTexts).mockImplementation(() => new Promise<number[][]>(() => {}));
 
     const service = new SemanticSearchService({
       store: mockStore,
@@ -116,4 +122,3 @@ describe('SemanticSearchService', () => {
     vi.useRealTimers();
   });
 });
-

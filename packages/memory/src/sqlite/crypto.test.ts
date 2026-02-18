@@ -69,4 +69,3 @@ describe('createCrypto', () => {
     expect(crypto2.decrypt(ciphertext)).toBe(plaintext);
   });
 });
-

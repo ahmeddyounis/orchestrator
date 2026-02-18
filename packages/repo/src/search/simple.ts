@@ -24,7 +24,7 @@ export class JsFallbackSearch implements SearchEngine {
 
     const matches: SearchMatch[] = [];
     let matchesFound = 0;
-    
+
     // Counter map to track matches per file (avoids O(n²) filtering)
     const matchesPerFile = new Map<string, number>();
 
@@ -49,10 +49,7 @@ export class JsFallbackSearch implements SearchEngine {
           if (match) {
             // Check if we've hit the per-file limit before adding
             const currentFileMatches = matchesPerFile.get(file.path) ?? 0;
-            if (
-              options.maxMatchesPerFile &&
-              currentFileMatches >= options.maxMatchesPerFile
-            ) {
+            if (options.maxMatchesPerFile && currentFileMatches >= options.maxMatchesPerFile) {
               break;
             }
             matches.push({
@@ -63,7 +60,7 @@ export class JsFallbackSearch implements SearchEngine {
               matchText: match[0],
             });
             matchesFound++;
-            
+
             // Update the counter map
             matchesPerFile.set(file.path, currentFileMatches + 1);
           }

@@ -6,13 +6,7 @@ import * as fsSync from 'node:fs';
 
 describe('tryRepairUnifiedDiff', () => {
   it('inserts missing file headers in a diff --git block', () => {
-    const input = [
-      'diff --git a/foo.txt b/foo.txt',
-      '@@ -1,1 +1,1 @@',
-      '-a',
-      '+b',
-      '',
-    ].join('\n');
+    const input = ['diff --git a/foo.txt b/foo.txt', '@@ -1,1 +1,1 @@', '-a', '+b', ''].join('\n');
 
     const repaired = tryRepairUnifiedDiff(input, { repoRoot: '/', stepHint: 'Update foo.txt' });
     expect(repaired?.diffText).toContain('--- a/foo.txt');
@@ -59,4 +53,3 @@ describe('tryRepairUnifiedDiff', () => {
     expect(repaired).toBeNull();
   });
 });
-

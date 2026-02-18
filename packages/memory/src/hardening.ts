@@ -163,7 +163,12 @@ export function validateRetentionPolicy(policy: RetentionPolicy): void {
     });
   }
 
-  const validSensitivities: SensitivityLevel[] = ['public', 'internal', 'confidential', 'restricted'];
+  const validSensitivities: SensitivityLevel[] = [
+    'public',
+    'internal',
+    'confidential',
+    'restricted',
+  ];
   if (!validSensitivities.includes(policy.sensitivityLevel)) {
     throw new MemoryError('Invalid sensitivity level in retention policy', {
       details: { sensitivityLevel: policy.sensitivityLevel },

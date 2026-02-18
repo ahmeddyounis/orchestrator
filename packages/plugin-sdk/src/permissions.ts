@@ -4,10 +4,7 @@
  * Utilities for declaring and validating plugin permissions.
  */
 
-import type {
-  PluginPermissions,
-  PermissionManifest,
-} from '@orchestrator/shared';
+import type { PluginPermissions, PermissionManifest } from '@orchestrator/shared';
 import {
   validatePermissionManifest,
   checkPermissions,
@@ -131,8 +128,7 @@ export class PermissionManifestBuilder {
       schemaVersion: PLUGIN_SECURITY_VERSION,
       required: this.required,
       optional: Object.keys(this.optional).length > 0 ? this.optional : undefined,
-      justifications:
-        Object.keys(this.justifications).length > 0 ? this.justifications : undefined,
+      justifications: Object.keys(this.justifications).length > 0 ? this.justifications : undefined,
       allowedHosts: this.hosts.length > 0 ? this.hosts : undefined,
       allowedPaths: this.paths.length > 0 ? this.paths : undefined,
     };

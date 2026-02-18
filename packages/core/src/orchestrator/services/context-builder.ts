@@ -40,7 +40,8 @@ export class ContextBuilderService {
     artifactsRoot: string;
     stepsCompleted: number;
   }): Promise<ContextBuildResult> {
-    const { goal, step, touchedFiles, memoryHits, signals, artifactsRoot, stepsCompleted } = options;
+    const { goal, step, touchedFiles, memoryHits, signals, artifactsRoot, stepsCompleted } =
+      options;
 
     let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
 

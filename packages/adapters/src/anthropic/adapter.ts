@@ -10,11 +10,7 @@ import {
   ProviderConfig,
   ToolCall,
 } from '@orchestrator/shared';
-import {
-  ProviderAdapter,
-  AdapterContext,
-  ConfigError,
-} from '../index';
+import { ProviderAdapter, AdapterContext, ConfigError } from '../index';
 import { BaseProviderAdapter, ErrorTypeConfig, APIErrorLike } from '../base-adapter';
 import { executeProviderRequest } from '../common';
 

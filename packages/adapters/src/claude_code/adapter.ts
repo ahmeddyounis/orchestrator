@@ -50,7 +50,11 @@ export class ClaudeCodeAdapter extends SubprocessProviderAdapter {
       latencyClass: 'slow',
       configRequirements: {
         supportedFields: {
-          pty: { description: 'Spawn subprocess in a pseudo-terminal', type: 'boolean', default: false },
+          pty: {
+            description: 'Spawn subprocess in a pseudo-terminal',
+            type: 'boolean',
+            default: false,
+          },
           timeoutMs: { description: 'Maximum runtime in milliseconds', type: 'number' },
         },
       },

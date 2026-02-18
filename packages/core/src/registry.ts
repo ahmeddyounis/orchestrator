@@ -72,7 +72,10 @@ export class ProviderRegistry {
    * Validates a single provider configuration.
    * Returns null if the factory is not registered (can't validate).
    */
-  validateProvider(providerId: string, providerConfig: ProviderConfig): ConfigValidationResult | null {
+  validateProvider(
+    providerId: string,
+    providerConfig: ProviderConfig,
+  ): ConfigValidationResult | null {
     const factory = this.factories.get(providerConfig.type);
     if (!factory) {
       // Can't validate without a factory - this will be caught at adapter creation time
@@ -84,7 +87,10 @@ export class ProviderRegistry {
     try {
       // For validation, we create with a dummy config to get capabilities
       // Some adapters may throw during construction, which is also validation
-      const tempAdapter = factory({ ...providerConfig, api_key: providerConfig.api_key || 'validation-placeholder' });
+      const tempAdapter = factory({
+        ...providerConfig,
+        api_key: providerConfig.api_key || 'validation-placeholder',
+      });
       const capabilities = tempAdapter.capabilities();
       return validateProviderConfig(providerConfig, capabilities, providerId);
     } catch (_error) {
