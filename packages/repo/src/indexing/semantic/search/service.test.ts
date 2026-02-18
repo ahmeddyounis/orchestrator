@@ -111,10 +111,13 @@ describe('SemanticSearchService', () => {
 
     const searchPromise = service.search('slow query', 5, 'run-timeout');
 
+    // Attach the rejection handler before advancing timers to avoid unhandled rejections.
+    const assertion = expect(searchPromise).rejects.toThrow(/timed out after 30000ms/);
+
     // Advance timers past the default EMBED_TIMEOUT_MS (30 000 ms)
     await vi.advanceTimersByTimeAsync(30_000);
 
-    await expect(searchPromise).rejects.toThrow(/timed out after 30000ms/);
+    await assertion;
 
     // Event should NOT have been emitted since search failed
     expect(mockEventBus.emit).not.toHaveBeenCalled();
