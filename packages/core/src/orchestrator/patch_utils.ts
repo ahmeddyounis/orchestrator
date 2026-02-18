@@ -55,8 +55,9 @@ export function readFileContext(
     return '';
   }
 
+  if (content.length === 0) return '';
+
   const lines = content.split('\n');
-  if (lines.length === 0) return '';
 
   const targetLine = Math.min(Math.max(1, Math.floor(line)), lines.length);
   const start = Math.max(1, targetLine - windowSize);

@@ -201,4 +201,136 @@ describe('ExecutionService', () => {
     expect(appliedText).toContain('+++ b/src/foo.ts');
     expect(appliedText).toContain('@@ -1,1 +1,1 @@');
   });
+
+  it('does not add an extra newline when patch already ends with one', async () => {
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: true,
+      filesChanged: ['file1.ts'],
+    });
+    mockGit.createCheckpoint.mockResolvedValue('sha123');
+
+    await service.applyPatch('diff...\n', 'Fix bug');
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(
+      repoRoot,
+      'diff...\n',
+      expect.any(Object),
+    );
+  });
+
+  it('skips auto-repair when disabled', async () => {
+    const noRepairConfig: Config = {
+      ...config,
+      execution: { autoRepairPatchFragments: false } as any,
+    };
+
+    const noRepairService = new ExecutionService(
+      eventBus,
+      mockGit as unknown as GitService,
+      mockApplier as unknown as PatchApplier,
+      runId,
+      repoRoot,
+      noRepairConfig,
+      mockConfirmationProvider as unknown as ConfirmationProvider,
+    );
+
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: true,
+      filesChanged: ['src/foo.ts'],
+    });
+
+    const fragment = ['@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
+    await noRepairService.applyPatch(fragment, 'Fix src/foo.ts');
+
+    expect(mockApplier.applyUnifiedDiff).toHaveBeenCalledWith(
+      repoRoot,
+      fragment + '\n',
+      expect.any(Object),
+    );
+  });
+
+  it('handles limit errors without a confirmation provider', async () => {
+    const noConfirmService = new ExecutionService(
+      eventBus,
+      mockGit as unknown as GitService,
+      mockApplier as unknown as PatchApplier,
+      runId,
+      repoRoot,
+      config,
+      undefined,
+    );
+
+    mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
+      applied: false,
+      error: { type: 'limit', message: 'Too many files' },
+    });
+
+    const result = await noConfirmService.applyPatch('diff...', 'Fix bug');
+    expect(result.success).toBe(false);
+    expect(mockGit.rollbackToCheckpoint).toHaveBeenCalledWith('HEAD');
+  });
+
+  it('skips checkpoint creation when noCheckpoints is enabled', async () => {
+    const noCheckpointConfig: Config = {
+      ...config,
+      execution: { noCheckpoints: true } as any,
+    };
+
+    const noCheckpointService = new ExecutionService(
+      eventBus,
+      mockGit as unknown as GitService,
+      mockApplier as unknown as PatchApplier,
+      runId,
+      repoRoot,
+      noCheckpointConfig,
+      mockConfirmationProvider as unknown as ConfirmationProvider,
+    );
+
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: true,
+      filesChanged: ['file1.ts'],
+    });
+
+    await noCheckpointService.applyPatch('diff...', 'Fix bug');
+    expect(mockGit.createCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it('uses an Unknown error fallback when apply fails without an error object', async () => {
+    const noConfirmService = new ExecutionService(
+      eventBus,
+      mockGit as unknown as GitService,
+      mockApplier as unknown as PatchApplier,
+      runId,
+      repoRoot,
+      config,
+      undefined,
+    );
+
+    mockApplier.applyUnifiedDiff.mockResolvedValueOnce({
+      applied: false,
+      filesChanged: [],
+      error: undefined,
+    });
+
+    const result = await noConfirmService.applyPatch('diff...', 'Fix bug');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Unknown error');
+  });
+
+  it('truncates long stderr tails to 1000 characters', async () => {
+    const longLine = 'x'.repeat(200);
+    const longStderr = Array.from({ length: 20 }, (_, i) => `line-${i} ${longLine}`).join('\n');
+    mockApplier.applyUnifiedDiff.mockResolvedValue({
+      applied: false,
+      filesChanged: [],
+      error: {
+        type: 'execution',
+        message: '',
+        details: { stderr: longStderr },
+      },
+    });
+
+    const result = await service.applyPatch('diff...', 'Fix bug');
+    expect(result.success).toBe(false);
+    expect((result.error ?? '').length).toBeLessThanOrEqual(1100);
+  });
 });

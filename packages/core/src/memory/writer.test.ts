@@ -193,6 +193,95 @@ describe('MemoryWriter', () => {
       sqliteStore.close();
     });
 
+    it('updates an existing procedural memory entry when the command repeats', async () => {
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+      const repeatingMeta: ToolRunMeta = {
+        ...toolRunMeta,
+        toolRunId: 'run-repeat-1',
+        request: { command: 'pnpm test', toolName: 'shell' },
+      } as any;
+
+      const first = await writer.extractProcedural(repeatingMeta, toolRunResult, repoStateWithDb);
+      const second = await writer.extractProcedural(
+        { ...repeatingMeta, toolRunId: 'run-repeat-2' } as any,
+        toolRunResult,
+        repoStateWithDb,
+      );
+
+      expect(first?.id).toBeTruthy();
+      expect(second?.id).toBe(first?.id);
+
+      const sqliteStore = createMemoryStore();
+      sqliteStore.init({ dbPath });
+      expect(sqliteStore.get(first!.id)).toBeTruthy();
+      sqliteStore.close();
+    });
+
+    it('does not persist updated procedural memory when integrity is blocked or suspect', async () => {
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+
+      const blockedMeta: ToolRunMeta = {
+        ...toolRunMeta,
+        toolRunId: 'run-blocked-1',
+        request: { command: 'rm -rf /', toolName: 'shell' },
+      } as any;
+      const blocked1 = await writer.extractProcedural(blockedMeta, toolRunResult, repoStateWithDb);
+      const blocked2 = await writer.extractProcedural(
+        { ...blockedMeta, toolRunId: 'run-blocked-2' } as any,
+        toolRunResult,
+        repoStateWithDb,
+      );
+      expect(blocked2?.id).toBe(blocked1?.id);
+
+      const suspectMeta: ToolRunMeta = {
+        ...toolRunMeta,
+        toolRunId: 'run-suspect-1',
+        request: { command: 'sudo pnpm test', toolName: 'shell' },
+      } as any;
+      const suspect1 = await writer.extractProcedural(suspectMeta, toolRunResult, repoStateWithDb);
+      const suspect2 = await writer.extractProcedural(
+        { ...suspectMeta, toolRunId: 'run-suspect-2' } as any,
+        toolRunResult,
+        repoStateWithDb,
+      );
+      expect(suspect2?.id).toBe(suspect1?.id);
+
+      const sqliteStore = createMemoryStore();
+      sqliteStore.init({ dbPath });
+      expect(sqliteStore.get(blocked1!.id)).toBeNull();
+      expect(sqliteStore.get(suspect1!.id)).toBeNull();
+      sqliteStore.close();
+    });
+
+    it('can exercise private fallbacks for coverage', async () => {
+      expect((writer as any).generateTitle('weird')).toBe('How to perform a task');
+
+      const embedder = {
+        embedTexts: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
+      };
+      const vectorBackend = {
+        upsert: vi.fn().mockResolvedValue(undefined),
+      };
+      const writerWithVectors = new MemoryWriter({
+        embedder: embedder as any,
+        vectorBackend: vectorBackend as any,
+      });
+      await (writerWithVectors as any).embedAndUpsert(
+        TEST_REPO_ID,
+        {
+          id: 'mem-private',
+          type: 'procedural',
+          title: 'T',
+          content: 'pnpm test',
+          gitSha: 'sha',
+          evidence: {},
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        repoStateWithoutDb,
+      );
+    });
+
     it('wipes sqlite and vector backend when configured', async () => {
       const vectorBackend = {
         wipeRepo: vi.fn().mockResolvedValue(undefined),
@@ -237,6 +326,34 @@ describe('MemoryWriter', () => {
       expect(retrieved).toBeDefined();
       expect(retrieved!.id).toBe(memory.id);
       sqliteStore.close();
+    });
+
+    it('does not persist episodic memory when integrity is suspect', async () => {
+      const suspectSummary: RunSummary = {
+        ...runSummary,
+        runId: 'run-suspect-epi',
+        goal: 'Run sudo to do the thing',
+      };
+
+      const memory = await writer.extractEpisodic(suspectSummary, repoStateWithDb);
+      expect(memory).toBeDefined();
+
+      const sqliteStore = createMemoryStore();
+      sqliteStore.init({ dbPath });
+      expect(sqliteStore.get(memory.id)).toBeNull();
+      sqliteStore.close();
+    });
+
+    it('does not redact episodic content when redaction is disabled', async () => {
+      const writerNoRedact = new MemoryWriter({ securityConfig: { redaction: { enabled: false } } });
+      const memory = await writerNoRedact.extractEpisodic(runSummary, repoStateWithoutDb, { passed: true } as any, {
+        filesChanged: 1,
+        insertions: 1,
+        deletions: 0,
+      } as any);
+
+      expect(memory.content).toContain('sk-12345678901234567890');
+      expect(memory.content).toContain('"filesChanged"');
     });
 
     it('should truncate long content', async () => {

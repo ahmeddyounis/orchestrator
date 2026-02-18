@@ -689,4 +689,99 @@ describe('PlanService', () => {
       expect.stringContaining('Failed to expand plan step 1.'),
     );
   });
+
+  it('keeps actionable top-level steps in hierarchical plans (set up / wire up)', async () => {
+    const rawText = JSON.stringify({
+      steps: [
+        '1. Set up migrations',
+        '  1.1. Add migration file',
+        '  1.2. Update models',
+        '2. Wire up routes',
+        '  2.1. Add route handler',
+      ],
+    });
+    (planner.generate as Mock).mockResolvedValue({ text: rawText } as ModelResponse);
+
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
+
+    expect(result).toEqual([
+      'Set up migrations',
+      'Add migration file',
+      'Update models',
+      'Wire up routes',
+      'Add route handler',
+    ]);
+  });
+
+  it('drops empty steps and de-dupes steps case-insensitively', async () => {
+    const rawText = JSON.stringify({
+      steps: ['-', '1. Fix bug', '2. fix bug', '  - Fix bug', '3. Add tests'],
+    });
+    (planner.generate as Mock).mockResolvedValue({ text: rawText } as ModelResponse);
+
+    const result = await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot);
+
+    expect(result).toEqual(['Fix bug', 'Add tests']);
+  });
+
+  it('skips injecting a research brief when ResearchService returns null', async () => {
+    const { ResearchService } = await import('../research/service');
+    const researchSpy = vi.spyOn(ResearchService.prototype, 'run').mockResolvedValueOnce(null);
+
+    (planner.generate as Mock).mockResolvedValue({ text: JSON.stringify({ steps: ['Step 1'] }) } as ModelResponse);
+
+    await service.generatePlan(
+      'my goal',
+      { planner },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      { planning: { research: { enabled: true, count: 1, synthesize: false, maxQueries: 0 } } } as any,
+    );
+
+    const req = (planner.generate as Mock).mock.calls[0]![0];
+    const userPrompt = req.messages.find((m: any) => m.role === 'user')?.content ?? '';
+    expect(userPrompt).not.toContain('RESEARCH BRIEF');
+
+    researchSpy.mockRestore();
+  });
+
+  it('does not expand a step when the expansion response is empty', async () => {
+    (planner.generate as Mock)
+      .mockResolvedValueOnce({ text: JSON.stringify({ steps: ['Top'] }) } as ModelResponse)
+      .mockResolvedValueOnce({ text: '' } as ModelResponse);
+
+    const result = await service.generatePlan(
+      'my goal',
+      { planner },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      undefined,
+      { maxDepth: 2, maxSubstepsPerStep: 10 },
+    );
+
+    expect(result).toEqual(['Top']);
+  });
+
+  it('expands steps using fenced JSON and enforces maxTotalSteps', async () => {
+    (planner.generate as Mock)
+      .mockResolvedValueOnce({ text: JSON.stringify({ steps: ['Top 1', 'Top 2'] }) } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: '```json\nPreamble {"steps": ["Sub 1", "Sub 2"]} trailing\n```',
+      } as ModelResponse);
+
+    const result = await service.generatePlan(
+      'my goal',
+      { planner },
+      ctx,
+      artifactsDir,
+      repoRoot,
+      undefined,
+      { maxDepth: 2, maxSubstepsPerStep: 10, maxTotalSteps: 3 },
+    );
+
+    // maxTotalSteps=3: 2 outline nodes + 1 child node.
+    expect(result).toEqual(['Sub 1', 'Top 2']);
+  });
 });

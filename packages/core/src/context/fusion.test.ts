@@ -410,4 +410,118 @@ describe('SimpleContextFuser', () => {
     expect(prompt).toContain('Type: file_change');
     expect(prompt).not.toContain('Data: undefined');
   });
+
+  it('omits the goal section when the goal is empty', () => {
+    const budgets: FusionBudgets = {
+      maxRepoContextChars: 1000,
+      maxMemoryChars: 1000,
+      maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
+    };
+
+    const { prompt } = fuser.fuse({
+      goal: '',
+      repoPack: { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: [],
+      signals: [],
+      budgets,
+    });
+
+    expect(prompt).toBe('');
+  });
+
+  it('skips rendering the context stack when maxContextStackFrames is 0', () => {
+    const budgets: FusionBudgets = {
+      maxRepoContextChars: 1000,
+      maxMemoryChars: 1000,
+      maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 0,
+    };
+
+    const { prompt, metadata } = fuser.fuse({
+      goal: 'Test',
+      repoPack: { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: [],
+      signals: [],
+      contextStack: [
+        {
+          schemaVersion: 1,
+          ts: '2026-02-06T00:00:00.000Z',
+          kind: 'PlanCreated',
+          title: 'Plan created',
+          summary: '2 steps',
+        },
+      ],
+      budgets,
+    });
+
+    expect(prompt).not.toContain('SO FAR (CONTEXT STACK)');
+    expect(metadata.contextStack).toHaveLength(0);
+  });
+
+  it('redacts secrets in context stack, memory, and signals when enabled', () => {
+    const redactingFuser = new SimpleContextFuser({ redaction: { enabled: true } });
+    const budgets: FusionBudgets = {
+      maxRepoContextChars: 1000,
+      maxMemoryChars: 1000,
+      maxSignalsChars: 1000,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
+    };
+
+    const secret = 'sk-123456789012345678901234567890';
+    const { prompt } = redactingFuser.fuse({
+      goal: 'Test',
+      repoPack: { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: [
+        {
+          id: 'mem1',
+          type: 'procedural',
+          title: 'T1',
+          content: `token=${secret}`,
+          repoId: 'r',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      signals: [{ type: 'file_change', data: secret } as any],
+      contextStack: [
+        {
+          schemaVersion: 1,
+          ts: '2026-02-06T00:00:00.000Z',
+          kind: 'PlanCreated',
+          title: 'Plan created',
+          summary: secret,
+        },
+      ],
+      budgets,
+    });
+
+    expect(prompt).toContain('[REDACTED:openai-api-key]');
+    expect(prompt).not.toContain(secret);
+  });
+
+  it('truncates signals when they exceed the budget', () => {
+    const budgets: FusionBudgets = {
+      maxRepoContextChars: 1000,
+      maxMemoryChars: 1000,
+      maxSignalsChars: 20,
+      maxContextStackChars: 1000,
+      maxContextStackFrames: 10,
+    };
+
+    const { prompt, metadata } = fuser.fuse({
+      goal: 'Test',
+      repoPack: { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: [],
+      signals: [{ type: 'file_change', data: 'x'.repeat(100) } as any],
+      budgets,
+    });
+
+    expect(prompt).toContain('...[TRUNCATED]');
+    expect(metadata.signals).toHaveLength(1);
+    expect(metadata.signals[0].truncated).toBe(true);
+  });
 });

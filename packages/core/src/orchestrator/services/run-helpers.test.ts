@@ -39,6 +39,22 @@ describe('run-helpers', () => {
       expect(result).toEqual({ allow: false });
     });
 
+    it('returns allow=false for empty or undefined steps', async () => {
+      expect(
+        await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
+          step: '',
+          repoRoot: '/repo',
+        }),
+      ).toEqual({ allow: false });
+
+      expect(
+        await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
+          step: undefined as any,
+          repoRoot: '/repo',
+        }),
+      ).toEqual({ allow: false });
+    });
+
     it('accepts a step satisfied in fused context (fast path)', async () => {
       const result = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
         step: 'Use Foo\\\\Bar\\\\Baz in app/File.php',
@@ -73,6 +89,28 @@ describe('run-helpers', () => {
       expect(searchSpy).toHaveBeenCalled();
       expect(result.allow).toBe(true);
       expect(result.reason).toContain('Found existing PHP import in repo');
+    });
+
+    it('returns allow=false when repo matches are missing a usable lineText', async () => {
+      searchSpy.mockResolvedValueOnce({
+        matches: [
+          {
+            path: 'app/File.php',
+            line: 12,
+            column: 1,
+            matchText: 'Foo\\Bar\\Baz',
+            lineText: undefined,
+            score: 1,
+          },
+        ],
+      } as any);
+
+      const result = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
+        step: 'Import Foo\\\\Bar\\\\Baz in app/File.php',
+        repoRoot: '/repo',
+      });
+
+      expect(result).toEqual({ allow: false });
     });
 
     it('handles search errors as best-effort and returns allow=false', async () => {
@@ -244,6 +282,58 @@ describe('run-helpers', () => {
         '/repo',
       );
       expect(text).toBe('');
+    });
+
+    it('returns empty when stderr is present but does not match known hints', () => {
+      const text = buildPatchApplyRetryContext(
+        {
+          type: 'execution',
+          message: 'apply failed',
+          details: { errors: [], stderr: 'some other error' },
+        } as PatchError,
+        '/repo',
+      );
+      expect(text).toBe('');
+    });
+
+    it('formats failed hunks without kind annotations', () => {
+      const text = buildPatchApplyRetryContext(
+        {
+          type: 'execution',
+          message: 'apply failed',
+          details: {
+            errors: [{ file: 'a/src/a.ts', line: 2 }],
+          },
+        } as any,
+        '/repo',
+      );
+
+      expect(text).toContain('Failed hunks:');
+      expect(text).toContain('- src/a.ts:2');
+      expect(text).not.toContain('(undefined)');
+    });
+
+    it('truncates very large retry contexts', () => {
+      const text = buildPatchApplyRetryContext(
+        {
+          type: 'execution',
+          message: 'apply failed',
+          details: {
+            errors: [
+              {
+                kind: 'HUNK_FAILED',
+                file: 'a/src/a.ts',
+                line: 10,
+                message: 'x'.repeat(7000),
+              },
+            ],
+          },
+        } as PatchError,
+        '/repo',
+      );
+
+      expect(text).toContain('... (truncated)');
+      expect(text.length).toBeLessThanOrEqual(6020);
     });
   });
 

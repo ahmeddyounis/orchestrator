@@ -146,4 +146,53 @@ describe('tryRepairUnifiedDiff', () => {
     const input = ['@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
     expect(tryRepairUnifiedDiff(input, { repoRoot: '/' })).toBeNull();
   });
+
+  it('returns null when a diff --git line does not match the expected pattern', () => {
+    const input = ['diff --git foo bar', '@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
+    expect(tryRepairUnifiedDiff(input, { repoRoot: '/', stepHint: 'Update foo' })).toBeNull();
+  });
+
+  it('does not wrap hunk fragments when step hint has no file paths', () => {
+    const input = ['@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
+    expect(tryRepairUnifiedDiff(input, { repoRoot: '/', stepHint: 'Fix the bug' })).toBeNull();
+  });
+
+  it('does not wrap hunk fragments when inferred file path contains ".."', () => {
+    const input = ['@@ -1,1 +1,1 @@', '-a', '+b'].join('\n');
+    expect(
+      tryRepairUnifiedDiff(input, { repoRoot: '/', stepHint: 'Fix ../src/foo.ts please' }),
+    ).toBeNull();
+  });
+
+  it('returns null when multiple candidate paths exist in the repo', () => {
+    const tmp = fsSync.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-diff-repair-'));
+    try {
+      fsSync.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+      fsSync.writeFileSync(path.join(tmp, 'src', 'a.ts'), 'a\n', 'utf8');
+      fsSync.writeFileSync(path.join(tmp, 'src', 'b.ts'), 'b\n', 'utf8');
+
+      const input = ['@@ -1 +1 @@', '-a', '+b'].join('\n');
+      expect(
+        tryRepairUnifiedDiff(input, { repoRoot: tmp, stepHint: 'Touch src/a.ts and src/b.ts' }),
+      ).toBeNull();
+    } finally {
+      fsSync.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('treats invalid hunk headers as modify-mode when wrapping', () => {
+    const tmp = fsSync.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-diff-repair-'));
+    try {
+      const input = ['@@ invalid @@', '-a', '+b'].join('\n');
+      const repaired = tryRepairUnifiedDiff(input, {
+        repoRoot: tmp,
+        stepHint: 'Fix bug in src/foo.ts',
+      });
+
+      expect(repaired?.diffText).toContain('diff --git a/src/foo.ts b/src/foo.ts');
+      expect(repaired?.diffText).toContain('@@ invalid @@');
+    } finally {
+      fsSync.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });

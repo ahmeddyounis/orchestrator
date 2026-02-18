@@ -143,6 +143,59 @@ describe('ConfigLoader', () => {
       expect(config.providers?.openai.api_key).toBe('secret-key');
     });
 
+    it('does not resolve api_key_env when the env var is missing', () => {
+      const configWithEnv = {
+        providers: {
+          openai: {
+            type: 'openai',
+            model: 'gpt-4',
+            api_key_env: 'MISSING_KEY',
+          },
+        },
+      };
+
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(configWithEnv));
+
+      const config = ConfigLoader.load({
+        configPath: '/config.yaml',
+        env: {} as NodeJS.ProcessEnv,
+      });
+      expect(config.providers?.openai.api_key).toBeUndefined();
+    });
+
+    it('does not override api_key when it is already set', () => {
+      const env = { MY_API_KEY: 'secret-key' };
+      const configWithEnv = {
+        providers: {
+          openai: {
+            type: 'openai',
+            model: 'gpt-4',
+            api_key_env: 'MY_API_KEY',
+            api_key: 'already-set',
+          },
+        },
+      };
+
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(configWithEnv));
+
+      const config = ConfigLoader.load({
+        configPath: '/config.yaml',
+        env: env as NodeJS.ProcessEnv,
+      });
+      expect(config.providers?.openai.api_key).toBe('already-set');
+    });
+
+    it('rethrows non-YAMLException errors while reading YAML', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockImplementation(() => {
+        throw new Error('read fail');
+      });
+
+      expect(() => ConfigLoader.load({ configPath: '/config.yaml' })).toThrow(/read fail/);
+    });
+
     it('should load and validate execution tools policy', () => {
       const toolConfig = {
         execution: {
@@ -208,6 +261,20 @@ describe('ConfigLoader', () => {
         expect(config.memory.writePolicy.storeEpisodes).toBe(true);
       });
 
+      it('should apply L3 defaults', () => {
+        const config = ConfigLoader.load({
+          flags: {
+            thinkLevel: 'L3',
+            memory: { enabled: true },
+          },
+        });
+
+        expect(config.memory.retrieval.topKLexical).toBe(10);
+        expect(config.memory.retrieval.topKVector).toBe(10);
+        expect(config.memory.maxChars).toBe(4000);
+        expect(config.memory.writePolicy.storeEpisodes).toBe(true);
+      });
+
       it('should not override user-defined values', () => {
         const config = ConfigLoader.load({
           flags: {
@@ -243,6 +310,25 @@ describe('ConfigLoader', () => {
 
         expect(config.memory).toEqual(baseConfig.memory);
       });
+
+      it('can apply think-level defaults without an explicit thinkLevel (fallback)', () => {
+        const applied = (ConfigLoader as any).applyThinkLevelDefaults({
+          memory: { enabled: true },
+        });
+        expect(applied.memory.retrieval.topKLexical).toBe(5);
+      });
+    });
+  });
+
+  describe('mergeConfigs', () => {
+    it('skips inherited properties and ignores undefined source values', () => {
+      const proto = { inherited: 1 };
+      const source = Object.create(proto);
+      source.own = 2;
+      source.keep = undefined;
+
+      const merged = ConfigLoader.mergeConfigs({ inherited: 0, keep: 123 } as any, source as any);
+      expect(merged).toEqual({ inherited: 0, keep: 123, own: 2 });
     });
   });
 

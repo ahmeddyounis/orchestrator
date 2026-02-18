@@ -280,4 +280,131 @@ index 1234567..abcdefg 100644
     expect((await generator.generateAndSelectCandidate({} as any, 1))?.index).toBe(0);
     expect((await generator.generateAndSelectCandidate({} as any, 2))?.index).toBe(0);
   });
+
+  it('includes stepId, ancestors, and researchBrief in the system prompt', async () => {
+    const generator = new CandidateGenerator();
+
+    (mockExecutor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: `BEGIN_DIFF\ndiff --git a/a b/a\n--- a/a\n+++ b/a\n@@\n+ok\nEND_DIFF`,
+    });
+
+    const stepContext: StepContext = {
+      runId: 'test-run',
+      goal: 'Test goal',
+      step: 'Test step',
+      stepId: '1.1',
+      ancestors: ['Parent step'],
+      researchBrief: 'Some brief',
+      stepIndex: 0,
+      fusedContext: mockFusedContext,
+      eventBus: mockEventBus,
+      costTracker: mockCostTracker,
+      executor: mockExecutor,
+      reviewer: mockReviewer,
+      artifactsRoot: '/tmp/artifacts',
+      budget: {} as any,
+      logger: mockLogger,
+    };
+
+    await generator.generateCandidates(stepContext, 1);
+
+    const req = (mockExecutor.generate as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    const systemPrompt = req.messages[0]?.content ?? '';
+    expect(systemPrompt).toContain('- Step ID: 1.1');
+    expect(systemPrompt).toContain('Ancestors (outer → inner)');
+    expect(systemPrompt).toContain('RESEARCH BRIEF');
+  });
+
+  it('continues generating when the cost budget is set but estimated cost is missing/zero', async () => {
+    const generator = new CandidateGenerator();
+
+    const costTracker = {
+      getSummary: vi.fn().mockReturnValue({ total: { estimatedCostUsd: 0 } }),
+    } as unknown as CostTracker;
+
+    (mockExecutor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: 'BEGIN_DIFF\ndiff --git a/a b/a\n--- a/a\n+++ b/a\n@@\n+ok\nEND_DIFF',
+    });
+
+    const stepContext: StepContext = {
+      runId: 'test-run',
+      goal: 'Test goal',
+      step: 'Test step',
+      stepIndex: 0,
+      fusedContext: mockFusedContext,
+      eventBus: mockEventBus,
+      costTracker,
+      executor: mockExecutor,
+      reviewer: mockReviewer,
+      artifactsRoot: '/tmp/artifacts',
+      budget: { cost: 1 } as any,
+      logger: mockLogger,
+    };
+
+    const candidates = await generator.generateCandidates(stepContext, 1);
+    expect(candidates).toHaveLength(1);
+    expect(mockExecutor.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats provider responses without text as invalid candidates', async () => {
+    const generator = new CandidateGenerator();
+    (mockExecutor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({} as any);
+
+    const stepContext: StepContext = {
+      runId: 'test-run',
+      goal: 'Test goal',
+      step: 'Test step',
+      stepIndex: 0,
+      fusedContext: mockFusedContext,
+      eventBus: mockEventBus,
+      costTracker: mockCostTracker,
+      executor: mockExecutor,
+      reviewer: mockReviewer,
+      artifactsRoot: '/tmp/artifacts',
+      budget: {} as any,
+      logger: mockLogger,
+    };
+
+    const candidates = await generator.generateCandidates(stepContext, 1);
+    expect(candidates[0]?.valid).toBe(false);
+    expect(candidates[0]?.patch).toBeUndefined();
+  });
+
+  it('falls back to the first candidate when the best candidateId is not found', async () => {
+    const generator = new CandidateGenerator();
+    vi.spyOn(generator, 'generateAndReviewCandidates').mockResolvedValue({
+      candidates: [
+        { index: 0, valid: true, patch: 'p0', rawOutput: '', providerId: 'p', durationMs: 1 },
+        { index: 1, valid: true, patch: 'p1', rawOutput: '', providerId: 'p', durationMs: 1 },
+      ],
+      reviews: [{ candidateId: '999', score: 1, reasons: [], riskFlags: [] }],
+    } as any);
+
+    const selected = await generator.generateAndSelectCandidate({} as any, 2);
+    expect(selected?.index).toBe(0);
+  });
+
+  it('returns empty when no valid candidates are produced', async () => {
+    const generator = new CandidateGenerator();
+    vi.spyOn(generator, 'generateCandidates').mockResolvedValue([
+      { index: 0, valid: false, patch: undefined, rawOutput: '', providerId: 'p', durationMs: 1 },
+    ] as any);
+
+    const result = await generator.generateAndReviewCandidates({} as any, 1);
+    expect(result).toEqual({ candidates: [], reviews: [] });
+  });
+
+  it('returns the single valid candidate without reviews', async () => {
+    const generator = new CandidateGenerator();
+    vi.spyOn(generator, 'generateCandidates').mockResolvedValue([
+      { index: 0, valid: false, patch: undefined, rawOutput: '', providerId: 'p', durationMs: 1 },
+      { index: 1, valid: true, patch: 'p1', rawOutput: '', providerId: 'p', durationMs: 1 },
+    ] as any);
+
+    const result = await generator.generateAndReviewCandidates({} as any, 2);
+    expect(result).toEqual({
+      candidates: [{ index: 1, valid: true, patch: 'p1', rawOutput: '', providerId: 'p', durationMs: 1 }],
+      reviews: [],
+    });
+  });
 });

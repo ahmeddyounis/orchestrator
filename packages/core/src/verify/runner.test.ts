@@ -318,4 +318,75 @@ describe('VerificationRunner', () => {
       JSON.stringify(report.commandSources, null, 2),
     );
   });
+
+  it('falls back to toolchain commands when targeted command generation returns undefined', async () => {
+    mocks.generateTargetedCommand.mockReturnValue(undefined as any);
+    const scope = { touchedFiles: ['packages/a/src/index.ts'] };
+
+    await runner.run(mockProfile, 'auto', scope, mockCtx);
+
+    const commands = mocks.run.mock.calls.map((c) => c[0]?.command);
+    expect(commands).toContain('pnpm -r lint');
+    expect(commands).toContain('pnpm -r test');
+    expect(commands).toContain('pnpm -r typecheck');
+  });
+
+  it('adds a fallback reason when a memory command is empty but allowed', async () => {
+    mocks.memoryFind.mockResolvedValue([
+      [],
+      [{ content: '', stale: false, updatedAt: Date.now() }],
+      [],
+    ]);
+    mocks.checkPolicy.mockReturnValue({ isAllowed: true });
+
+    const report = await runner.run(mockProfile, 'auto', {}, mockCtx);
+    expect(report.commandSources.lint.source).toBe('memory');
+    expect(report.commandSources.lint.fallbackReason).toContain('Falling back to detected command');
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'pnpm -r lint' }),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('skips a task when neither memory nor detected command is available', async () => {
+    mocks.detect.mockResolvedValue({
+      packageManager: 'pnpm',
+      usesTurbo: false,
+      scripts: { test: true, lint: true, typecheck: true },
+      commands: {
+        testCmd: 'pnpm -r test',
+        lintCmd: 'pnpm -r lint',
+        typecheckCmd: undefined,
+      },
+    });
+
+    const report = await runner.run(mockProfile, 'auto', {}, mockCtx);
+    expect(report.commandSources.typecheck).toBeUndefined();
+
+    const commands = mocks.run.mock.calls.map((c) => c[0]?.command);
+    expect(commands).not.toContain('pnpm -r typecheck');
+  });
+
+  it('does not mkdir for failure summary when the runs dir already exists', async () => {
+    const runsDir = path.join('/app', '.orchestrator', 'runs', mockCtx.runId);
+    fsMock.existsSync.mockImplementation((p: any) => p === runsDir);
+
+    mocks.run.mockImplementation(async ({ command }: any) => {
+      const exitCode = String(command).includes('lint') ? 1 : 0;
+      return { exitCode, durationMs: 100 };
+    });
+
+    await runner.run(mockProfile, 'auto', {}, mockCtx);
+    expect(fs.promises.mkdir).not.toHaveBeenCalled();
+  });
+
+  it('generates an empty failure signature when no checks failed', async () => {
+    const signature = await (runner as any).generateFailureSignature([
+      { name: 'lint', passed: true },
+      { name: 'tests', passed: true },
+    ]);
+    expect(signature).toBe('');
+  });
 });

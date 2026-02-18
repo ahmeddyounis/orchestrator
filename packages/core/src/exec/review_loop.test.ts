@@ -449,4 +449,131 @@ describe('runPatchReviewLoop', () => {
     expect(result.patch.trim()).toBe(revisedPatch.trim());
     expect((executor.generate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
   });
+
+  it('uses the default context stack path and default maxReviews when omitted', async () => {
+    const config = {
+      contextStack: { path: '' },
+      execution: { reviewLoop: { enabled: true } },
+    } as unknown as Config;
+
+    (reviewer.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: JSON.stringify({
+        verdict: 'approve',
+        summary: 'ok',
+        issues: [],
+        requiredChanges: [],
+        suggestions: [],
+        riskFlags: [],
+        suggestedTests: [],
+        confidence: 'high',
+      }),
+    });
+
+    await runPatchReviewLoop({
+      ...baseInput,
+      config,
+      providers: { executor, reviewer },
+      adapterCtx,
+    });
+
+    const reviewReq = (reviewer.generate as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    const firstUser = reviewReq.messages.find((m: any) => m.role === 'user')?.content ?? '';
+    expect(firstUser).toContain('.orchestrator/context_stack.jsonl');
+  });
+
+  it('writes a parse error when the reviewer returns no text', async () => {
+    const config = ConfigSchema.parse({
+      execution: { reviewLoop: { enabled: true, maxReviews: 1 } },
+    });
+
+    (reviewer.generate as ReturnType<typeof vi.fn>).mockResolvedValue({} as any);
+
+    const result = await runPatchReviewLoop({
+      ...baseInput,
+      config,
+      providers: { executor, reviewer },
+      adapterCtx,
+    });
+
+    expect(result.patch).toBe(baseInput.initialPatch);
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(/review_parse_error\.txt$/),
+      expect.any(String),
+    );
+  });
+
+  it('omits the context excerpt when the patch is very large', async () => {
+    const config = ConfigSchema.parse({
+      execution: { reviewLoop: { enabled: true, maxReviews: 1 } },
+    });
+
+    (reviewer.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: JSON.stringify({
+        verdict: 'approve',
+        summary: 'ok',
+        issues: [],
+        requiredChanges: [],
+        suggestions: [],
+        riskFlags: [],
+        suggestedTests: [],
+        confidence: 'high',
+      }),
+    });
+
+    await runPatchReviewLoop({
+      ...baseInput,
+      fusedContextText: 'some context' as any,
+      initialPatch: (baseInput.initialPatch + 'x'.repeat(25_000)) as any,
+      config,
+      providers: { executor, reviewer },
+      adapterCtx,
+    });
+
+    const reviewReq = (reviewer.generate as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    const firstUser = reviewReq.messages.find((m: any) => m.role === 'user')?.content ?? '';
+    expect(firstUser).not.toContain('CONTEXT (excerpt):');
+  });
+
+  it('uses a fallback dry-run failure message when PatchApplier returns no error object', async () => {
+    const config = ConfigSchema.parse({
+      execution: { reviewLoop: { enabled: true, maxReviews: 1 } },
+    });
+
+    (reviewer.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: JSON.stringify({
+        verdict: 'revise',
+        summary: 'Needs changes.',
+        issues: [],
+        requiredChanges: ['Do X'],
+        suggestions: [],
+        riskFlags: [],
+        suggestedTests: [],
+        confidence: 'medium',
+      }),
+    });
+
+    const revisedPatch =
+      'diff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1 @@\n-old\n+new\n';
+    (executor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: `BEGIN_DIFF\n${revisedPatch}\nEND_DIFF`,
+    });
+
+    applyUnifiedDiffSpy
+      .mockResolvedValueOnce({ applied: false })
+      .mockResolvedValueOnce({ applied: true, filesChanged: [] });
+
+    const result = await runPatchReviewLoop({
+      ...baseInput,
+      config,
+      providers: { executor, reviewer },
+      adapterCtx,
+    });
+
+    expect(result.patch.trim()).toBe(revisedPatch.trim());
+    expect((executor.generate as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+
+    const secondReq = (executor.generate as ReturnType<typeof vi.fn>).mock.calls[1]![0];
+    const userPrompt = secondReq.messages.find((m: any) => m.role === 'user')?.content ?? '';
+    expect(userPrompt).toContain('Patch failed dry-run apply');
+  });
 });

@@ -65,6 +65,13 @@ describe('Judge', () => {
       ).toEqual({ invoke: true, reason: 'verification_unavailable' });
     });
 
+    it('invokes when verification is unavailable and there are fewer than 2 reviews', () => {
+      expect(Judge.shouldInvoke(false, [], [{ candidateId: 'a', score: 10 }])).toEqual({
+        invoke: true,
+        reason: 'verification_unavailable',
+      });
+    });
+
     it('does not invoke when exactly one candidate passes', () => {
       expect(
         Judge.shouldInvoke(
@@ -134,11 +141,12 @@ describe('Judge', () => {
       goal: 'Ship a small fix',
       invocationReason: 'objective_near_tie',
       candidates: [
-        { id: 'c1', patch: 'diff --git a/a b/a' },
+        { id: 'c1', patch: 'diff --git a/a b/a', patchStats: { filesChanged: 1, linesAdded: 1, linesDeleted: 0 } },
         { id: 'c2', patch: 'diff --git a/b b/b' },
+        { id: 'c3', patch: 'diff --git a/c b/c' },
       ],
       verifications: [
-        { candidateId: 'c1', status: 'passed', score: 0.9 },
+        { candidateId: 'c1', status: 'passed', score: 0.9, summary: 'ok' },
         { candidateId: 'c2', status: 'passed', score: 0.91 },
       ],
     });
@@ -258,6 +266,54 @@ describe('Judge', () => {
         expect.objectContaining({ type: 'JudgeFailed' }),
       );
     });
+
+    it('falls back when the provider throws a non-Error value', async () => {
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-judge-'));
+      const artifactsRoot = path.join(tmpDir, 'artifacts');
+      await fs.mkdir(artifactsRoot, { recursive: true });
+
+      const provider = makeProvider({
+        generate: vi.fn().mockRejectedValue('boom'),
+      });
+
+      const judge = new Judge(provider);
+      const output = await judge.decide(makeInput(), {
+        runId: 'run-1',
+        iteration: 4,
+        artifactsRoot,
+        logger,
+        eventBus,
+      });
+
+      expect(output.winnerCandidateId).toBe('c1');
+      expect(output.rationale.join('\n')).toContain('boom');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'JudgeFailed' }),
+      );
+    });
+
+    it('falls back when the provider returns no text', async () => {
+      tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-judge-'));
+      const artifactsRoot = path.join(tmpDir, 'artifacts');
+      await fs.mkdir(artifactsRoot, { recursive: true });
+
+      const provider = makeProvider({
+        generate: vi.fn().mockResolvedValue({} as any),
+      });
+
+      const judge = new Judge(provider);
+      const output = await judge.decide(makeInput(), {
+        runId: 'run-1',
+        iteration: 5,
+        artifactsRoot,
+        logger,
+        eventBus,
+      });
+
+      expect(output.winnerCandidateId).toBe('c1');
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'JudgeFailed' }),
+      );
+    });
   });
 });
-

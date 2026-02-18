@@ -84,6 +84,63 @@ describe('State Module', () => {
 
       expect(() => manager.checkCost()).toThrow(BudgetExceededError);
     });
+
+    it('does not throw when within iteration/tool run/wall time limits', () => {
+      const now = Date.now();
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+
+      const state = createRunState({
+        iteration: 10,
+        toolRuns: 10,
+        startedAt: now - 5000,
+      });
+      const budget = createBudget({ maxIterations: 10, maxToolRuns: 10, maxWallTimeMs: 10000 });
+      const manager = new BudgetManager(budget, state);
+
+      expect(() => manager.checkIteration()).not.toThrow();
+      expect(() => manager.checkToolRuns()).not.toThrow();
+      expect(() => manager.checkWallTime()).not.toThrow();
+
+      nowSpy.mockRestore();
+    });
+
+    it('skips cost checks when maxCostUsd is undefined', () => {
+      const state = createRunState();
+      const budget = createBudget({ maxCostUsd: undefined });
+      const manager = new BudgetManager(budget, state);
+
+      const summarySpy = vi.spyOn(state.costTracker, 'getSummary');
+
+      expect(() => manager.checkCost()).not.toThrow();
+      expect(summarySpy).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when cost is below budget', () => {
+      const state = createRunState();
+      state.costTracker.recordUsage('mock', {
+        inputTokens: 500000,
+        outputTokens: 0,
+        totalTokens: 500000,
+      });
+
+      const budget = createBudget({ maxCostUsd: 1.0 });
+      const manager = new BudgetManager(budget, state);
+
+      expect(() => manager.checkCost()).not.toThrow();
+    });
+
+    it('treats null estimatedCostUsd as zero when checking cost', () => {
+      const state = createRunState();
+      const summarySpy = vi.spyOn(state.costTracker, 'getSummary').mockReturnValue({
+        total: { estimatedCostUsd: null },
+      } as any);
+
+      const budget = createBudget({ maxCostUsd: 0.01 });
+      const manager = new BudgetManager(budget, state);
+
+      expect(() => manager.checkCost()).not.toThrow();
+      expect(summarySpy).toHaveBeenCalled();
+    });
   });
 
   describe('RunStateManager', () => {
