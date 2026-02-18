@@ -141,7 +141,11 @@ describe('Judge', () => {
       goal: 'Ship a small fix',
       invocationReason: 'objective_near_tie',
       candidates: [
-        { id: 'c1', patch: 'diff --git a/a b/a', patchStats: { filesChanged: 1, linesAdded: 1, linesDeleted: 0 } },
+        {
+          id: 'c1',
+          patch: 'diff --git a/a b/a',
+          patchStats: { filesChanged: 1, linesAdded: 1, linesDeleted: 0 },
+        },
         { id: 'c2', patch: 'diff --git a/b b/b' },
         { id: 'c3', patch: 'diff --git a/c b/c' },
       ],
@@ -187,12 +191,8 @@ describe('Judge', () => {
 
       expect(output.winnerCandidateId).toBe('c2');
 
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeInvoked' }),
-      );
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeDecided' }),
-      );
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeInvoked' }));
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeDecided' }));
 
       const artifactPath = path.join(artifactsRoot, 'judge_iter_1.json');
       const raw = await fs.readFile(artifactPath, 'utf8');
@@ -228,9 +228,7 @@ describe('Judge', () => {
       expect(output.winnerCandidateId).toBe('c1');
       expect(output.confidence).toBeLessThan(0.5);
 
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeFailed' }),
-      );
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeFailed' }));
 
       const artifactPath = path.join(artifactsRoot, 'judge_iter_2.json');
       await expect(fs.readFile(artifactPath, 'utf8')).resolves.toContain('"winnerCandidateId"');
@@ -262,9 +260,7 @@ describe('Judge', () => {
       });
 
       expect(output.winnerCandidateId).toBe('c1');
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeFailed' }),
-      );
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeFailed' }));
     });
 
     it('falls back when the provider throws a non-Error value', async () => {
@@ -287,9 +283,7 @@ describe('Judge', () => {
 
       expect(output.winnerCandidateId).toBe('c1');
       expect(output.rationale.join('\n')).toContain('boom');
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeFailed' }),
-      );
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeFailed' }));
     });
 
     it('falls back when the provider returns no text', async () => {
@@ -311,9 +305,7 @@ describe('Judge', () => {
       });
 
       expect(output.winnerCandidateId).toBe('c1');
-      expect(eventBus.emit).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'JudgeFailed' }),
-      );
+      expect(eventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'JudgeFailed' }));
     });
   });
 });

@@ -7,7 +7,7 @@ import * as fs from 'fs/promises';
 
 vi.mock('fs/promises', () => {
   const writeFile = vi.fn();
-	return { writeFile, default: { writeFile } };
+  return { writeFile, default: { writeFile } };
 });
 
 const { scanSpy, searchSpy, extractSnippetsSpy, packSpy } = vi.hoisted(() => ({
@@ -665,7 +665,10 @@ describe('PlanService', () => {
     );
 
     expect(result).toEqual(['Sub A', 'Sub B']);
-    expect(fs.writeFile).toHaveBeenCalledWith(`${artifactsDir}/plan_expand_1_raw.txt`, '1. Sub A\n2. Sub B');
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      `${artifactsDir}/plan_expand_1_raw.txt`,
+      '1. Sub A\n2. Sub B',
+    );
   });
 
   it('writes an expansion error artifact when expansion fails and returns the outline step', async () => {
@@ -728,16 +731,13 @@ describe('PlanService', () => {
     const { ResearchService } = await import('../research/service');
     const researchSpy = vi.spyOn(ResearchService.prototype, 'run').mockResolvedValueOnce(null);
 
-    (planner.generate as Mock).mockResolvedValue({ text: JSON.stringify({ steps: ['Step 1'] }) } as ModelResponse);
+    (planner.generate as Mock).mockResolvedValue({
+      text: JSON.stringify({ steps: ['Step 1'] }),
+    } as ModelResponse);
 
-    await service.generatePlan(
-      'my goal',
-      { planner },
-      ctx,
-      artifactsDir,
-      repoRoot,
-      { planning: { research: { enabled: true, count: 1, synthesize: false, maxQueries: 0 } } } as any,
-    );
+    await service.generatePlan('my goal', { planner }, ctx, artifactsDir, repoRoot, {
+      planning: { research: { enabled: true, count: 1, synthesize: false, maxQueries: 0 } },
+    } as any);
 
     const req = (planner.generate as Mock).mock.calls[0]![0];
     const userPrompt = req.messages.find((m: any) => m.role === 'user')?.content ?? '';
@@ -766,7 +766,9 @@ describe('PlanService', () => {
 
   it('expands steps using fenced JSON and enforces maxTotalSteps', async () => {
     (planner.generate as Mock)
-      .mockResolvedValueOnce({ text: JSON.stringify({ steps: ['Top 1', 'Top 2'] }) } as ModelResponse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ steps: ['Top 1', 'Top 2'] }),
+      } as ModelResponse)
       .mockResolvedValueOnce({
         text: '```json\nPreamble {"steps": ["Sub 1", "Sub 2"]} trailing\n```',
       } as ModelResponse);

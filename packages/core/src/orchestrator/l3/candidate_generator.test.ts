@@ -149,9 +149,7 @@ index 1234567..abcdefg 100644
     const candidates = await generator.generateCandidates(stepContext, 3);
     expect(candidates).toEqual([]);
     expect(mockExecutor.generate).not.toHaveBeenCalled();
-    expect(mockEventBus.emit).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'RunStopped' }),
-    );
+    expect(mockEventBus.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'RunStopped' }));
   });
 
   it('marks candidates invalid when no unified diff is present', async () => {
@@ -192,9 +190,19 @@ index 1234567..abcdefg 100644
     const generator = new CandidateGenerator();
 
     expect(
-      await generator.reviewCandidates({} as any, [
-        { index: 0, valid: true, patch: 'diff --git a/a b/a', rawOutput: '', providerId: 'p', durationMs: 1 },
-      ] as any),
+      await generator.reviewCandidates(
+        {} as any,
+        [
+          {
+            index: 0,
+            valid: true,
+            patch: 'diff --git a/a b/a',
+            rawOutput: '',
+            providerId: 'p',
+            durationMs: 1,
+          },
+        ] as any,
+      ),
     ).toEqual([]);
 
     const reviewSpy = vi.fn().mockResolvedValue({
@@ -265,7 +273,9 @@ index 1234567..abcdefg 100644
     vi.spyOn(generator, 'generateAndReviewCandidates')
       .mockResolvedValueOnce({ candidates: [], reviews: [] } as any)
       .mockResolvedValueOnce({
-        candidates: [{ index: 0, valid: true, patch: 'p0', rawOutput: '', providerId: 'p', durationMs: 1 }],
+        candidates: [
+          { index: 0, valid: true, patch: 'p0', rawOutput: '', providerId: 'p', durationMs: 1 },
+        ],
         reviews: [],
       } as any)
       .mockResolvedValueOnce({
@@ -403,7 +413,9 @@ index 1234567..abcdefg 100644
 
     const result = await generator.generateAndReviewCandidates({} as any, 2);
     expect(result).toEqual({
-      candidates: [{ index: 1, valid: true, patch: 'p1', rawOutput: '', providerId: 'p', durationMs: 1 }],
+      candidates: [
+        { index: 1, valid: true, patch: 'p1', rawOutput: '', providerId: 'p', durationMs: 1 },
+      ],
       reviews: [],
     });
   });

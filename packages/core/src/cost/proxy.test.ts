@@ -104,4 +104,3 @@ describe('CostTrackingAdapter', () => {
     expect(events).toEqual([]);
   });
 });
-

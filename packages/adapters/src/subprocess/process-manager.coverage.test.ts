@@ -160,4 +160,3 @@ describe('ProcessManager (coverage)', () => {
     expect(log).toHaveBeenCalled();
   });
 });
-

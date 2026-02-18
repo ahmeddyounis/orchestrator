@@ -230,7 +230,9 @@ describe('OpenAIAdapter', () => {
         {
           message: {
             content: 'x',
-            tool_calls: [{ type: 'not-a-function', id: 'x', function: { name: 'x', arguments: '{}' } }],
+            tool_calls: [
+              { type: 'not-a-function', id: 'x', function: { name: 'x', arguments: '{}' } },
+            ],
           },
         },
       ],

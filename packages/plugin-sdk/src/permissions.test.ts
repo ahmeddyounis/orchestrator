@@ -61,4 +61,3 @@ describe('PermissionManifestBuilder', () => {
     expect(manifest.allowedPaths).toBeUndefined();
   });
 });
-

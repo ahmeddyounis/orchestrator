@@ -97,9 +97,9 @@ describe('verifyPluginSecurity', () => {
       },
     };
 
-    expect(() =>
-      verifyPluginSecurity('needs-perms', 'content', manifest, ctx),
-    ).toThrow(PluginPermissionError);
+    expect(() => verifyPluginSecurity('needs-perms', 'content', manifest, ctx)).toThrow(
+      PluginPermissionError,
+    );
   });
 });
 
@@ -128,4 +128,3 @@ describe('addTrustedKey', () => {
     expect(ctx.trustedKeys.get('fingerprint')).toBe('public-key');
   });
 });
-

@@ -79,4 +79,3 @@ describe('FakeAdapter', () => {
     expect(ok.text).toContain('toBe(3)');
   });
 });
-

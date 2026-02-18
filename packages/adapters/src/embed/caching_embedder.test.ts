@@ -31,4 +31,3 @@ describe('CachingEmbedder', () => {
     expect(embedder.id()).toBe('cached(my-embedder)');
   });
 });
-

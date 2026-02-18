@@ -120,7 +120,13 @@ describe('ResearchService', () => {
       adapterCtx,
       artifactsDir: tmpDir,
       artifactPrefix: 'exec:1',
-      config: { enabled: true, count: 2, maxBriefChars: 120, maxQueries: 3, synthesize: true } as any,
+      config: {
+        enabled: true,
+        count: 2,
+        maxBriefChars: 120,
+        maxQueries: 3,
+        synthesize: true,
+      } as any,
     });
 
     expect(bundle).toBeTruthy();
@@ -260,13 +266,15 @@ describe('ResearchService', () => {
     const provider: ProviderAdapter = {
       id: () => 'mock-provider',
       capabilities,
-      generate: vi.fn(async (): Promise<ModelResponse> => ({
-        text: JSON.stringify({
-          summary: 'S1',
-          findings: ['F1'],
-          fileHints: [{ path: 'src/a.ts', reason: 'reason' }],
+      generate: vi.fn(
+        async (): Promise<ModelResponse> => ({
+          text: JSON.stringify({
+            summary: 'S1',
+            findings: ['F1'],
+            fileHints: [{ path: 'src/a.ts', reason: 'reason' }],
+          }),
         }),
-      })),
+      ),
     };
 
     const service = new ResearchService();

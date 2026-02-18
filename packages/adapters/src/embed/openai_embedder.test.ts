@@ -77,4 +77,3 @@ describe('OpenAIEmbedder', () => {
     expect(new OpenAIEmbedder({ apiKey: 'k', model: 'unknown' }).dims()).toBe(0);
   });
 });
-

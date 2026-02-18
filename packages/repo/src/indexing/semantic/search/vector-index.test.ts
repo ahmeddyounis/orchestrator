@@ -123,4 +123,3 @@ describe('vector-index', () => {
     expect(() => (index as any).buildNode([])).toThrow(/no indices/i);
   });
 });
-

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ToolManager } from './tool_manager';
-import { MANIFEST_VERSION, ToolRunRequest, ToolPolicy, UsageError, ToolError } from '@orchestrator/shared';
+import {
+  MANIFEST_VERSION,
+  ToolRunRequest,
+  ToolPolicy,
+  UsageError,
+  ToolError,
+} from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
@@ -163,7 +169,12 @@ describe('ToolManager', () => {
         envOverrides: { FOO: 'sandbox', BAR: '1' },
       }),
     };
-    toolManager = new ToolManager(mockEventBus as any, manifestPath, '/repo', sandboxProvider as any);
+    toolManager = new ToolManager(
+      mockEventBus as any,
+      manifestPath,
+      '/repo',
+      sandboxProvider as any,
+    );
 
     const runSpy = vi
       .spyOn(SafeCommandRunner.prototype, 'run')
@@ -197,7 +208,12 @@ describe('ToolManager', () => {
         envOverrides: {},
       }),
     };
-    toolManager = new ToolManager(mockEventBus as any, manifestPath, '/repo', sandboxProvider as any);
+    toolManager = new ToolManager(
+      mockEventBus as any,
+      manifestPath,
+      '/repo',
+      sandboxProvider as any,
+    );
 
     const runSpy = vi
       .spyOn(SafeCommandRunner.prototype, 'run')
@@ -224,7 +240,7 @@ describe('ToolManager', () => {
 
   it('stores relative log paths in manifest (and preserves existing)', async () => {
     const { updateManifest } = await import('@orchestrator/shared');
-    let manifestState: any = { schemaVersion: 999, toolLogPaths: ['existing.log'] };
+    const manifestState: any = { schemaVersion: 999, toolLogPaths: ['existing.log'] };
     vi.mocked(updateManifest).mockImplementationOnce(async (_path: any, updater: any) => {
       updater(manifestState);
     });
@@ -292,7 +308,9 @@ describe('ToolManager', () => {
     await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
     await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
 
-    const blockedCalls = mockEventBus.emit.mock.calls.filter((c) => c[0]?.type === 'ToolRunBlocked');
+    const blockedCalls = mockEventBus.emit.mock.calls.filter(
+      (c) => c[0]?.type === 'ToolRunBlocked',
+    );
     expect(blockedCalls.map((c) => c[0].payload.reason)).toEqual([
       'policy',
       'network_denied',

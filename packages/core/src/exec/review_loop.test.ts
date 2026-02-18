@@ -200,8 +200,9 @@ describe('runPatchReviewLoop', () => {
       stepId: undefined,
       ancestors: [],
       fusedContextText: '' as any,
-      initialPatch: (`diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n` +
-        'x'.repeat(20_000)) as any,
+      initialPatch:
+        (`diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n` +
+          'x'.repeat(20_000)) as any,
       config,
       label: { kind: 'step', index: 0, slug: undefined as any },
       providers: { executor, reviewer },
@@ -388,7 +389,9 @@ describe('runPatchReviewLoop', () => {
       }),
     });
 
-    (executor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({ text: 'BEGIN_DIFF\n\nEND_DIFF' });
+    (executor.generate as ReturnType<typeof vi.fn>).mockResolvedValue({
+      text: 'BEGIN_DIFF\n\nEND_DIFF',
+    });
 
     const result = await runPatchReviewLoop({
       ...baseInput,

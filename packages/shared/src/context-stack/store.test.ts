@@ -127,9 +127,12 @@ describe('ContextStackStore', () => {
 
     await fs.writeFile(
       filePath,
-      [JSON.stringify(valid1), 'not-json', JSON.stringify(invalidSchema), JSON.stringify(valid2)].join(
-        '\n',
-      ),
+      [
+        JSON.stringify(valid1),
+        'not-json',
+        JSON.stringify(invalidSchema),
+        JSON.stringify(valid2),
+      ].join('\n'),
       'utf8',
     );
 

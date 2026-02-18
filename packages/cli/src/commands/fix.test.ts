@@ -181,9 +181,7 @@ describe('registerFixCommand', () => {
       },
     } as any);
 
-    parseBudgetSpy
-      .mockReturnValueOnce({ maxCostUsd: 5 })
-      .mockReturnValueOnce({ maxIterations: 2 });
+    parseBudgetSpy.mockReturnValueOnce({ maxCostUsd: 5 }).mockReturnValueOnce({ maxIterations: 2 });
 
     const program = new Command();
     program.exitOverride();
@@ -328,7 +326,8 @@ describe('registerFixCommand', () => {
     program.option('--json');
     registerFixCommand(program);
 
-    await expect(program.parseAsync(['node', 'cli', '--config', 'cfg.yml', 'fix', 'goal'])).rejects
-      .toThrow(UsageError);
+    await expect(
+      program.parseAsync(['node', 'cli', '--config', 'cfg.yml', 'fix', 'goal']),
+    ).rejects.toThrow(UsageError);
   });
 });

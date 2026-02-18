@@ -9,4 +9,3 @@ describe('stripAnsi', () => {
     expect(stripAnsi('plain text')).toBe('plain text');
   });
 });
-

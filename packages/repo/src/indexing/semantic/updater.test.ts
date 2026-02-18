@@ -120,9 +120,27 @@ describe('SemanticIndexUpdater', () => {
     });
 
     storeGetAllFilesSpy.mockReturnValueOnce([
-      { path: 'unchanged.ts', fileHash: 'h-unchanged', language: 'typescript', mtimeMs: 1, sizeBytes: 10 },
-      { path: 'same-hash.ts', fileHash: 'h-same', language: 'typescript', mtimeMs: 1, sizeBytes: 10 },
-      { path: 'removed.ts', fileHash: 'h-removed', language: 'typescript', mtimeMs: 1, sizeBytes: 10 },
+      {
+        path: 'unchanged.ts',
+        fileHash: 'h-unchanged',
+        language: 'typescript',
+        mtimeMs: 1,
+        sizeBytes: 10,
+      },
+      {
+        path: 'same-hash.ts',
+        fileHash: 'h-same',
+        language: 'typescript',
+        mtimeMs: 1,
+        sizeBytes: 10,
+      },
+      {
+        path: 'removed.ts',
+        fileHash: 'h-removed',
+        language: 'typescript',
+        mtimeMs: 1,
+        sizeBytes: 10,
+      },
     ]);
 
     scanSpy.mockResolvedValueOnce({
@@ -214,4 +232,3 @@ describe('SemanticIndexUpdater', () => {
     );
   });
 });
-

@@ -194,7 +194,12 @@ describe('run-helpers', () => {
           details: {
             errors: [
               { kind: 'HUNK_FAILED', file: 'a/src/a.ts', line: 10, message: 'no match' },
-              { kind: 'MISSING_FILE', file: 'b/src/b.ts', message: 'missing', suggestion: 'add it' },
+              {
+                kind: 'MISSING_FILE',
+                file: 'b/src/b.ts',
+                message: 'missing',
+                suggestion: 'add it',
+              },
             ],
           },
         } as PatchError,
@@ -231,7 +236,11 @@ describe('run-helpers', () => {
     it('includes file context for failed hunks when possible', async () => {
       tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orch-hunk-'));
       await fs.mkdir(path.join(tmpDir, 'src'), { recursive: true });
-      await fs.writeFile(path.join(tmpDir, 'src', 'a.ts'), ['one', 'two', 'three'].join('\n'), 'utf8');
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'a.ts'),
+        ['one', 'two', 'three'].join('\n'),
+        'utf8',
+      );
 
       const text = buildPatchApplyRetryContext(
         {

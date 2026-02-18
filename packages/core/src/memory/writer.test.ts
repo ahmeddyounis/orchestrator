@@ -129,7 +129,11 @@ describe('MemoryWriter', () => {
       });
 
       const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
-      const memory = await writerWithVectors.extractProcedural(toolRunMeta, toolRunResult, repoStateWithDb);
+      const memory = await writerWithVectors.extractProcedural(
+        toolRunMeta,
+        toolRunResult,
+        repoStateWithDb,
+      );
 
       expect(memory).toBeDefined();
       expect(embedder.embedTexts).toHaveBeenCalled();
@@ -167,10 +171,16 @@ describe('MemoryWriter', () => {
     });
 
     it('does not redact secrets when redaction is disabled', async () => {
-      const writerNoRedact = new MemoryWriter({ securityConfig: { redaction: { enabled: false } } });
+      const writerNoRedact = new MemoryWriter({
+        securityConfig: { redaction: { enabled: false } },
+      });
       const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
 
-      const memory = await writerNoRedact.extractProcedural(toolRunMeta, toolRunResult, repoStateWithoutDb);
+      const memory = await writerNoRedact.extractProcedural(
+        toolRunMeta,
+        toolRunResult,
+        repoStateWithoutDb,
+      );
       expect(memory?.content).toContain('sk-12345678901234567890');
     });
 
@@ -345,12 +355,19 @@ describe('MemoryWriter', () => {
     });
 
     it('does not redact episodic content when redaction is disabled', async () => {
-      const writerNoRedact = new MemoryWriter({ securityConfig: { redaction: { enabled: false } } });
-      const memory = await writerNoRedact.extractEpisodic(runSummary, repoStateWithoutDb, { passed: true } as any, {
-        filesChanged: 1,
-        insertions: 1,
-        deletions: 0,
-      } as any);
+      const writerNoRedact = new MemoryWriter({
+        securityConfig: { redaction: { enabled: false } },
+      });
+      const memory = await writerNoRedact.extractEpisodic(
+        runSummary,
+        repoStateWithoutDb,
+        { passed: true } as any,
+        {
+          filesChanged: 1,
+          insertions: 1,
+          deletions: 0,
+        } as any,
+      );
 
       expect(memory.content).toContain('sk-12345678901234567890');
       expect(memory.content).toContain('"filesChanged"');

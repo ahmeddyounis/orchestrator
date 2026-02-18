@@ -50,4 +50,3 @@ describe('BaseProviderAdapter.mapError', () => {
     expect(err.message).toBe('123');
   });
 });
-

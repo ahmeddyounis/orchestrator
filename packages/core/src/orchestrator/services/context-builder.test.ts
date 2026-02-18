@@ -131,4 +131,3 @@ describe('ContextBuilderService', () => {
     await expect(fs.readFile(txtPath, 'utf8')).resolves.toContain('Goal:');
   });
 });
-

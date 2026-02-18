@@ -12,7 +12,10 @@ describe('resolveToolTimeout', () => {
       rg: { timeoutMs: 1, gracePeriodMs: 2 },
     };
 
-    expect(resolveToolTimeout('rg', 'read_only', custom)).toEqual({ timeoutMs: 1, gracePeriodMs: 2 });
+    expect(resolveToolTimeout('rg', 'read_only', custom)).toEqual({
+      timeoutMs: 1,
+      gracePeriodMs: 2,
+    });
   });
 
   it('falls back to default tool timeouts', () => {
@@ -29,4 +32,3 @@ describe('resolveToolTimeout', () => {
     expect(resolveToolTimeout('unknown-tool')).toEqual(GLOBAL_DEFAULT_TIMEOUT);
   });
 });
-

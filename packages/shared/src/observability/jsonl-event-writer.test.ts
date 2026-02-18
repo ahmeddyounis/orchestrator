@@ -52,4 +52,3 @@ describe('JsonlEventWriter', () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 });
-

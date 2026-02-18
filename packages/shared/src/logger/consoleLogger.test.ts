@@ -67,4 +67,3 @@ describe('ConsoleLogger', () => {
     warnSpy.mockRestore();
   });
 });
-

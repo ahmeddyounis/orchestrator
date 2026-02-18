@@ -60,13 +60,7 @@ describe('ProceduralMemoryImpl', () => {
       repoRoot,
     );
 
-    const result = await memory.find(
-      [
-        { text: 'q1', titleContains: 'alpha' },
-        { text: 'q2' },
-      ],
-      2,
-    );
+    const result = await memory.find([{ text: 'q1', titleContains: 'alpha' }, { text: 'q2' }], 2);
 
     expect(mockStore.init).toHaveBeenCalledWith({
       dbPath: '/repo/.orchestrator/memory.sqlite',
@@ -113,4 +107,3 @@ describe('ProceduralMemoryImpl', () => {
     expect(mockStore.close).toHaveBeenCalled();
   });
 });
-

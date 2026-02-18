@@ -164,4 +164,3 @@ describe('safeLoadPlugin', () => {
     expect(result.error).toContain('Invalid plugin manifest');
   });
 });
-
