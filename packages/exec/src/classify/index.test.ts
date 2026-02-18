@@ -83,13 +83,17 @@ describe('classifyCommand', () => {
     ['yarn build:prod', 'build'],
     ['npm run lint', 'lint'],
     ['pnpm format', 'format'],
+    ['pnpm run something-else', 'unknown'],
     ['tsc', 'build'],
     ['vitest', 'test'],
     ['eslint .', 'lint'],
     ['prettier .', 'format'],
     ['echo hello', 'unknown'],
     ['ls -la', 'unknown'],
+    ['npm help', 'unknown'],
     ['./scripts/test.sh', 'test'],
+    ['./scripts/setup.sh', 'unknown'],
+    ['./scripts/test-runner.js', 'test'],
   ];
 
   cases.forEach(([cmd, expectedCategory]) => {

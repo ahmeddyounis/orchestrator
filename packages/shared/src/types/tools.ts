@@ -62,7 +62,7 @@ export interface ToolPolicy {
   requireConfirmation: boolean;
   /** Command prefixes that are always allowed */
   allowlistPrefixes: string[];
-  /** Patterns that are always denied (regex strings) */
+  /** Literal patterns that are always denied */
   denylistPatterns: string[];
   /** Network access policy */
   networkPolicy: 'deny' | 'allow';

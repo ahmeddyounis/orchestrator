@@ -66,7 +66,7 @@ describe('SafeCommandRunner Integration', () => {
   it('should block a denylisted command', async () => {
     const policy: ToolPolicy = {
       ...basePolicy,
-      denylistPatterns: ['.*forbidden.*'],
+      denylistPatterns: ['forbidden'],
     };
 
     const req: ToolRunRequest = {

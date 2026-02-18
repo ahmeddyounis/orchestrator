@@ -145,7 +145,7 @@ export const ToolPolicySchema = z.object({
     ]),
   denylistPatterns: z
     .array(z.string())
-    .default(['rm -rf', 'mkfs', ':(){:|:&};:', 'curl .*\\|\\s*sh']),
+    .default(['rm -rf', 'mkfs', ':(){:|:&};:', '|sh', '| sh', '|bash', '| bash']),
   networkPolicy: z.enum(['deny', 'allow']).default('deny'),
   envAllowlist: z.array(z.string()).default([]),
   allowShell: z.boolean().default(false),

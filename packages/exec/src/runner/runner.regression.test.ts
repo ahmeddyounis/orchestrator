@@ -119,7 +119,7 @@ describe('SafeCommandRunner Regression', () => {
         // Even with auto-approve and an allowlist prefix, denylist should win.
         autoApprove: true,
         allowlistPrefixes: ['sudo'],
-        denylistPatterns: ['rm -rf /', '^sudo rm'],
+        denylistPatterns: ['rm -rf /', 'sudo rm'],
       };
 
       const deniedCommands = ['rm -rf /', 'sudo rm -rf /some/dir', 'sudo rm -fimportant.file'];

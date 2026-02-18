@@ -168,4 +168,62 @@ describe('SafeCommandRunner', () => {
     const result = await promise;
     expect(result.truncated).toBe(true);
   });
+
+  it('should truncate stderr output if limit exceeded', async () => {
+    const req: ToolRunRequest = { command: 'echo long', reason: 'test', cwd: '/tmp' };
+    const policy = { ...defaultPolicy, maxOutputBytes: 5 };
+
+    const mockChild = new EventEmitter() as any;
+    mockChild.stdout = new EventEmitter();
+    mockChild.stderr = new EventEmitter();
+    mockChild.pid = 123;
+    vi.mocked(spawn).mockReturnValue(mockChild);
+
+    const promise = runner.run(req, policy, mockUi, mockCtx);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    mockChild.stderr.emit('data', Buffer.from('123456'));
+    mockChild.emit('close', 0);
+
+    const result = await promise;
+    expect(result.truncated).toBe(true);
+  });
+
+  it('should reject when child process emits an error', async () => {
+    const req: ToolRunRequest = { command: 'safe-cmd run', reason: 'test', cwd: '/tmp' };
+    const policy = { ...defaultPolicy, requireConfirmation: false };
+
+    const mockChild = new EventEmitter() as any;
+    mockChild.stdout = new EventEmitter();
+    mockChild.stderr = new EventEmitter();
+    mockChild.pid = 123;
+    vi.mocked(spawn).mockReturnValue(mockChild);
+
+    const promise = runner.run(req, policy, mockUi, mockCtx);
+
+    setTimeout(() => mockChild.emit('error', new Error('boom')), 10);
+
+    await expect(promise).rejects.toThrow(ToolError);
+  });
+
+  it('should wrap spawn failures in ToolError', async () => {
+    const req: ToolRunRequest = { command: 'safe-cmd run', reason: 'test', cwd: '/tmp' };
+    const policy = { ...defaultPolicy, requireConfirmation: false };
+
+    vi.mocked(spawn).mockImplementation(() => {
+      throw new Error('spawn fail');
+    });
+
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(
+      /Failed to spawn process: spawn fail/,
+    );
+  });
+
+  it('should reject when shell execution is disallowed and command needs a shell', async () => {
+    const req: ToolRunRequest = { command: 'echo hello | cat', reason: 'test', cwd: '/tmp' };
+    const policy = { ...defaultPolicy, requireConfirmation: false, allowShell: false };
+
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(ToolError);
+  });
 });

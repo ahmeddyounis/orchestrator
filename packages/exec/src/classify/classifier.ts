@@ -86,17 +86,19 @@ export function isNetworkCommand(parsed: ParsedCommand): boolean {
   return category === 'network' || category === 'install';
 }
 
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function matchesDenylist(command: string, patterns: string[]): boolean {
   return patterns.some((pattern) => {
     if (!pattern) return false;
-    try {
-      // Match on token boundaries to reduce accidental partial matches
-      // (e.g. deny "rm -rf /" but allow "rm -rf /tmp/safe-dir").
-      return new RegExp(`(?:^|\\s)(?:${pattern})(?:\\s|$)`).test(command);
-    } catch {
-      // If it's not a valid regex, fall back to substring matching.
-      return command.includes(pattern);
-    }
+    const escapedPattern = escapeRegExp(pattern);
+    // Match on token boundaries to reduce accidental partial matches
+    // (e.g. deny "rm -rf /" but allow "rm -rf /tmp/safe-dir").
+    const needsLeadingBoundary = /^\w/.test(pattern);
+    const leadingBoundary = needsLeadingBoundary ? '(?:^|\\W)' : '';
+    return new RegExp(`${leadingBoundary}${escapedPattern}(?:\\W|$)`).test(command);
   });
 }
 
