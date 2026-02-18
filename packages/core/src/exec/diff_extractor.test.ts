@@ -143,4 +143,70 @@ More text`;
   it('returns null when no diff-like content exists', () => {
     expect(extractUnifiedDiff('Just some random text\nwith no diff')).toBeNull();
   });
+
+  it('falls back to heuristic extraction when END_DIFF is missing', () => {
+    const input = `Preamble
+BEGIN_DIFF
+diff --git a/file.ts b/file.ts
+--- a/file.ts
++++ b/file.ts
+@@ -1,1 +1,1 @@
+-a
++b`;
+
+    const diff = extractUnifiedDiff(input);
+    expect(diff).toContain('diff --git a/file.ts b/file.ts');
+    expect(diff).toContain('+b');
+  });
+
+  it('falls back to heuristic extraction when ```diff fence is unterminated', () => {
+    const input = `Intro
+\`\`\`diff
+diff --git a/x.ts b/x.ts
+--- a/x.ts
++++ b/x.ts
+@@ -1,1 +1,1 @@
+-x
++y`;
+
+    const diff = extractUnifiedDiff(input);
+    expect(diff).toContain('diff --git a/x.ts b/x.ts');
+    expect(diff).toContain('+y');
+  });
+
+  it('returns trimmed marker content when markers exist but no diff is present', () => {
+    const input = `BEGIN_DIFF
+not actually a diff
+END_DIFF`;
+    expect(extractUnifiedDiff(input)).toBe('not actually a diff');
+  });
+
+  it('handles --- a/ without a following +++ line', () => {
+    const input = `--- a/foo.txt`;
+    expect(extractUnifiedDiff(input)).toBeNull();
+  });
+
+  it('extracts hunk fragments with blank lines', () => {
+    const input = `@@ -1,1 +1,1 @@
+-a
+
++b
+More text`;
+    const diff = extractUnifiedDiff(input);
+    expect(diff?.startsWith('@@ ')).toBe(true);
+    expect(diff).toContain('-a');
+    expect(diff).toContain('+b');
+  });
+
+  it('dedents indented diffs', () => {
+    const input = `  diff --git a/a.ts b/a.ts
+  --- a/a.ts
+  +++ b/a.ts
+  @@ -1,1 +1,1 @@
+  -a
+  +b`;
+    const diff = extractUnifiedDiff(input);
+    expect(diff?.startsWith('diff --git')).toBe(true);
+    expect(diff).toContain('+b');
+  });
 });

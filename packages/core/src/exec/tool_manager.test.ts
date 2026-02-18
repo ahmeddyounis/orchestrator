@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ToolManager } from './tool_manager';
-import { MANIFEST_VERSION, ToolRunRequest, ToolPolicy } from '@orchestrator/shared';
+import { MANIFEST_VERSION, ToolRunRequest, ToolPolicy, UsageError, ToolError } from '@orchestrator/shared';
 import * as fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import { SafeCommandRunner } from '@orchestrator/exec';
 
 // Mock fs/promises
 vi.mock('fs/promises', async (importOriginal) => {
@@ -153,5 +154,152 @@ describe('ToolManager', () => {
         type: 'ToolRunStarted',
       }),
     );
+  });
+
+  it('uses sandbox cwd/env when not provided on request', async () => {
+    const sandboxProvider = {
+      prepare: vi.fn().mockResolvedValue({
+        cwd: '/sandbox',
+        envOverrides: { FOO: 'sandbox', BAR: '1' },
+      }),
+    };
+    toolManager = new ToolManager(mockEventBus as any, manifestPath, '/repo', sandboxProvider as any);
+
+    const runSpy = vi
+      .spyOn(SafeCommandRunner.prototype, 'run')
+      .mockImplementationOnce(async (req: any) => {
+        expect(req.cwd).toBe('/sandbox');
+        expect(req.env).toEqual(expect.objectContaining({ FOO: 'sandbox', BAR: '1' }));
+        return {
+          exitCode: 0,
+          durationMs: 1,
+          stdoutPath: '/tmp/stdout.txt',
+          stderrPath: '/tmp/stderr.txt',
+          truncated: false,
+        };
+      });
+
+    await toolManager.runTool(
+      { command: 'echo hello', reason: 'test', env: { FOO: 'req' } },
+      { enabled: false } as any,
+      mockUi as any,
+      { runId: 'run-1' } as any,
+    );
+
+    runSpy.mockRestore();
+    expect(sandboxProvider.prepare).toHaveBeenCalledWith('/repo', 'run-1');
+  });
+
+  it('does not override explicit request cwd with sandbox cwd', async () => {
+    const sandboxProvider = {
+      prepare: vi.fn().mockResolvedValue({
+        cwd: '/sandbox',
+        envOverrides: {},
+      }),
+    };
+    toolManager = new ToolManager(mockEventBus as any, manifestPath, '/repo', sandboxProvider as any);
+
+    const runSpy = vi
+      .spyOn(SafeCommandRunner.prototype, 'run')
+      .mockImplementationOnce(async (req: any) => {
+        expect(req.cwd).toBe('/explicit');
+        return {
+          exitCode: 0,
+          durationMs: 1,
+          stdoutPath: '/tmp/stdout.txt',
+          stderrPath: '/tmp/stderr.txt',
+          truncated: false,
+        };
+      });
+
+    await toolManager.runTool(
+      { command: 'echo hello', reason: 'test', cwd: '/explicit' },
+      { enabled: false } as any,
+      mockUi as any,
+      { runId: 'run-1' } as any,
+    );
+
+    runSpy.mockRestore();
+  });
+
+  it('stores relative log paths in manifest (and preserves existing)', async () => {
+    const { updateManifest } = await import('@orchestrator/shared');
+    let manifestState: any = { schemaVersion: 999, toolLogPaths: ['existing.log'] };
+    vi.mocked(updateManifest).mockImplementationOnce(async (_path: any, updater: any) => {
+      updater(manifestState);
+    });
+
+    const runSpy = vi.spyOn(SafeCommandRunner.prototype, 'run').mockResolvedValueOnce({
+      exitCode: 0,
+      durationMs: 1,
+      stdoutPath: '/tmp/logs/stdout.txt',
+      stderrPath: '/tmp/logs/stderr.txt',
+      truncated: false,
+    } as any);
+
+    await toolManager.runTool(
+      { command: 'echo hello', reason: 'test', cwd: '/tmp' },
+      { enabled: false } as any,
+      mockUi as any,
+      { runId: 'run-1' } as any,
+    );
+
+    runSpy.mockRestore();
+    expect(manifestState.schemaVersion).toBe(999);
+    expect(manifestState.toolLogPaths).toEqual(
+      expect.arrayContaining(['existing.log', 'logs/stdout.txt', 'logs/stderr.txt']),
+    );
+  });
+
+  it('swallows manifest update failures', async () => {
+    const { updateManifest } = await import('@orchestrator/shared');
+    vi.mocked(updateManifest).mockRejectedValueOnce(new Error('boom'));
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const runSpy = vi.spyOn(SafeCommandRunner.prototype, 'run').mockResolvedValueOnce({
+      exitCode: 0,
+      durationMs: 1,
+      stdoutPath: '/tmp/stdout.txt',
+      stderrPath: '/tmp/stderr.txt',
+      truncated: false,
+    } as any);
+
+    await toolManager.runTool(
+      { command: 'echo hello', reason: 'test', cwd: '/tmp' },
+      { enabled: false } as any,
+      mockUi as any,
+      { runId: 'run-1' } as any,
+    );
+
+    runSpy.mockRestore();
+    consoleError.mockRestore();
+  });
+
+  it('classifies block reasons from error details and message patterns', async () => {
+    const runSpy = vi
+      .spyOn(SafeCommandRunner.prototype, 'run')
+      .mockRejectedValueOnce(new UsageError('denied', { details: { reason: 'policy' } }))
+      .mockRejectedValueOnce(new ToolError('network access denied'))
+      .mockRejectedValueOnce(new ToolError('shell is not allowed'))
+      .mockRejectedValueOnce(new ToolError('User denied the action'));
+
+    const req: ToolRunRequest = { command: 'echo hello', reason: 'test', cwd: '/tmp' };
+    const policy = { enabled: false } as any;
+    const ctx = { runId: 'run-1' } as any;
+
+    await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
+    await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
+    await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
+    await expect(toolManager.runTool(req, policy, mockUi as any, ctx)).rejects.toThrow();
+
+    const blockedCalls = mockEventBus.emit.mock.calls.filter((c) => c[0]?.type === 'ToolRunBlocked');
+    expect(blockedCalls.map((c) => c[0].payload.reason)).toEqual([
+      'policy',
+      'network_denied',
+      'shell_disallowed',
+      'user_denied',
+    ]);
+
+    runSpy.mockRestore();
   });
 });

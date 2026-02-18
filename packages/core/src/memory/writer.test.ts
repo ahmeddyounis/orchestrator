@@ -57,6 +57,123 @@ describe('MemoryWriter', () => {
       expect(memory!.content).toContain('[REDACTED:openai-api-key]');
     });
 
+    it('generates titles for other applicable classifications', async () => {
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+
+      const buildMem = await writer.extractProcedural(
+        {
+          ...toolRunMeta,
+          toolRunId: 'run-build',
+          classification: 'build',
+          request: { command: 'pnpm build', toolName: 'shell' },
+        } as any,
+        toolRunResult,
+        repoStateWithoutDb,
+      );
+      expect(buildMem?.title).toBe('How to build the project');
+
+      const lintMem = await writer.extractProcedural(
+        {
+          ...toolRunMeta,
+          toolRunId: 'run-lint',
+          classification: 'lint',
+          request: { command: 'pnpm lint', toolName: 'shell' },
+        } as any,
+        toolRunResult,
+        repoStateWithoutDb,
+      );
+      expect(lintMem?.title).toBe('How to run the linter');
+
+      const fmtMem = await writer.extractProcedural(
+        {
+          ...toolRunMeta,
+          toolRunId: 'run-format',
+          classification: 'format',
+          request: { command: 'pnpm format', toolName: 'shell' },
+        } as any,
+        toolRunResult,
+        repoStateWithoutDb,
+      );
+      expect(fmtMem?.title).toBe('How to format the code');
+    });
+
+    it('does not persist procedural memory when integrity check blocks it', async () => {
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+      const blockedMeta: ToolRunMeta = {
+        ...toolRunMeta,
+        toolRunId: 'run-blocked',
+        request: { command: 'rm -rf /', toolName: 'shell' },
+      } as any;
+
+      const memory = await writer.extractProcedural(blockedMeta, toolRunResult, repoStateWithDb);
+      expect(memory).toBeDefined();
+
+      const sqliteStore = createMemoryStore();
+      sqliteStore.init({ dbPath });
+      const retrieved = sqliteStore.get(memory!.id);
+      expect(retrieved).toBeNull();
+      sqliteStore.close();
+    });
+
+    it('upserts vector embeddings when embedder and backend are configured', async () => {
+      const embedder = {
+        embedTexts: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
+      };
+      const vectorBackend = {
+        upsert: vi.fn().mockResolvedValue(undefined),
+        wipeRepo: vi.fn().mockResolvedValue(undefined),
+      };
+      const writerWithVectors = new MemoryWriter({
+        embedder: embedder as any,
+        vectorBackend: vectorBackend as any,
+      });
+
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+      const memory = await writerWithVectors.extractProcedural(toolRunMeta, toolRunResult, repoStateWithDb);
+
+      expect(memory).toBeDefined();
+      expect(embedder.embedTexts).toHaveBeenCalled();
+      expect(vectorBackend.upsert).toHaveBeenCalledWith(
+        {},
+        TEST_REPO_ID,
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: memory!.id,
+            vector: expect.any(Float32Array),
+            metadata: expect.objectContaining({ type: 'procedural' }),
+          }),
+        ]),
+      );
+    });
+
+    it('skips vector upsert when embedder returns no vectors', async () => {
+      const embedder = {
+        embedTexts: vi.fn().mockResolvedValue([]),
+      };
+      const vectorBackend = {
+        upsert: vi.fn().mockResolvedValue(undefined),
+        wipeRepo: vi.fn().mockResolvedValue(undefined),
+      };
+      const writerWithVectors = new MemoryWriter({
+        embedder: embedder as any,
+        vectorBackend: vectorBackend as any,
+      });
+
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+      await writerWithVectors.extractProcedural(toolRunMeta, toolRunResult, repoStateWithDb);
+
+      expect(embedder.embedTexts).toHaveBeenCalled();
+      expect(vectorBackend.upsert).not.toHaveBeenCalled();
+    });
+
+    it('does not redact secrets when redaction is disabled', async () => {
+      const writerNoRedact = new MemoryWriter({ securityConfig: { redaction: { enabled: false } } });
+      const toolRunResult: ToolRunResult = { exitCode: 0, stdout: 'pass', durationMs: 100 };
+
+      const memory = await writerNoRedact.extractProcedural(toolRunMeta, toolRunResult, repoStateWithoutDb);
+      expect(memory?.content).toContain('sk-12345678901234567890');
+    });
+
     it('should not create memory for a failed run', async () => {
       const toolRunResult: ToolRunResult = { exitCode: 1, stderr: 'fail', durationMs: 100 };
       const memory = await writer.extractProcedural(toolRunMeta, toolRunResult, repoStateWithoutDb);
@@ -74,6 +191,20 @@ describe('MemoryWriter', () => {
       expect(retrieved).toBeDefined();
       expect(retrieved!.id).toBe(memory!.id);
       sqliteStore.close();
+    });
+
+    it('wipes sqlite and vector backend when configured', async () => {
+      const vectorBackend = {
+        wipeRepo: vi.fn().mockResolvedValue(undefined),
+      };
+      const writerWithVectors = new MemoryWriter({ vectorBackend: vectorBackend as any });
+
+      await writerWithVectors.wipe(TEST_REPO_ID, dbPath, repoStateWithDb);
+      expect(vectorBackend.wipeRepo).toHaveBeenCalledWith({}, TEST_REPO_ID);
+    });
+
+    it('can wipe without a vector backend', async () => {
+      await writer.wipe(TEST_REPO_ID, dbPath, repoStateWithDb);
     });
   });
 
