@@ -273,6 +273,139 @@ describe('SQLite MemoryStore', () => {
     expect(results2.length).toBe(1);
     expect(results2[0].id).toBe('test-1');
   });
+
+  it('returns empty results for queries with no searchable tokens', () => {
+    store.upsert({
+      id: 'test-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'Hello',
+      content: 'World',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+
+    expect(store.search('repo-1', '!!!', { topK: 10 })).toEqual([]);
+    expect(store.search('repo-1', '   ', { topK: 10 })).toEqual([]);
+  });
+
+  it('supports list limit', () => {
+    store.upsert({
+      id: 'test-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'T1',
+      content: 'C1',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+    store.upsert({
+      id: 'test-2',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'T2',
+      content: 'C2',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+
+    const list = store.list('repo-1', undefined, 1);
+    expect(list).toHaveLength(1);
+  });
+
+  it('can list entries for a repo without ordering/filtering', () => {
+    store.upsert({
+      id: 'test-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'T1',
+      content: 'C1',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+    store.upsert({
+      id: 'test-2',
+      repoId: 'repo-1',
+      type: 'episodic',
+      title: 'T2',
+      content: 'C2',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+
+    const entries = store.listEntriesForRepo('repo-1');
+    expect(entries.map((e) => e.id).sort()).toEqual(['test-1', 'test-2']);
+  });
+
+  it('can list entries missing vectors and respects type/limit filters', () => {
+    store.upsert({
+      id: 'with-vector',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'Has vector',
+      content: 'C1',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+    store.upsert({
+      id: 'no-vector-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'No vector',
+      content: 'C2',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+    store.upsert({
+      id: 'no-vector-2',
+      repoId: 'repo-1',
+      type: 'episodic',
+      title: 'No vector 2',
+      content: 'C3',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+
+    store.markVectorUpdated('with-vector');
+
+    const allMissing = store.listEntriesWithoutVectors('repo-1');
+    expect(allMissing.map((e) => e.id).sort()).toEqual(['no-vector-1', 'no-vector-2']);
+
+    const proceduralOnly = store.listEntriesWithoutVectors('repo-1', 'procedural');
+    expect(proceduralOnly.map((e) => e.id)).toEqual(['no-vector-1']);
+
+    const limited = store.listEntriesWithoutVectors('repo-1', undefined, 1);
+    expect(limited).toHaveLength(1);
+  });
+
+  it('can update stale flag and reflect it in status', () => {
+    store.upsert({
+      id: 'stale-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'T',
+      content: 'C',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    });
+
+    store.updateStaleFlag('stale-1', true);
+    expect(store.get('stale-1')?.stale).toBe(true);
+    expect(store.status('repo-1').staleCount).toBe(1);
+
+    store.updateStaleFlag('stale-1', false);
+    expect(store.get('stale-1')?.stale).toBe(false);
+    expect(store.status('repo-1').staleCount).toBe(0);
+  });
 });
 
 describe('SQLite MemoryStore with encryption', () => {
@@ -389,5 +522,121 @@ describe('SQLite MemoryStore with encryption', () => {
 
     store2.close();
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('decrypts content in lexical search hits when encryption is enabled', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-enc-test-'));
+    const dbPath = join(tempDir, 'memory-enc.db');
+    const store = createMemoryStore();
+    store.init({
+      dbPath,
+      encryption: { encryptAtRest: true, key: TEST_KEY },
+    });
+
+    const entry: MemoryEntry = {
+      id: 'enc-search-1',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'FindMe In Title',
+      content: 'Secret content',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stale: false,
+    };
+    store.upsert(entry);
+
+    const hits = store.search('repo-1', 'FindMe', { topK: 10 });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].content).toBe(entry.content);
+
+    store.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+});
+
+describe('SQLite MemoryStore hardening purge', () => {
+  it('returns an empty purge result when nothing is expired', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-hardening-test-'));
+    const dbPath = join(tempDir, 'memory.db');
+    const store = createMemoryStore();
+    store.init({
+      dbPath,
+      hardening: {
+        retentionPolicies: [{ sensitivityLevel: 'internal', maxAgeMs: 60_000 }],
+      },
+    });
+
+    const result = store.purgeExpired('repo-1');
+    expect(result.purgedCount).toBe(0);
+    expect(result.errors).toEqual([]);
+
+    store.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('purges entries past the configured retention window', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orchestrator-hardening-test-'));
+    const dbPath = join(tempDir, 'memory.db');
+    const store = createMemoryStore();
+    store.init({
+      dbPath,
+      hardening: {
+        retentionPolicies: [{ sensitivityLevel: 'internal', maxAgeMs: 1 }],
+      },
+    });
+
+    store.upsert({
+      id: 'expired-1',
+      repoId: 'repo-1',
+      type: 'episodic',
+      title: 'Old',
+      content: 'Old content',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      stale: false,
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(store.listExpired('repo-1').map((e) => e.id)).toEqual(['expired-1']);
+
+    const result = store.purgeExpired('repo-1');
+    expect(result.purgedCount).toBe(1);
+    expect(result.purgedByType.episodic).toBe(1);
+    expect(result.purgedBySensitivity.internal).toBe(1);
+    expect(store.get('expired-1')).toBeNull();
+
+    store.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+});
+
+describe('SQLite MemoryStore errors', () => {
+  it('throws when used before initialization', () => {
+    const store = createMemoryStore();
+
+    const entry: MemoryEntry = {
+      id: 'x',
+      repoId: 'repo-1',
+      type: 'procedural',
+      title: 'T',
+      content: 'C',
+      createdAt: 0,
+      updatedAt: 0,
+      stale: false,
+    };
+
+    expect(() => store.upsert(entry)).toThrow(/Database not initialized/);
+    expect(() => store.get('x')).toThrow(/Database not initialized/);
+    expect(() => store.list('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.listEntriesForRepo('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.listEntriesWithoutVectors('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.markVectorUpdated('x')).toThrow(/Database not initialized/);
+    expect(() => store.updateStaleFlag('x', true)).toThrow(/Database not initialized/);
+    expect(() => store.status('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.search('repo-1', 'hello', { topK: 1 })).toThrow(/Database not initialized/);
+    expect(() => store.wipe('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.listExpired('repo-1')).toThrow(/Database not initialized/);
+    expect(() => store.purgeExpired('repo-1')).toThrow(/Database not initialized/);
   });
 });

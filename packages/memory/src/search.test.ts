@@ -165,6 +165,57 @@ describe('MemorySearchService', () => {
     expect((result.hits[1] as VectorHit).vectorScore).toBe(0.85);
   });
 
+  it('skips missing and blocked entries when hydrating vector hits', async () => {
+    const request: MemorySearchRequest = {
+      query: 'test',
+      mode: 'vector',
+      topKFinal: 10,
+      topKVector: 10,
+    };
+
+    vi.spyOn(mockEmbedder, 'embedTexts').mockResolvedValue([[1, 2, 3, 4]]);
+    vi.spyOn(mockVectorBackend, 'query').mockResolvedValue([
+      { id: 'blocked', score: 0.9 },
+      { id: 'missing', score: 0.8 },
+      { id: 'ok', score: 0.7 },
+    ]);
+
+    const entries = [
+      {
+        id: 'blocked',
+        repoId: 'test-repo',
+        title: 'blocked',
+        content: 'c',
+        type: 'procedural' as const,
+        stale: false,
+        integrityStatus: 'blocked' as const,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {
+        id: 'ok',
+        repoId: 'test-repo',
+        title: 'ok',
+        content: 'c',
+        type: 'semantic' as const,
+        stale: false,
+        integrityStatus: 'ok' as const,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ];
+    vi.spyOn(mockMemoryStore, 'get').mockImplementation(
+      (id: string) => entries.find((e) => e.id === id) || null,
+    );
+
+    const result = await searchService.search(request);
+
+    expect(result.methodUsed).toBe('vector');
+    expect(result.hits).toHaveLength(1);
+    expect(result.hits[0].id).toBe('ok');
+    expect((result.hits[0] as VectorHit).vectorScore).toBe(0.7);
+  });
+
   it('should perform hybrid search', async () => {
     const request: MemorySearchRequest = {
       query: 'test',
@@ -423,6 +474,18 @@ describe('MemorySearchService', () => {
 
     await expect(searchService.search(request)).rejects.toThrow(
       'Vector search failed: Vector DB is down',
+    );
+  });
+
+  it('throws on unsupported search mode', async () => {
+    const request = {
+      query: 'test',
+      mode: 'unsupported',
+      topKFinal: 5,
+    } as unknown as MemorySearchRequest;
+
+    await expect(searchService.search(request)).rejects.toThrow(
+      'Unsupported search mode: unsupported',
     );
   });
 });
