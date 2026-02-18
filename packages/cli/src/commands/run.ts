@@ -307,7 +307,7 @@ export function registerRunCommand(program: Command) {
           thinkLevel,
           l3: Object.keys(l3).length > 0 ? l3 : undefined,
           budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
-          planning: Object.keys(planning).length > 0 ? (planning as any) : undefined,
+          planning: Object.keys(planning).length > 0 ? planning : undefined,
           defaults: {
             planner: options.planner,
             executor: options.executor,

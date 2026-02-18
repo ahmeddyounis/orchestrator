@@ -1,32 +1,34 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { SearchService } from './service';
 import { SearchResult } from './types';
 
-const FIXTURES_DIR = path.join(__dirname, 'fixtures');
+let fixturesDir: string;
 
 describe('SearchService', () => {
   beforeAll(async () => {
-    // Setup fixtures
-    await fs.mkdir(path.join(FIXTURES_DIR, 'subdir'), { recursive: true });
+    fixturesDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchestrator-search-fixtures-'));
+    await fs.mkdir(path.join(fixturesDir, 'subdir'), { recursive: true });
     await fs.writeFile(
-      path.join(FIXTURES_DIR, 'a.ts'),
+      path.join(fixturesDir, 'a.ts'),
       "console.log('hello world');\n// another hello",
     );
-    await fs.writeFile(path.join(FIXTURES_DIR, 'b.ts'), "console.log('hello universe')");
-    await fs.writeFile(path.join(FIXTURES_DIR, 'subdir', 'c.ts'), "console.log('hello galaxy')");
+    await fs.writeFile(path.join(fixturesDir, 'b.ts'), "console.log('hello universe')");
+    await fs.writeFile(path.join(fixturesDir, 'subdir', 'c.ts'), "console.log('hello galaxy')");
   });
 
   afterAll(async () => {
-    await fs.rm(FIXTURES_DIR, { recursive: true, force: true });
+    if (!fixturesDir) return;
+    await fs.rm(fixturesDir, { recursive: true, force: true });
   });
 
   it('should find matches using ripgrep (if available)', async () => {
     const service = new SearchService();
     const result = await service.search({
       query: 'hello',
-      cwd: FIXTURES_DIR,
+      cwd: fixturesDir,
     });
 
     // Check if it used ripgrep (since we know it is installed in this env)
@@ -46,7 +48,7 @@ describe('SearchService', () => {
     // a.ts has 2 'hello's
     const result = await service.search({
       query: 'hello',
-      cwd: FIXTURES_DIR,
+      cwd: fixturesDir,
       maxMatchesPerFile: 1,
     });
 
@@ -57,12 +59,12 @@ describe('SearchService', () => {
   it('should rank exact matches higher', async () => {
     const service = new SearchService();
     // Create specific ranking test
-    await fs.writeFile(path.join(FIXTURES_DIR, 'rank1.ts'), 'exactmatch');
-    await fs.writeFile(path.join(FIXTURES_DIR, 'rank2.ts'), 'exactmatchsuffix');
+    await fs.writeFile(path.join(fixturesDir, 'rank1.ts'), 'exactmatch');
+    await fs.writeFile(path.join(fixturesDir, 'rank2.ts'), 'exactmatchsuffix');
 
     const result = await service.search({
       query: 'exactmatch',
-      cwd: FIXTURES_DIR,
+      cwd: fixturesDir,
     });
 
     const rank1 = result.matches.find((m) => m.path === 'rank1.ts');
@@ -85,7 +87,7 @@ describe('SearchService', () => {
     const jsEngine = service.js;
     const result: SearchResult = await jsEngine.search({
       query: 'hello',
-      cwd: FIXTURES_DIR,
+      cwd: fixturesDir,
     });
 
     expect(result.stats.engine).toBe('js-fallback');
@@ -94,7 +96,7 @@ describe('SearchService', () => {
 
   it('should cache search results', async () => {
     const service = new SearchService();
-    const options = { query: 'galaxy', cwd: FIXTURES_DIR };
+    const options = { query: 'galaxy', cwd: fixturesDir };
 
     // @ts-expect-error - spy on private method
     const searchSpy = vi.spyOn(service.rg, 'search');

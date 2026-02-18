@@ -164,17 +164,15 @@ export function registerPlanCommand(program: Command) {
         planning.research = research as NonNullable<Config['planning']>['research'];
       }
 
-      const config = ConfigLoader.load({
-        configPath: globalOpts.config,
-        flags: {
-          defaults: {
-            planner: options.planner,
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
-          planning: Object.keys(planning).length > 0 ? (planning as any) : undefined,
+      const flags: DeepPartial<Config> = {
+        defaults: {
+          planner: options.planner,
         },
-      });
+      };
+      if (Object.keys(memory).length > 0) flags.memory = memory;
+      if (Object.keys(planning).length > 0) flags.planning = planning;
+
+      const config = ConfigLoader.load({ configPath: globalOpts.config, flags });
 
       const plannerId = config.defaults?.planner;
       if (!plannerId) {
