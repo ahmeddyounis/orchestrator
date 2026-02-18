@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpenAIAdapter } from './adapter';
 import { StreamEvent } from '@orchestrator/shared';
 import { APIError, APIConnectionTimeoutError } from 'openai';
-import { RateLimitError, TimeoutError } from '../errors';
+import { RateLimitError, TimeoutError, ConfigError } from '../errors';
 import { AdapterContext } from '../types';
 
 const mockCreate = vi.fn();
@@ -137,6 +137,115 @@ describe('OpenAIAdapter', () => {
     expect(events[1]).toEqual({ type: 'text-delta', content: ' World' });
   });
 
+  it('stream yields usage and tool call deltas and ignores chunks without delta', async () => {
+    const asyncIterator = (async function* () {
+      yield {
+        usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+        choices: [{ delta: { content: 'Hi' } }],
+      };
+      yield { choices: [{}] };
+      yield {
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  id: 'tc_1',
+                  index: 0,
+                  function: { name: 'tool', arguments: '{"a":1}' },
+                },
+              ],
+            },
+          },
+        ],
+      };
+    })();
+
+    mockCreate.mockResolvedValue(asyncIterator);
+
+    const stream = adapter.stream(
+      {
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      mockContext,
+    );
+
+    const events: StreamEvent[] = [];
+    for await (const event of stream) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: 'usage', usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } },
+      { type: 'text-delta', content: 'Hi' },
+      {
+        type: 'tool-call-delta',
+        toolCall: { name: 'tool', arguments: '{"a":1}', id: 'tc_1', index: 0 },
+      },
+    ]);
+  });
+
+  it('generate maps assistant tool calls and tool messages', async () => {
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: '', tool_calls: null } }],
+    });
+
+    await adapter.generate(
+      {
+        messages: [
+          {
+            role: 'assistant',
+            toolCalls: [{ id: 'call_1', name: 'do', arguments: { x: 1 } }],
+          } as any,
+          {
+            role: 'tool',
+            toolCallId: 'call_1',
+            content: 'result',
+          },
+        ],
+      },
+      mockContext,
+    );
+
+    const callArg = mockCreate.mock.calls[0]?.[0];
+    expect(callArg.messages).toEqual([
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'do', arguments: '{"x":1}' },
+          },
+        ],
+      },
+      { role: 'tool', content: 'result', tool_call_id: 'call_1' },
+    ]);
+  });
+
+  it('generate ignores non-function tool calls', async () => {
+    mockCreate.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: 'x',
+            tool_calls: [{ type: 'not-a-function', id: 'x', function: { name: 'x', arguments: '{}' } }],
+          },
+        },
+      ],
+    });
+
+    const result = await adapter.generate(
+      {
+        messages: [{ role: 'user', content: 'Hi' }],
+      },
+      mockContext,
+    );
+
+    expect(result.toolCalls).toEqual([]);
+  });
+
   it('maps RateLimitError', async () => {
     const error = new (APIError as any)('Rate limit', 429);
     (error as any).status = 429;
@@ -153,5 +262,15 @@ describe('OpenAIAdapter', () => {
     await expect(
       adapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, mockContext),
     ).rejects.toThrow(TimeoutError);
+  });
+
+  it('maps ConfigError for auth failures', async () => {
+    const error = new (APIError as any)('Unauthorized', 401);
+    (error as any).status = 401;
+
+    mockCreate.mockRejectedValue(error);
+    await expect(
+      adapter.generate({ messages: [{ role: 'user', content: 'hi' }] }, mockContext),
+    ).rejects.toThrow(ConfigError);
   });
 });

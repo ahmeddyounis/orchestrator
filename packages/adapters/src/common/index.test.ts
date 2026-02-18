@@ -117,4 +117,88 @@ describe('executeProviderRequest', () => {
     // Should NOT retry if aborted by user
     expect(fn).toHaveBeenCalledTimes(1);
   });
+
+  it('retries on 5xx status codes', async () => {
+    const fn = vi.fn().mockRejectedValueOnce({ status: 503 }).mockResolvedValue('ok');
+
+    const result = await executeProviderRequest(ctx, 'test', 'model', fn, { initialDelayMs: 1 });
+    expect(result).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries on network error codes (including nested cause.code)', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce({ code: 'ECONNRESET' })
+      .mockRejectedValueOnce({ cause: { code: 'ETIMEDOUT' } })
+      .mockResolvedValue('ok');
+
+    const result = await executeProviderRequest(ctx, 'test', 'model', fn, {
+      maxRetries: 5,
+      initialDelayMs: 1,
+    });
+    expect(result).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry on non-retriable status codes', async () => {
+    const fn = vi.fn().mockRejectedValue({ statusCode: 400 });
+
+    await expect(
+      executeProviderRequest(ctx, 'test', 'model', fn, { maxRetries: 5, initialDelayMs: 1 }),
+    ).rejects.toThrow();
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts immediately when the abort signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    ctx.abortSignal = controller.signal;
+
+    const fn = vi.fn(async (signal: AbortSignal) => {
+      if (signal.aborted) {
+        throw new Error('aborted');
+      }
+      return 'ok';
+    });
+
+    await expect(executeProviderRequest(ctx, 'test', 'model', fn)).rejects.toThrow('aborted');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears timeouts and abort listeners on success', async () => {
+    const clearSpy = vi.spyOn(global, 'clearTimeout');
+
+    const controller = new AbortController();
+    ctx.abortSignal = controller.signal;
+    ctx.timeoutMs = 1000;
+
+    const fn = vi.fn().mockResolvedValue('ok');
+    const result = await executeProviderRequest(ctx, 'test', 'model', fn);
+
+    expect(result).toBe('ok');
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
+  });
+
+  it('logs non-Error failures with String(lastError)', async () => {
+    const fn = vi.fn().mockRejectedValue('fail');
+
+    try {
+      await executeProviderRequest(ctx, 'test', 'model', fn);
+      throw new Error('expected rejection');
+    } catch (err) {
+      expect(err).toBe('fail');
+    }
+
+    const finishedCalls = logSpy.mock.calls
+      .map(([event]) => event)
+      .filter((e) => e.type === 'ProviderRequestFinished');
+
+    expect(finishedCalls).toHaveLength(1);
+    expect(finishedCalls[0].payload).toMatchObject({
+      success: false,
+      error: 'fail',
+    });
+  });
 });
