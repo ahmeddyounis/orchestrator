@@ -363,13 +363,11 @@ export class ProcessManager extends EventEmitter {
         if (queue.length > 0) {
           yield queue.shift()!;
         } else {
-          if (finished) {
-            if (error) throw error;
-            break;
-          }
           await new Promise<void>((r) => (resolveNext = r));
         }
       }
+
+      if (error) throw error;
     } finally {
       this.off('output', onData);
       this.off('exit', onExit);
