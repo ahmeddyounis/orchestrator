@@ -4,7 +4,7 @@ If you encounter a bug or have a problem, this guide explains how to get help an
 
 ## Filing a Bug Report
 
-The best way to report a bug is to create an issue on our [GitHub repository](https://github.com/example/orchestrator/issues).
+The best way to report a bug is to create an issue on our [GitHub repository](https://github.com/ahmeddyounes/orchestrator/issues).
 
 A good bug report is detailed and reproducible. Please include the following information in your issue.
 
@@ -51,4 +51,4 @@ Before filing a report, check if your issue is covered here.
 - **"Command not found" for tools**: Ensure that any required command-line tools are installed and available in your system's `PATH`.
 - **"Index not found"**: Run `orchestrator index build` in the root of your project.
 
-If you have a question or need help with configuration, you can also start a discussion on our [GitHub Discussions page](https://github.com/example/orchestrator/discussions).
+If you have a question or need help with configuration, you can also start a discussion on our [GitHub Discussions page](https://github.com/ahmeddyounes/orchestrator/discussions).

@@ -5,14 +5,33 @@ This guide will walk you through installing and running the Orchestrator on your
 ## Prerequisites
 
 - Node.js v20+
+- `git`
+- `rg` (ripgrep)
+- (Windows) WSL is recommended
 - A TypeScript project (we'll use a `pnpm` monorepo in this guide)
 
 ## 1. Installation
 
-Install the CLI package globally from npm:
+Orchestrator is currently distributed as a packed tarball attached to GitHub Releases (npm publishing is planned).
+
+### Option A: Install from GitHub Releases (recommended)
+
+1. Download the latest `orchestrator-cli-*.tgz` from GitHub Releases:
+   - https://github.com/ahmeddyounes/orchestrator/releases
+2. Install it globally:
 
 ```bash
-npm install -g @orchestrator/cli
+npm install -g ./orchestrator-cli-*.tgz
+orchestrator --help
+```
+
+### Option B: Install from source (contributors)
+
+```bash
+pnpm install
+pnpm --filter @orchestrator/cli build
+npm install -g ./packages/cli
+orchestrator --help
 ```
 
 ## 2. Configuration
