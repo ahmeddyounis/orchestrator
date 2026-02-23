@@ -17,7 +17,7 @@
     "@orchestrator/memory": "workspace:*",
     "@types/node": "^25.1.0",
     "memfs": "^4.56.10",
-    "tree-sitter": "^0.22.4",
+    "tree-sitter": "^0.25.0",
     "tree-sitter-go": "^0.23.4",
     "tree-sitter-javascript": "^0.23.1",
     "tree-sitter-python": "^0.23.6",
