@@ -182,9 +182,10 @@ export function parseGeminiCliJson(text: string): GeminiCliJson | null {
   try {
     return JSON.parse(text.slice(firstBrace, lastBrace + 1)) as GeminiCliJson;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.debug(
       '[GeminiCliAdapter] Failed to parse JSON from output:',
-      err,
+      message,
       'slice:',
       text.slice(firstBrace, Math.min(firstBrace + 200, lastBrace + 1)),
     );
