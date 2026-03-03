@@ -57,6 +57,7 @@ import {
   ContextBuilderService,
   ContextStackService,
   RunMemoryService,
+  RunFinalizerService,
   RunSummaryService,
   VerificationService,
   shouldAllowEmptyDiffForStep,
@@ -123,6 +124,7 @@ export class Orchestrator {
   private contextBuilder: ContextBuilderService;
   private contextStackService: ContextStackService;
   private runMemoryService: RunMemoryService;
+  private runFinalizerService: RunFinalizerService;
   private runSummaryService: RunSummaryService;
   private indexAutoUpdate: IndexAutoUpdateService;
   private escalationCount = 0;
@@ -146,6 +148,12 @@ export class Orchestrator {
       costTracker: this.costTracker,
       toolPolicy: this.toolPolicy,
     });
+    this.runFinalizerService = new RunFinalizerService(
+      this.config,
+      this.git,
+      this.runSummaryService,
+      this.runMemoryService,
+    );
     this.indexAutoUpdate = new IndexAutoUpdateService({
       config: this.config,
       repoRoot: this.repoRoot,
@@ -816,84 +824,23 @@ END_DIFF
       stopReason: RunResult['stopReason'] | undefined,
       summaryMsg: string,
     ): Promise<RunResult> => {
-      if (stopReason) {
-        await eventBus.emit({
-          type: 'RunStopped',
-          schemaVersion: 1,
-          timestamp: new Date().toISOString(),
-          runId,
-          payload: { reason: stopReason, details: summaryMsg },
-        });
-      }
-
-      await eventBus.emit({
-        type: 'RunFinished',
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId,
-        payload: { status, summary: summaryMsg },
-      });
-
-      const finishedAt = new Date().toISOString();
-      try {
-        const finalDiff = await this.git.diff(baseRef);
-        if (finalDiff.trim().length > 0) {
-          const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-          const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
-          if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
-        }
-      } catch {
-        // Non-fatal: artifact generation should not fail the run.
-      }
-
-      try {
-        await updateManifest(artifacts.manifest, (manifest) => {
-          manifest.finishedAt = finishedAt;
-          manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
-          manifest.contextPaths = [...(manifest.contextPaths ?? []), ...contextPaths];
-        });
-      } catch {
-        // Non-fatal: artifact updates should not fail the run.
-      }
-
-      const runResult: RunResult = {
-        status,
-        runId,
-        summary: summaryMsg,
-        filesChanged: Array.from(touchedFiles),
-        patchPaths,
-        stopReason,
-        memory: this.config.memory,
-        verification: {
-          enabled: false,
-          passed: false,
-          summary: 'Not run',
-        },
-      };
-
-      const summary = this.runSummaryService.build({
+      return this.runFinalizerService.finalize({
         runId,
         goal,
         startTime,
         status,
         thinkLevel: 'L1',
-        runResult,
+        stopReason,
+        summaryMsg,
         artifacts,
-        escalationCount: this.escalationCount,
-      });
-      await SummaryWriter.write(summary, artifacts.root);
-
-      await this.writeEpisodicMemory(
-        summary,
-        {
-          artifactsRoot: artifacts.root,
-          patchPaths,
-          extraArtifactPaths: contextPaths,
-        },
+        baseRef,
+        patchPaths,
+        contextPaths,
+        touchedFiles,
         eventBus,
-      );
-
-      return runResult;
+        escalationCount: this.escalationCount,
+        suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
+      });
     };
 
     const maxStepAttempts = this.config.execution?.maxStepAttempts ?? 6;
@@ -2203,85 +2150,24 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       stopReason: RunResult['stopReason'] | undefined,
       summaryMsg: string,
     ): Promise<RunResult> => {
-      if (stopReason) {
-        await eventBus.emit({
-          type: 'RunStopped',
-          schemaVersion: 1,
-          timestamp: new Date().toISOString(),
-          runId,
-          payload: { reason: stopReason, details: summaryMsg },
-        });
-      }
-
-      await eventBus.emit({
-        type: 'RunFinished',
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId,
-        payload: { status, summary: summaryMsg },
-      });
-
-      const finishedAt = new Date().toISOString();
-      try {
-        const finalDiff = await this.git.diff(baseRef);
-        if (finalDiff.trim().length > 0) {
-          const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-          const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
-          if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
-        }
-      } catch {
-        // Non-fatal: artifact generation should not fail the run.
-      }
-
-      try {
-        await updateManifest(artifacts.manifest, (manifest) => {
-          manifest.finishedAt = finishedAt;
-          manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
-          manifest.contextPaths = [...(manifest.contextPaths ?? []), ...contextPaths];
-        });
-      } catch {
-        // Non-fatal: artifact updates should not fail the run.
-      }
-
-      const runResult: RunResult = {
-        status,
-        runId,
-        summary: summaryMsg,
-        filesChanged: Array.from(touchedFiles),
-        patchPaths,
-        stopReason,
-        memory: this.config.memory,
-        verification: {
-          enabled: false,
-          passed: false,
-          summary: 'Not run',
-        },
-      };
-
-      const summary = this.runSummaryService.build({
+      return this.runFinalizerService.finalize({
         runId,
         goal,
         startTime,
         status,
         thinkLevel: 'L3',
-        runResult,
+        stopReason,
+        summaryMsg,
         artifacts,
+        baseRef,
+        patchPaths,
+        contextPaths,
+        touchedFiles,
+        eventBus,
         escalationCount: this.escalationCount,
         l3Metadata,
+        suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
       });
-      await SummaryWriter.write(summary, artifacts.root);
-
-      await this.writeEpisodicMemory(
-        summary,
-        {
-          artifactsRoot: artifacts.root,
-          patchPaths,
-          extraArtifactPaths: contextPaths,
-        },
-        eventBus,
-      );
-
-      return runResult;
     };
 
     for (const execStep of executionSteps) {
