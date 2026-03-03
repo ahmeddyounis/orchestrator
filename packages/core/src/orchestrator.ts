@@ -310,7 +310,7 @@ export class Orchestrator {
         },
       });
 
-      const indexPath = path.join(this.repoRoot, cfg.path);
+      const indexPath = path.isAbsolute(cfg.path) ? cfg.path : path.join(this.repoRoot, cfg.path);
       const updater = new IndexUpdater(indexPath);
       const result = await updater.update(this.repoRoot);
 
