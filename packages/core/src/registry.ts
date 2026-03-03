@@ -149,10 +149,21 @@ export class ProviderRegistry {
       resolvedConfig = { ...providerConfig, api_key: fromEnv };
     }
 
-    // Validate config against adapter capabilities before creation
+    // Create adapter (single instantiation) and validate its capabilities.
+    // This avoids constructing the adapter twice (which can have side effects for plugins).
+    let adapter: ProviderAdapter;
     try {
-      const tempAdapter = factory(resolvedConfig);
-      const capabilities = tempAdapter.capabilities();
+      adapter = factory(resolvedConfig);
+    } catch (error) {
+      if (error instanceof RegistryError) throw error;
+      throw new RegistryError(
+        `Failed to create adapter for provider '${providerId}': ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    // Validate config against adapter capabilities (best-effort)
+    try {
+      const capabilities = adapter.capabilities();
       const validation = validateProviderConfig(resolvedConfig, capabilities, providerId);
 
       if (!validation.valid) {
@@ -160,18 +171,10 @@ export class ProviderRegistry {
           `Invalid configuration for provider '${providerId}':\n${formatValidationResult(validation)}`,
         );
       }
-
-      // Log warnings if any
-      if (validation.warnings.length > 0) {
-        // Warnings are informational - adapter still created
-      }
     } catch (error) {
       if (error instanceof RegistryError) throw error;
-      // If validation itself failed, continue with normal creation
+      // If validation itself failed, continue with the created adapter.
     }
-
-    // Create adapter
-    let adapter = factory(resolvedConfig);
 
     if (this.costTracker) {
       adapter = new CostTrackingAdapter(providerId, adapter, this.costTracker);

@@ -216,11 +216,14 @@ describe('ProviderRegistry', () => {
       },
     });
 
-    let calls = 0;
     registry.registerFactory('mock-type', () => {
-      calls += 1;
-      if (calls === 1) throw new Error('validation construction failed');
-      return new MockAdapter(mockCapabilities);
+      return {
+        id: () => 'mock',
+        capabilities: () => {
+          throw new Error('validation capabilities failed');
+        },
+        generate: async () => ({}),
+      };
     });
 
     expect(registry.getAdapter('p1')).toBeDefined();

@@ -35,7 +35,8 @@ import {
   NoopVectorMemoryBackend,
   createMemoryStore,
 } from '@orchestrator/memory';
-import { createEmbedder, type ProviderAdapter } from '@orchestrator/adapters';
+import { createEmbedder } from '@orchestrator/adapters';
+import type { PreparedPlugin, ProviderAdapterPlugin } from '@orchestrator/plugin-sdk';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -56,6 +57,7 @@ import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
 import { PluginLoader, LoadedPlugin } from './plugins/loader';
+import { PluginProviderAdapter } from './plugins/provider_adapter';
 import { SimpleContextFuser } from './context';
 import { CandidateGenerator, StepContext, Candidate } from './orchestrator/l3/candidate_generator';
 import {
@@ -154,14 +156,24 @@ export class Orchestrator {
     );
     const pluginLoader = new PluginLoader(options.config, logger, options.repoRoot);
     const loadedPlugins = await pluginLoader.loadPlugins();
+    const pluginConfigByName = options.config.plugins?.config ?? {};
+
+    const toObjectRecord = (value: unknown): Record<string, unknown> => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+      return value as Record<string, unknown>;
+    };
 
     for (const loadedPlugin of loadedPlugins) {
       if (loadedPlugin.manifest.type === 'provider') {
-        options.registry.registerFactory(loadedPlugin.manifest.name, (_config) => {
-          // This is a bit of a hack, as the plugin is already initialized.
-          // We should ideally pass the config to the plugin loader.
-          // For now, we just return the already initialized plugin.
-          return loadedPlugin.plugin as unknown as ProviderAdapter;
+        const pluginDefaults = toObjectRecord(pluginConfigByName[loadedPlugin.manifest.name]);
+        const prepared = loadedPlugin.prepared as unknown as PreparedPlugin<ProviderAdapterPlugin>;
+        options.registry.registerFactory(loadedPlugin.manifest.name, (providerConfig) => {
+          return new PluginProviderAdapter({
+            pluginName: loadedPlugin.manifest.name,
+            prepared,
+            config: { ...pluginDefaults, ...providerConfig },
+            logger,
+          });
         });
       }
     }

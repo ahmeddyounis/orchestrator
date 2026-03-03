@@ -1,10 +1,10 @@
 import {
   PluginLifecycle,
   PluginManifest,
-  safeLoadPlugin,
-  PluginContext,
-  LoadPluginResult,
+  preparePlugin,
   DEFAULT_TRUSTED_PERMISSIONS,
+  type PreparedPlugin,
+  type PluginExport,
   type PluginSecurityContext,
 } from '@orchestrator/plugin-sdk';
 import { Config, Logger } from '@orchestrator/shared';
@@ -16,9 +16,19 @@ import { pathToFileURL } from 'url';
 
 export interface LoadedPlugin<T extends PluginLifecycle = PluginLifecycle> {
   manifest: PluginManifest;
-  plugin: T;
+  prepared: PreparedPlugin<T>;
   filePath: string;
   hash: string;
+}
+
+function isPluginExport(value: unknown): value is PluginExport {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.manifest === 'object' &&
+    record.manifest !== null &&
+    typeof record.createPlugin === 'function'
+  );
 }
 
 export class PluginLoader {
@@ -93,18 +103,24 @@ export class PluginLoader {
   private async loadPluginFiles(pluginFiles: string[]): Promise<Array<LoadedPlugin>> {
     const plugins: Array<LoadedPlugin> = [];
     const allowlist = this.config.plugins?.allowlistIds;
-    const pluginConfigByName = this.config.plugins?.config ?? {};
     const securityContext = this.buildSecurityContext();
 
     for (const file of pluginFiles) {
       try {
         const fileBuffer = await fs.readFile(file);
         const moduleNs = await import(pathToFileURL(file).href);
-        const pluginExport =
-          typeof moduleNs?.manifest === 'object' && typeof moduleNs?.createPlugin === 'function'
-            ? moduleNs
-            : (moduleNs.default as typeof moduleNs);
-        const manifest = pluginExport?.manifest as PluginManifest;
+        const pluginExport = isPluginExport(moduleNs)
+          ? moduleNs
+          : isPluginExport(moduleNs.default)
+            ? moduleNs.default
+            : null;
+
+        if (!pluginExport) {
+          this.logger.warn(`Plugin ${file} is missing a manifest or createPlugin export.`);
+          continue;
+        }
+
+        const manifest = pluginExport.manifest as PluginManifest;
 
         if (!manifest) {
           this.logger.warn(`Plugin ${file} is missing a manifest.`);
@@ -116,37 +132,19 @@ export class PluginLoader {
           continue;
         }
 
-        const rawPluginConfig = pluginConfigByName[manifest.name];
-        const pluginConfig =
-          rawPluginConfig && typeof rawPluginConfig === 'object' && !Array.isArray(rawPluginConfig)
-            ? (rawPluginConfig as Record<string, unknown>)
-            : {};
-
-        const ctx: PluginContext = {
-          runId: `plugin-load:${manifest.name}`,
-          logger: this.logger.child({ plugin: manifest.name }),
-        };
-
-        const result: LoadPluginResult = await safeLoadPlugin(pluginExport, pluginConfig, ctx, {
+        const prepared = preparePlugin(pluginExport, {
           pluginContent: fileBuffer,
           securityContext,
         });
 
-        if (!result.success) {
-          this.logger.warn(`Failed to load plugin ${manifest.name}: ${result.error}`);
-          continue;
-        }
-
-        if (result.plugin && result.manifest) {
-          const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-          plugins.push({
-            manifest: result.manifest,
-            plugin: result.plugin,
-            filePath: file,
-            hash,
-          });
-          this.logger.info(`Loaded plugin: ${manifest.name}`);
-        }
+        const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+        plugins.push({
+          manifest: prepared.manifest,
+          prepared,
+          filePath: file,
+          hash,
+        });
+        this.logger.info(`Loaded plugin: ${manifest.name}`);
       } catch (error) {
         this.logger.warn(`Error loading plugin from ${file}: ${error}`);
       }
