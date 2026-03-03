@@ -39,11 +39,23 @@ export type AdapterFactory = (config: ProviderConfig) => ProviderAdapter;
 export class ProviderRegistry {
   private factories = new Map<string, AdapterFactory>();
   private adapters = new Map<string, ProviderAdapter>();
+  private eventBus?: EventBus;
+  private boundRunId?: string;
 
   constructor(
     private config: Config,
     private costTracker?: CostTracker,
   ) {}
+
+  bindEventBus(eventBus: EventBus, runId: string): void {
+    this.eventBus = eventBus;
+    this.boundRunId = runId;
+  }
+
+  getEventContext(): { eventBus: EventBus; runId: string } | undefined {
+    if (!this.eventBus || !this.boundRunId) return undefined;
+    return { eventBus: this.eventBus, runId: this.boundRunId };
+  }
 
   /**
    * Validates all provider configurations in the config against their adapter capabilities.

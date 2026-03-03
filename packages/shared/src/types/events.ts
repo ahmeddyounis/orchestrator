@@ -277,6 +277,44 @@ export interface ProviderRequestFinished extends BaseEvent {
   };
 }
 
+/** Emitted when a plugin initialization starts */
+export interface PluginInitStarted extends BaseEvent {
+  type: 'PluginInitStarted';
+  payload: {
+    pluginName: string;
+  };
+}
+
+/** Emitted when a plugin initialization finishes (success or failure) */
+export interface PluginInitFinished extends BaseEvent {
+  type: 'PluginInitFinished';
+  payload: {
+    pluginName: string;
+    durationMs: number;
+    success: boolean;
+    error?: string;
+  };
+}
+
+/** Emitted when a plugin shutdown starts */
+export interface PluginShutdownStarted extends BaseEvent {
+  type: 'PluginShutdownStarted';
+  payload: {
+    pluginName: string;
+  };
+}
+
+/** Emitted when a plugin shutdown finishes (success or failure) */
+export interface PluginShutdownFinished extends BaseEvent {
+  type: 'PluginShutdownFinished';
+  payload: {
+    pluginName: string;
+    durationMs: number;
+    success: boolean;
+    error?: string;
+  };
+}
+
 /** Emitted when a subprocess is spawned */
 export interface SubprocessSpawned extends BaseEvent {
   type: 'SubprocessSpawned';
@@ -537,6 +575,10 @@ export type OrchestratorEvent =
   | ProviderSelected
   | ProviderRequestStarted
   | ProviderRequestFinished
+  | PluginInitStarted
+  | PluginInitFinished
+  | PluginShutdownStarted
+  | PluginShutdownFinished
   | SubprocessSpawned
   | SubprocessOutputChunked
   | SubprocessExited

@@ -40,11 +40,13 @@ export class PluginManager {
       const prepared = loadedPlugin.prepared as unknown as PreparedPlugin<ProviderAdapterPlugin>;
 
       registry.registerFactory(pluginName, (providerConfig) => {
+        const events = registry.getEventContext();
         return new PluginProviderAdapter({
           pluginName,
           prepared,
           config: { ...pluginDefaults, ...providerConfig },
           logger: this.logger,
+          events,
         });
       });
     }

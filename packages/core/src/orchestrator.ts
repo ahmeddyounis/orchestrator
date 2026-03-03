@@ -517,6 +517,7 @@ export class Orchestrator {
       eventBus: eventBusObj,
     });
     const eventBus = contextStack.eventBus;
+    this.registry.bindEventBus?.(eventBus, runId);
 
     const emitEvent = async (e: OrchestratorEvent) => {
       await eventBus.emit(e);
@@ -1008,6 +1009,7 @@ END_DIFF
       eventBus: eventBusObj,
     });
     const eventBus = contextStack.eventBus;
+    this.registry.bindEventBus?.(eventBus, runId);
     const baseRef = await this.git.getHeadSha();
 
     await this.initService.emitRunStarted(eventBus, runId, goal);
@@ -1923,6 +1925,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
       eventBus: eventBusObj,
     });
     const eventBus = contextStack.eventBus;
+    this.registry.bindEventBus?.(eventBus, runId);
 
     // 1. Initial Plan & Execute (L1)
     this.suppressEpisodicMemoryWrite = true;
@@ -2596,6 +2599,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       eventBus: eventBusObj,
     });
     const eventBus = contextStack.eventBus;
+    this.registry.bindEventBus?.(eventBus, runId);
     const baseRef = await this.git.getHeadSha();
 
     await this.initService.emitRunStarted(eventBus, runId, goal);

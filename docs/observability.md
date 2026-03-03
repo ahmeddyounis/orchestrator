@@ -14,7 +14,7 @@ Each `run_id` is a unique timestamp. This directory is your single source of tru
 
 - **`summary.json`**: A high-level summary of the run, including the final status, duration, and how much it cost (in tokens and dollars).
 - **`patches/final.diff.patch`**: A unified diff of the final code changes that were made. You can use this to easily review (or apply) the changes.
-- **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging.
+- **`trace.jsonl`**: A detailed, low-level log of every single event that happened during the run. This is useful for deep debugging (includes provider selection, tool runs, verification, and plugin lifecycle events).
 - **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
 - **`manifest.json`**: A machine-readable index of key artifact paths for the run.
 - **`effective-config.json`**: The fully resolved configuration used for the run.

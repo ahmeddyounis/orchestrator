@@ -1,6 +1,8 @@
 import type { ProviderAdapter, AdapterContext } from '@orchestrator/adapters';
 import type {
   Logger,
+  EventBus,
+  OrchestratorEvent,
   ModelRequest,
   ModelResponse,
   ProviderCapabilities,
@@ -27,6 +29,9 @@ export class PluginProviderAdapter implements ProviderAdapter {
   private readonly pluginName: string;
   private readonly plugin: ProviderAdapterPlugin;
   private readonly initPromise: Promise<void>;
+  private shutdownPromise: Promise<void> | undefined;
+  private readonly eventBus: EventBus | undefined;
+  private readonly runId: string | undefined;
 
   public readonly stream?: (req: ModelRequest, ctx: AdapterContext) => AsyncIterable<StreamEvent>;
 
@@ -35,16 +40,61 @@ export class PluginProviderAdapter implements ProviderAdapter {
     prepared: PreparedPlugin<ProviderAdapterPlugin>;
     config: PluginConfig;
     logger: Logger;
+    events?: { eventBus: EventBus; runId: string };
   }) {
     this.pluginName = args.pluginName;
     this.plugin = args.prepared.createPlugin();
+    this.eventBus = args.events?.eventBus;
+    this.runId = args.events?.runId;
 
     const initCtx: PluginContext = {
       runId: `plugin-init:${args.pluginName}`,
       logger: args.logger.child({ plugin: args.pluginName }),
     };
 
-    this.initPromise = this.plugin.init(args.config, initCtx);
+    const initStartedAt = Date.now();
+    this.emit({
+      type: 'PluginInitStarted',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: this.runId ?? initCtx.runId,
+      payload: { pluginName: this.pluginName },
+    });
+
+    this.initPromise = this.plugin.init(args.config, initCtx).catch(async (error) => {
+      this.emit({
+        type: 'PluginInitFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: this.runId ?? initCtx.runId,
+        payload: {
+          pluginName: this.pluginName,
+          durationMs: Date.now() - initStartedAt,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+
+      // Best-effort cleanup when init fails (avoid leaking resources).
+      await this.shutdownOnce().catch(() => undefined);
+      throw error;
+    });
+
+    void this.initPromise.then(
+      () =>
+        this.emit({
+          type: 'PluginInitFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: this.runId ?? initCtx.runId,
+          payload: {
+            pluginName: this.pluginName,
+            durationMs: Date.now() - initStartedAt,
+            success: true,
+          },
+        }),
+      () => undefined,
+    );
     // Prevent unhandled promise rejections if init fails and the adapter is never used.
     void this.initPromise.catch(() => undefined);
 
@@ -88,6 +138,56 @@ export class PluginProviderAdapter implements ProviderAdapter {
       }),
     ]);
 
-    await this.plugin.shutdown();
+    await this.shutdownOnce();
+  }
+
+  private shutdownOnce(): Promise<void> {
+    if (this.shutdownPromise) return this.shutdownPromise;
+
+    const shutdownStartedAt = Date.now();
+    this.emit({
+      type: 'PluginShutdownStarted',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: this.runId ?? `plugin-shutdown:${this.pluginName}`,
+      payload: { pluginName: this.pluginName },
+    });
+
+    this.shutdownPromise = this.plugin
+      .shutdown()
+      .then(() => {
+        this.emit({
+          type: 'PluginShutdownFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: this.runId ?? `plugin-shutdown:${this.pluginName}`,
+          payload: {
+            pluginName: this.pluginName,
+            durationMs: Date.now() - shutdownStartedAt,
+            success: true,
+          },
+        });
+      })
+      .catch((error) => {
+        this.emit({
+          type: 'PluginShutdownFinished',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId: this.runId ?? `plugin-shutdown:${this.pluginName}`,
+          payload: {
+            pluginName: this.pluginName,
+            durationMs: Date.now() - shutdownStartedAt,
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+        throw error;
+      });
+    return this.shutdownPromise;
+  }
+
+  private emit(event: OrchestratorEvent): void {
+    if (!this.eventBus) return;
+    void Promise.resolve(this.eventBus.emit(event)).catch(() => undefined);
   }
 }
