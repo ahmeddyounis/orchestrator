@@ -96,12 +96,15 @@ export class FailureSummarizer {
   private extractFiles(text: string, collection: Set<string>): void {
     if (!text) return;
 
-    // Regex for common file paths
-    // TS/Lint: path/to/file.ts(10,20)
-    // Stack trace: (path/to/file.ts:10:20)
+    // Regex for common file paths (POSIX + Windows).
+    // TS: path/to/file.ts(10,20)
+    // Stack trace / ESLint: path/to/file.ts:10:20
+    const pathPrefix = '((?:[A-Za-z]:)?[A-Za-z0-9_\\-/.\\\\]+\\.(?:';
+    const exts = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'json', 'md'].join('|');
+    const pathPattern = `${pathPrefix}${exts}))`;
     const filePatterns = [
-      new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md)):\\d+', 'g'), // path/to/file.ts:10
-      new RegExp('([a-zA-Z0-9_\\-/.]+\\.(ts|tsx|js|jsx|json|md))\\(\\d+', 'g'), // path/to/file.ts(10
+      new RegExp(`${pathPattern}:\\d+`, 'g'), // path/to/file.ts:10
+      new RegExp(`${pathPattern}\\(\\d+`, 'g'), // path/to/file.ts(10
     ];
 
     for (const pattern of filePatterns) {

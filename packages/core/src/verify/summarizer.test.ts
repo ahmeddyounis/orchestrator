@@ -114,4 +114,37 @@ Error: expected 2 to be 3
       'Fix failing tests. Check stack traces in logs.',
     );
   });
+
+  it('should extract Windows-style paths from errors', async () => {
+    const stderrPath = path.join(tmpDir, 'windows.stderr');
+    const output = `
+src/index.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.
+C:\\Users\\user\\project\\src\\win.ts:12:3: error TS2345: Argument of type 'null' is not assignable.
+    at C:\\Users\\user\\project\\src\\stack.ts:99:1
+    at C:\\Users\\user\\project\\node_modules\\dep\\index.js:1:1
+    `;
+    await fs.promises.writeFile(stderrPath, output);
+
+    const checks: CheckResult[] = [
+      {
+        name: 'typecheck',
+        command: 'tsc --noEmit',
+        exitCode: 1,
+        durationMs: 100,
+        stdoutPath: '',
+        stderrPath: stderrPath,
+        passed: false,
+        truncated: false,
+      },
+    ];
+
+    const summary = await summarizer.summarize(checks);
+
+    expect(summary.suspectedFiles).toContain('src/index.ts');
+    expect(summary.suspectedFiles).toContain('C:\\Users\\user\\project\\src\\win.ts');
+    expect(summary.suspectedFiles).toContain('C:\\Users\\user\\project\\src\\stack.ts');
+    expect(summary.suspectedFiles).not.toContain(
+      'C:\\Users\\user\\project\\node_modules\\dep\\index.js',
+    );
+  });
 });
