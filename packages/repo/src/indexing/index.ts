@@ -14,6 +14,7 @@ export {
   INDEX_SCHEMA_VERSION,
   type IndexFile as IndexDocument,
 } from './store';
+export * from './convert';
 export * from './hasher';
 export * from './status';
 
