@@ -2272,15 +2272,117 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         }
       }
 
+      const signals: ContextSignal[] = [];
+      for (const f of touchedFiles) {
+        signals.push({ type: 'file_change', data: f, weight: 2 });
+      }
+      for (const f of verification.failureSummary?.suspectedFiles ?? []) {
+        signals.push({ type: 'file_change', data: f, weight: 3 });
+      }
+      if (errorDetails.trim().length > 0) {
+        signals.push({ type: 'error', data: { stack: errorDetails }, weight: 2 });
+      }
+
+      const normalizePathForMatch = (p: string): string => p.replace(/\\/g, '/');
+      const repoRootNormalized = normalizePathForMatch(this.repoRoot).replace(/\/$/, '');
+      const toRepoRelative = (p: string): string => {
+        const normalized = normalizePathForMatch(p);
+        if (normalized.startsWith(repoRootNormalized + '/')) {
+          return normalized.slice(repoRootNormalized.length + 1);
+        }
+        return normalized;
+      };
+
+      let contextPack: ReturnType<SimpleContextPacker['pack']> = {
+        items: [],
+        totalChars: 0,
+        estimatedTokens: 0,
+      };
+      try {
+        const matches: Array<{
+          path: string;
+          line: number;
+          column: number;
+          matchText: string;
+          lineText: string;
+          score: number;
+        }> = [];
+        const seen = new Set<string>();
+
+        const addMatch = (filePath: string, line: number, score: number, matchText: string) => {
+          const p = toRepoRelative(String(filePath ?? '').trim());
+          if (!p || p.includes('node_modules')) return;
+          const safeLine = Number.isFinite(line) && line > 0 ? Math.floor(line) : 1;
+          const key = `${p}:${safeLine}:${matchText}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          matches.push({
+            path: p,
+            line: safeLine,
+            column: 1,
+            matchText,
+            lineText: '',
+            score,
+          });
+        };
+
+        for (const f of touchedFiles) addMatch(f, 1, 200, 'TOUCHED_FILE');
+        for (const f of verification.failureSummary?.suspectedFiles ?? []) {
+          addMatch(f, 1, 500, 'SUSPECTED_FILE');
+        }
+
+        const hintTextParts: string[] = [];
+        for (const fc of verification.failureSummary?.failedChecks ?? []) {
+          hintTextParts.push(...(fc.keyErrors ?? []));
+          if (fc.stderrTailSnippet) hintTextParts.push(fc.stderrTailSnippet);
+        }
+        if (errorDetails) hintTextParts.push(errorDetails);
+        const hintText = hintTextParts.join('\n');
+
+        const exts = '(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|json|md)';
+        const filePathPattern = `((?:[A-Za-z]:)?[A-Za-z0-9_\\-/.\\\\]+\\.${exts})`;
+        const locationPatterns = [
+          // TS compiler style: file.ts(10,5)
+          new RegExp(`${filePathPattern}\\((\\d+)(?:,\\d+)?\\)`, 'g'),
+          // Stack trace / ESLint style: file.ts:10:5
+          new RegExp(`${filePathPattern}:(\\d+)(?::\\d+)?`, 'g'),
+        ];
+
+        for (const pattern of locationPatterns) {
+          let match: RegExpExecArray | null;
+          while ((match = pattern.exec(hintText)) !== null) {
+            const filePath = match[1];
+            const line = Number(match[2]);
+            if (!filePath || !Number.isFinite(line) || line <= 0) continue;
+            addMatch(filePath, line, 1500, 'ERROR_LOCATION');
+          }
+        }
+
+        const extractor = new SnippetExtractor();
+        const candidates = await extractor.extractSnippets(matches, {
+          cwd: this.repoRoot,
+          windowSize: 20,
+          maxSnippetChars: 1200,
+          maxSnippetsPerFile: 3,
+        });
+
+        const packer = new SimpleContextPacker();
+        contextPack = packer.pack(goal, signals, candidates, {
+          tokenBudget: this.config.context?.tokenBudget || 8000,
+        });
+      } catch {
+        // Non-fatal; repairs should still proceed with memory + logs.
+      }
+
       const fuser = new SimpleContextFuser(this.config.security);
       const fusedContext = fuser.fuse({
         goal: `Goal: ${goal}\nTask: Fix verification errors.`,
-        repoPack: { items: [], totalChars: 0, estimatedTokens: 0 }, // No repo context for repairs yet
+        repoPack: contextPack,
         memoryHits,
-        signals: [],
+        signals,
         contextStack: contextStack.store?.getAllFrames(),
         budgets: {
-          maxRepoContextChars: 0,
+          maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
           maxMemoryChars: 4000,
           maxSignalsChars: 1000,
           maxContextStackChars: this.config.contextStack?.enabled
@@ -2302,7 +2404,7 @@ ${verificationSummary}
 Error Details:
 ${errorDetails}
 
-CONTEXT FROM MEMORY:
+CONTEXT:
 ${fusedContext.prompt}
 
 Please analyze the errors and produce a unified diff to fix them.
