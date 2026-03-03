@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { promises as fs } from 'fs';
 import path from 'path';
 import which from 'which';
-import { isWindows, isWSL, Config } from '@orchestrator/shared';
-import { ConfigLoader } from '@orchestrator/core';
+import { isWindows, isWSL, Config, type Logger } from '@orchestrator/shared';
+import { ConfigLoader, PluginLoader } from '@orchestrator/core';
 import chalk from 'chalk';
 import { findRepoRoot } from '@orchestrator/repo';
 
@@ -85,7 +85,27 @@ function providerRequiresApiKey(type: string): boolean {
   return type === 'openai' || type === 'anthropic';
 }
 
-async function checkPluginStatus(config: Config): Promise<[string, string]> {
+function createBufferedLogger(): { logger: Logger; warnings: string[] } {
+  const warnings: string[] = [];
+
+  const logger: Logger = {
+    log: () => {},
+    trace: () => {},
+    debug: () => {},
+    info: () => {},
+    warn: (message) => {
+      warnings.push(message);
+    },
+    error: (error, message) => {
+      warnings.push(message ? `${message}: ${error.message}` : error.message);
+    },
+    child: () => logger,
+  };
+
+  return { logger, warnings };
+}
+
+async function checkPluginStatus(config: Config, repoRoot: string): Promise<[string, string]> {
   const plugins = config.plugins;
   if (!plugins?.enabled) {
     return [CHECKS.OK, 'Plugins are disabled.'];
@@ -93,7 +113,21 @@ async function checkPluginStatus(config: Config): Promise<[string, string]> {
   if (!plugins.allowlistIds || plugins.allowlistIds.length === 0) {
     return [CHECKS.WARN, 'Plugins are enabled, but no plugins are explicitly allowed.'];
   }
-  return [CHECKS.OK, `Enabled plugins: ${plugins.allowlistIds.join(', ')}.`];
+
+  const { logger, warnings } = createBufferedLogger();
+  const loader = new PluginLoader(config, logger, repoRoot);
+  const loaded = await loader.loadPlugins();
+  const loadedIds = loaded.map((p) => p.manifest.name).sort((a, b) => a.localeCompare(b));
+
+  const allowlist = plugins.allowlistIds;
+  const missing = allowlist.filter((id) => !loadedIds.includes(id));
+
+  if (missing.length > 0) {
+    const hint = warnings.length > 0 ? ` (e.g. ${warnings[0]})` : '';
+    return [CHECKS.FAIL, `Plugins enabled but failed to load: ${missing.join(', ')}.${hint}`];
+  }
+
+  return [CHECKS.OK, `Enabled plugins are loadable: ${allowlist.join(', ')}.`];
 }
 
 function checkToolExecPolicy(config: Config): [string, string][] {
@@ -163,7 +197,7 @@ export const registerDoctorCommand = (program: Command) => {
       console.log('\n' + chalk.bold('Configuration Checks (`.orchestrator.yaml`)'));
       results.push(await checkProviderConfig(config));
       results.push(...(await checkLocalProviderExecutables(config)));
-      results.push(await checkPluginStatus(config));
+      results.push(await checkPluginStatus(config, repoRoot));
       results.push(...checkToolExecPolicy(config));
 
       console.log('\n' + chalk.bold('Project Status'));
