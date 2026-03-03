@@ -59,7 +59,7 @@ async function runSmoke() {
     try {
       const adapter = new OpenAIAdapter({
         type: 'openai',
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         api_key: openaiKey,
       });
 
@@ -75,6 +75,40 @@ async function runSmoke() {
       console.log('✅ OpenAI Smoke Test Passed');
     } catch (error) {
       console.error('❌ OpenAI Smoke Test Failed:', error);
+      process.exitCode = 1;
+    }
+
+    console.log('Testing OpenAI stream()...');
+    try {
+      const adapter = new OpenAIAdapter({
+        type: 'openai',
+        model: 'gpt-4o-mini',
+        api_key: openaiKey,
+      });
+
+      let text = '';
+      let usage: unknown = undefined;
+
+      for await (const event of adapter.stream(
+        {
+          messages: [{ role: 'user', content: 'Count to 3 and nothing else.' }],
+          maxTokens: 50,
+        },
+        context,
+      )) {
+        if (event.type === 'text-delta') {
+          text += event.content;
+        }
+        if (event.type === 'usage') {
+          usage = event.usage;
+        }
+      }
+
+      console.log('OpenAI Stream Result:', text.slice(0, 100).replace(/\n/g, ' '));
+      console.log('OpenAI Stream Usage:', JSON.stringify(usage));
+      console.log('✅ OpenAI stream() Smoke Test Passed');
+    } catch (error) {
+      console.error('❌ OpenAI stream() Smoke Test Failed:', error);
       process.exitCode = 1;
     }
 
