@@ -74,6 +74,7 @@ import {
   shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
   buildPatchApplyRetryContext,
   extractPatchErrorKind,
+  buildContextSignals,
 } from './orchestrator/services';
 
 export interface OrchestratorOptions {
@@ -1284,6 +1285,7 @@ END_DIFF
       });
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
+      const signals = buildContextSignals({ goal, step, ancestors, touchedFiles });
       try {
         await this.measure(
           'repo_scan',
@@ -1435,7 +1437,7 @@ END_DIFF
           eventBus,
           runId,
           () =>
-            packer.pack(contextQuery, [], candidates, {
+            packer.pack(contextQuery, signals, candidates, {
               tokenBudget: this.config.context?.tokenBudget || 8000,
             }),
           (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
@@ -1465,9 +1467,6 @@ END_DIFF
         maxContextStackChars: stackEnabled ? this.config.contextStack.promptBudgetChars : 0,
         maxContextStackFrames: stackEnabled ? this.config.contextStack.promptMaxFrames : 0,
       };
-
-      // TODO: Plumb real signals
-      const signals: ContextSignal[] = [];
 
       const planContextLines: string[] = [`Goal: ${goal}`];
       if (stepId) planContextLines.push(`Plan Step ID: ${stepId}`);
@@ -2773,7 +2772,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     const contextPaths: string[] = [];
     const touchedFiles = new Set<string>();
 
-    const signals: ContextSignal[] = [];
+    const baseSignals: ContextSignal[] = [];
     let consecutiveInvalidDiffs = 0;
     let consecutiveApplyFailures = 0;
     let lastApplyErrorHash = '';
@@ -2931,6 +2930,14 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         payload: { step, index: stepsCompleted, total: executionSteps.length },
       });
 
+      let stepSignals = buildContextSignals({
+        goal,
+        step,
+        ancestors,
+        touchedFiles,
+        baseSignals,
+      });
+
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
         const searchResults = await searchService.search({
@@ -2973,7 +2980,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
 
         const packer = new SimpleContextPacker();
-        contextPack = packer.pack(contextQuery, [], candidates, {
+        contextPack = packer.pack(contextQuery, stepSignals, candidates, {
           tokenBudget: this.config.context?.tokenBudget || 8000,
         });
       } catch {
@@ -3005,7 +3012,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         goal: planContextText,
         repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
         memoryHits,
-        signals,
+        signals: stepSignals,
         contextStack: contextStack.store?.getAllFrames(),
         budgets: {
           maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
@@ -3371,17 +3378,24 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
             });
 
             if (diagnosisResult?.selectedHypothesis) {
-              signals.push({
+              baseSignals.push({
                 type: 'diagnosis',
                 data: `Diagnosis hypothesis: ${diagnosisResult.selectedHypothesis.hypothesis}`,
               });
 
               // Re-fuse context with new signal
+              stepSignals = buildContextSignals({
+                goal,
+                step,
+                ancestors,
+                touchedFiles,
+                baseSignals,
+              });
               fusedContext = fuser.fuse({
                 goal: planContextText,
                 repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
                 memoryHits,
-                signals,
+                signals: stepSignals,
                 contextStack: contextStack.store?.getAllFrames(),
                 budgets: {
                   maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
