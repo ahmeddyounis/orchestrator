@@ -1330,6 +1330,9 @@ END_DIFF
       }
     }
 
+    const scanner = new RepoScanner();
+    const searchService = new SearchService(this.config.context?.rgPath);
+
     for (let stepIndex = 0; stepIndex < executionSteps.length; stepIndex++) {
       const { step, ancestors, id: stepId } = executionSteps[stepIndex];
       const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
@@ -1362,7 +1365,6 @@ END_DIFF
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
-        const scanner = new RepoScanner();
         await this.measure(
           'repo_scan',
           eventBus,
@@ -1376,7 +1378,6 @@ END_DIFF
           (s) => ({ fileCount: s.files.length }),
         );
 
-        const searchService = new SearchService(this.config.context?.rgPath);
         const searchResults = await this.measure(
           'lexical_search',
           eventBus,
@@ -2877,6 +2878,8 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       return runResult;
     };
 
+    const searchService = new SearchService(this.config.context?.rgPath);
+
     for (const execStep of executionSteps) {
       const { step, ancestors, id: stepId } = execStep;
       const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
@@ -2908,7 +2911,6 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
       let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
       try {
-        const searchService = new SearchService(this.config.context?.rgPath);
         const searchResults = await searchService.search({
           query: contextQuery,
           cwd: this.repoRoot,
