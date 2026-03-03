@@ -105,6 +105,16 @@ export class ProcessManager extends EventEmitter {
       'XDG_CONFIG_HOME',
       'XDG_CACHE_HOME',
       'XDG_DATA_HOME',
+      'NODE_ENV',
+      // Windows
+      'USERPROFILE',
+      'APPDATA',
+      'LOCALAPPDATA',
+      'SYSTEMROOT',
+      'COMSPEC',
+      'PATHEXT',
+      'HOMEDRIVE',
+      'HOMEPATH',
     ];
     for (const key of baselineEnvKeys) {
       if (finalEnv[key] === undefined && process.env[key] !== undefined) {
