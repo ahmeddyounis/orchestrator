@@ -19,6 +19,17 @@ vi.mock('@orchestrator/repo', () => ({
   SimpleContextPacker: class {
     pack = packSpy;
   },
+  SemanticIndexStore: class {
+    init(_path: string) {}
+    getMeta() {
+      return null;
+    }
+    close() {}
+  },
+  SemanticSearchService: class {
+    constructor(_args: any) {}
+    search = vi.fn().mockResolvedValue([]);
+  },
 }));
 
 describe('ContextBuilderService', () => {

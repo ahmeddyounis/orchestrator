@@ -23,8 +23,6 @@ import {
   PatchApplier,
   SimpleContextPacker,
   SnippetExtractor,
-  SemanticIndexStore,
-  SemanticSearchService,
 } from '@orchestrator/repo';
 import {
   MemoryEntry,
@@ -926,30 +924,6 @@ END_DIFF
     return runResult;
   }
 
-  private async measure<T>(
-    name: string,
-    eventBus: EventBus,
-    runId: string,
-    fn: () => T | Promise<T>,
-    metadataFn?: (result: T) => Record<string, unknown>,
-  ): Promise<T> {
-    const start = Date.now();
-    const result = await fn();
-    const durationMs = Date.now() - start;
-    await eventBus.emit({
-      type: 'PerformanceMeasured',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: {
-        name,
-        durationMs,
-        metadata: metadataFn ? metadataFn(result) : undefined,
-      },
-    });
-    return result;
-  }
-
   private async readPlanExecutionSteps(
     artifactsRoot: string,
     fallbackSteps: string[],
@@ -1253,9 +1227,6 @@ END_DIFF
       }
     }
 
-    const scanner = new RepoScanner();
-    const searchService = new SearchService(this.config.context?.rgPath);
-
     for (let stepIndex = 0; stepIndex < executionSteps.length; stepIndex++) {
       const { step, ancestors, id: stepId } = executionSteps[stepIndex];
       const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
@@ -1286,167 +1257,8 @@ END_DIFF
         payload: { step, index: stepIndex, total: executionSteps.length },
       });
 
-      let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
+      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
       const signals = buildContextSignals({ goal, step, ancestors, touchedFiles });
-      try {
-        await this.measure(
-          'repo_scan',
-          eventBus,
-          runId,
-          () =>
-            scanner.scan(this.repoRoot, {
-              excludes: this.config.context?.exclude,
-              maxFiles: this.config.context?.scanner?.maxFiles,
-              maxFileSize: this.config.context?.scanner?.maxFileSize,
-            }),
-          (s) => ({ fileCount: s.files.length }),
-        );
-
-        const searchResults = await this.measure(
-          'lexical_search',
-          eventBus,
-          runId,
-          () =>
-            searchService.search({
-              query: contextQuery,
-              cwd: this.repoRoot,
-              maxMatchesPerFile: 5,
-              fixedStrings: true,
-            }),
-          (r) => ({ matchCount: r.matches.length }),
-        );
-
-        const lexicalMatches = searchResults.matches;
-
-        // M15-07: Semantic Search
-        type SemanticHit = {
-          path: string;
-          startLine: number;
-          endLine: number;
-          content: string;
-          score?: number;
-        };
-        let semanticHits: SemanticHit[] = [];
-        const semanticConfig = this.config.indexing?.semantic;
-        if (semanticConfig?.enabled) {
-          let store: SemanticIndexStore | undefined;
-          try {
-            const semanticDbPath = path.isAbsolute(semanticConfig.storage.path)
-              ? semanticConfig.storage.path
-              : path.join(this.repoRoot, semanticConfig.storage.path);
-
-            if (fsSync.existsSync(semanticDbPath)) {
-              store = new SemanticIndexStore();
-              store.init(semanticDbPath);
-
-              const embedder = createEmbedder(semanticConfig.embeddings);
-
-              const meta = store.getMeta();
-              if (meta?.embedderId && meta.embedderId !== embedder.id()) {
-                console.warn(
-                  `Semantic index embedder mismatch: index=${meta.embedderId} config=${embedder.id()}. Results may be degraded.`,
-                );
-              }
-
-              const semanticSearchService = new SemanticSearchService({
-                store,
-                embedder,
-                eventBus,
-              });
-
-              const topK = 5;
-              const hits = await this.measure(
-                'semantic_search',
-                eventBus,
-                runId,
-                () => semanticSearchService.search(contextQuery, topK, runId),
-                (h) => ({ hitCount: h.length }),
-              );
-
-              if (hits.length > 0) {
-                const hitsArtifactPath = path.join(
-                  artifacts.root,
-                  `semantic_hits_step_${stepIndex}.json`,
-                );
-                await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
-                contextPaths.push(hitsArtifactPath);
-              }
-
-              semanticHits = hits.map((hit) => ({
-                path: hit.path,
-                startLine: hit.startLine,
-                endLine: hit.endLine,
-                content: hit.content,
-                score: hit.score,
-              }));
-            }
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            await eventBus.emit({
-              type: 'SemanticSearchFailed',
-              schemaVersion: 1,
-              runId,
-              timestamp: new Date().toISOString(),
-              payload: {
-                error: message,
-              },
-            });
-          } finally {
-            store?.close();
-          }
-        }
-
-        const allMatches = [
-          ...lexicalMatches,
-          ...semanticHits.map((h) => ({
-            path: h.path,
-            line: h.startLine,
-            column: 0,
-            matchText: 'SEMANTIC_MATCH',
-            lineText: '',
-            score: h.score ?? 0.5,
-          })),
-        ];
-
-        for (const touched of touchedFiles) {
-          allMatches.push({
-            path: touched,
-            line: 1,
-            column: 1,
-            matchText: 'PREVIOUSLY_TOUCHED',
-            lineText: '',
-            score: 1000,
-          });
-        }
-
-        allMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
-        const limitedMatches = this.config.context?.maxCandidates
-          ? allMatches.slice(0, this.config.context.maxCandidates)
-          : allMatches;
-
-        const extractor = new SnippetExtractor();
-        const candidates = await this.measure(
-          'snippet_extraction',
-          eventBus,
-          runId,
-          () => extractor.extractSnippets(limitedMatches, { cwd: this.repoRoot }),
-          (c) => ({ candidateCount: c.length }),
-        );
-
-        const packer = new SimpleContextPacker();
-        contextPack = await this.measure(
-          'context_packing',
-          eventBus,
-          runId,
-          () =>
-            packer.pack(contextQuery, signals, candidates, {
-              tokenBudget: this.config.context?.tokenBudget || 8000,
-            }),
-          (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
-        );
-      } catch {
-        // Ignore context errors
-      }
 
       // Memory Search
       const memoryHits = await this.searchMemoryHits(
@@ -1460,16 +1272,6 @@ END_DIFF
         eventBus,
       );
 
-      const fuser = new SimpleContextFuser(this.config.security);
-      const stackEnabled = this.config.contextStack?.enabled ?? false;
-      const fusionBudgets = {
-        maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
-        maxMemoryChars: this.config.memory?.maxChars ?? 2000,
-        maxSignalsChars: 1000,
-        maxContextStackChars: stackEnabled ? this.config.contextStack.promptBudgetChars : 0,
-        maxContextStackFrames: stackEnabled ? this.config.contextStack.promptMaxFrames : 0,
-      };
-
       const planContextLines: string[] = [`Goal: ${goal}`];
       if (stepId) planContextLines.push(`Plan Step ID: ${stepId}`);
       if (ancestors.length > 0) {
@@ -1477,31 +1279,25 @@ END_DIFF
         for (const a of ancestors) planContextLines.push(`- ${a}`);
       }
       planContextLines.push(`Current Step (leaf): ${step}`);
+      const planContextText = planContextLines.join('\n');
 
-      const fusedContext = fuser.fuse({
-        goal: planContextLines.join('\n'),
-        repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
+      const stepContext = await this.contextBuilder.buildStepContext({
+        goal,
+        goalText: planContextText,
+        step,
+        query: contextQuery,
+        touchedFiles,
         memoryHits,
         signals,
         contextStack: contextStack.store?.getAllFrames(),
-        budgets: fusionBudgets,
+        eventBus,
+        runId,
+        artifactsRoot: artifacts.root,
+        stepsCompleted: stepIndex,
       });
+      contextPaths.push(...stepContext.contextPaths);
 
-      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
-      const fusedJsonPath = path.join(
-        artifacts.root,
-        `fused_context_step_${stepIndex}_${stepSlug}.json`,
-      );
-      const fusedTxtPath = path.join(
-        artifacts.root,
-        `fused_context_step_${stepIndex}_${stepSlug}.txt`,
-      );
-
-      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
-      await fs.writeFile(fusedTxtPath, fusedContext.prompt);
-      contextPaths.push(fusedJsonPath, fusedTxtPath);
-
-      const contextText = fusedContext.prompt;
+      const contextText = stepContext.fusedContext.prompt;
 
       let stepResearchBrief = '';
       if (researchService && execResearchCfg?.enabled && execResearchCfg.scope !== 'goal') {
@@ -2903,8 +2699,6 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       return runResult;
     };
 
-    const searchService = new SearchService(this.config.context?.rgPath);
-
     for (const execStep of executionSteps) {
       const { step, ancestors, id: stepId } = execStep;
       const contextQuery = ancestors.length > 0 ? `${ancestors.join(' ')} ${step}` : step;
@@ -2942,55 +2736,6 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         baseSignals,
       });
 
-      let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
-      try {
-        const searchResults = await searchService.search({
-          query: contextQuery,
-          cwd: this.repoRoot,
-          maxMatchesPerFile: 5,
-          fixedStrings: true,
-        });
-
-        const lexicalMatches = searchResults.matches;
-        type SemanticHit = { path: string; startLine: number; score?: number };
-        const semanticHits: SemanticHit[] = [];
-
-        // ... (semantic search logic from L1)
-
-        const allMatches = [
-          ...lexicalMatches,
-          ...semanticHits.map((h) => ({
-            path: h.path,
-            line: h.startLine,
-            column: 0,
-            matchText: 'SEMANTIC_MATCH',
-            lineText: '',
-            score: h.score ?? 0.5,
-          })),
-        ];
-
-        for (const touched of touchedFiles) {
-          allMatches.push({
-            path: touched,
-            line: 1,
-            column: 1,
-            matchText: 'PREVIOUSLY_TOUCHED',
-            lineText: '',
-            score: 1000,
-          });
-        }
-
-        const extractor = new SnippetExtractor();
-        const candidates = await extractor.extractSnippets(allMatches, { cwd: this.repoRoot });
-
-        const packer = new SimpleContextPacker();
-        contextPack = packer.pack(contextQuery, stepSignals, candidates, {
-          tokenBudget: this.config.context?.tokenBudget || 8000,
-        });
-      } catch {
-        // Ignore context errors
-      }
-
       const memoryHits = await this.searchMemoryHits(
         {
           query: memoryQuery,
@@ -3002,7 +2747,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         eventBus,
       );
 
-      const fuser = new SimpleContextFuser(this.config.security);
+      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
       const planContextLines: string[] = [`Goal: ${goal}`];
       if (stepId) planContextLines.push(`Plan Step ID: ${stepId}`);
       if (ancestors.length > 0) {
@@ -3012,38 +2757,23 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       planContextLines.push(`Current Step (leaf): ${step}`);
       const planContextText = planContextLines.join('\n');
 
-      let fusedContext = fuser.fuse({
-        goal: planContextText,
-        repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
+      const builtContext = await this.contextBuilder.buildStepContext({
+        goal,
+        goalText: planContextText,
+        step,
+        query: contextQuery,
+        touchedFiles,
         memoryHits,
         signals: stepSignals,
         contextStack: contextStack.store?.getAllFrames(),
-        budgets: {
-          maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
-          maxMemoryChars: this.config.memory?.maxChars ?? 2000,
-          maxSignalsChars: 1000,
-          maxContextStackChars: this.config.contextStack?.enabled
-            ? this.config.contextStack.promptBudgetChars
-            : 0,
-          maxContextStackFrames: this.config.contextStack?.enabled
-            ? this.config.contextStack.promptMaxFrames
-            : 0,
-        },
+        eventBus,
+        runId,
+        artifactsRoot: artifacts.root,
+        stepsCompleted,
       });
-
-      const stepSlug = step.slice(0, 20).replace(/[^a-z0-9]/gi, '_');
-      const fusedJsonPath = path.join(
-        artifacts.root,
-        `fused_context_step_${stepsCompleted}_${stepSlug}.json`,
-      );
-      const fusedTxtPath = path.join(
-        artifacts.root,
-        `fused_context_step_${stepsCompleted}_${stepSlug}.txt`,
-      );
-
-      await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
-      await fs.writeFile(fusedTxtPath, fusedContext.prompt);
-      contextPaths.push(fusedJsonPath, fusedTxtPath);
+      let fusedContext = builtContext.fusedContext;
+      const contextPack = builtContext.contextPack;
+      contextPaths.push(...builtContext.contextPaths);
 
       const noopAcceptance = await shouldAcceptEmptyDiffAsNoopForSatisfiedStep({
         step,
@@ -3395,23 +3125,12 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
                 touchedFiles,
                 baseSignals,
               });
-              fusedContext = fuser.fuse({
-                goal: planContextText,
-                repoPack: contextPack || { items: [], totalChars: 0, estimatedTokens: 0 },
+              fusedContext = this.contextBuilder.fuseContext({
+                goalText: planContextText,
+                contextPack,
                 memoryHits,
                 signals: stepSignals,
                 contextStack: contextStack.store?.getAllFrames(),
-                budgets: {
-                  maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
-                  maxMemoryChars: this.config.memory?.maxChars ?? 2000,
-                  maxSignalsChars: 1000,
-                  maxContextStackChars: this.config.contextStack?.enabled
-                    ? this.config.contextStack.promptBudgetChars
-                    : 0,
-                  maxContextStackFrames: this.config.contextStack?.enabled
-                    ? this.config.contextStack.promptMaxFrames
-                    : 0,
-                },
               });
               stepContext.fusedContext = fusedContext;
             }

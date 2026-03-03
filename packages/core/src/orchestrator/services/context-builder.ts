@@ -3,18 +3,25 @@ import {
   SnippetExtractor,
   SimpleContextPacker,
   ContextSignal,
+  SemanticIndexStore,
+  SemanticSearchService,
+  type SemanticHit,
 } from '@orchestrator/repo';
 import type { Config } from '@orchestrator/shared';
+import type { ContextStackFrame } from '@orchestrator/shared';
 import type { EventBus } from '../../registry';
 import { SimpleContextFuser } from '../../context';
 import type { FusedContext } from '../../context';
 import type { MemoryEntry } from '@orchestrator/memory';
+import { createEmbedder } from '@orchestrator/adapters';
 import path from 'path';
-import * as fs from 'fs/promises';
+import fs from 'fs/promises';
+import * as fsSync from 'fs';
 
 export interface ContextBuildResult {
   fusedContext: FusedContext;
   contextPack?: ReturnType<SimpleContextPacker['pack']>;
+  contextPaths: string[];
 }
 
 /**
@@ -26,38 +33,216 @@ export class ContextBuilderService {
     private readonly repoRoot: string,
   ) {}
 
+  fuseContext(options: {
+    goalText: string;
+    contextPack?: ReturnType<SimpleContextPacker['pack']>;
+    memoryHits: MemoryEntry[];
+    signals: ContextSignal[];
+    contextStack?: ContextStackFrame[];
+  }): FusedContext {
+    const fuser = new SimpleContextFuser(this.config.security);
+
+    const stackEnabled = this.config.contextStack?.enabled ?? false;
+    const fusionBudgets = {
+      maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
+      maxMemoryChars: this.config.memory?.maxChars ?? 2000,
+      maxSignalsChars: 1000,
+      maxContextStackChars: stackEnabled ? this.config.contextStack.promptBudgetChars : 0,
+      maxContextStackFrames: stackEnabled ? this.config.contextStack.promptMaxFrames : 0,
+    };
+
+    return fuser.fuse({
+      goal: options.goalText,
+      repoPack: options.contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
+      memoryHits: options.memoryHits,
+      signals: options.signals,
+      contextStack: options.contextStack,
+      budgets: fusionBudgets,
+    });
+  }
+
+  private async measure<T>(
+    name: string,
+    eventBus: EventBus,
+    runId: string,
+    fn: () => T | Promise<T>,
+    metadataFn?: (result: T) => Record<string, unknown>,
+  ): Promise<T> {
+    const start = Date.now();
+    const result = await fn();
+    const durationMs = Date.now() - start;
+    await eventBus.emit({
+      type: 'PerformanceMeasured',
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId,
+      payload: {
+        name,
+        durationMs,
+        metadata: metadataFn ? metadataFn(result) : undefined,
+      },
+    });
+    return result;
+  }
+
+  private async semanticSearch(options: {
+    query: string;
+    eventBus: EventBus;
+    runId: string;
+    artifactsRoot: string;
+    stepIndex: number;
+  }): Promise<{
+    hits: SemanticHit[];
+    matches: Array<{ path: string; line: number; score: number }>;
+  }> {
+    const semanticConfig = this.config.indexing?.semantic;
+    if (!semanticConfig?.enabled) return { hits: [], matches: [] };
+
+    let store: SemanticIndexStore | undefined;
+    try {
+      const semanticDbPath = path.isAbsolute(semanticConfig.storage.path)
+        ? semanticConfig.storage.path
+        : path.join(this.repoRoot, semanticConfig.storage.path);
+
+      if (!fsSync.existsSync(semanticDbPath)) {
+        return { hits: [], matches: [] };
+      }
+
+      store = new SemanticIndexStore();
+      store.init(semanticDbPath);
+
+      const embedder = createEmbedder(semanticConfig.embeddings);
+
+      const meta = store.getMeta();
+      if (meta?.embedderId && meta.embedderId !== embedder.id()) {
+        console.warn(
+          `Semantic index embedder mismatch: index=${meta.embedderId} config=${embedder.id()}. Results may be degraded.`,
+        );
+      }
+
+      const semanticSearchService = new SemanticSearchService({
+        store,
+        embedder,
+        eventBus: options.eventBus,
+      });
+
+      const topK = 5;
+      const hits = await this.measure(
+        'semantic_search',
+        options.eventBus,
+        options.runId,
+        () => semanticSearchService.search(options.query, topK, options.runId),
+        (h) => ({ hitCount: h.length }),
+      );
+
+      if (hits.length > 0) {
+        const hitsArtifactPath = path.join(
+          options.artifactsRoot,
+          `semantic_hits_step_${options.stepIndex}.json`,
+        );
+        await fs.writeFile(hitsArtifactPath, JSON.stringify(hits, null, 2));
+      }
+
+      const matches = hits.map((hit) => ({
+        path: hit.path,
+        line: hit.startLine,
+        score: hit.score,
+      }));
+
+      return { hits, matches };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      await options.eventBus.emit({
+        type: 'SemanticSearchFailed',
+        schemaVersion: 1,
+        runId: options.runId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          error: message,
+        },
+      });
+      return { hits: [], matches: [] };
+    } finally {
+      store?.close();
+    }
+  }
+
   /**
    * Build fused context for a step
    */
   async buildStepContext(options: {
     goal: string;
+    goalText?: string;
     step: string;
+    query?: string;
     touchedFiles: Set<string>;
     memoryHits: MemoryEntry[];
     signals: ContextSignal[];
+    contextStack?: ContextStackFrame[];
     eventBus: EventBus;
     runId: string;
     artifactsRoot: string;
     stepsCompleted: number;
   }): Promise<ContextBuildResult> {
-    const { goal, step, touchedFiles, memoryHits, signals, artifactsRoot, stepsCompleted } =
-      options;
+    const {
+      goal,
+      goalText,
+      step,
+      touchedFiles,
+      memoryHits,
+      signals,
+      artifactsRoot,
+      stepsCompleted,
+      contextStack,
+    } = options;
+    const query = options.query ?? step;
+    const goalForFusion = goalText ?? `Goal: ${goal}\nCurrent Step: ${step}`;
 
     let contextPack: ReturnType<SimpleContextPacker['pack']> | undefined;
+    const contextPaths: string[] = [];
 
     try {
       const searchService = new SearchService(this.config.context?.rgPath);
-      const searchResults = await searchService.search({
-        query: step,
-        cwd: this.repoRoot,
-        maxMatchesPerFile: 5,
-        fixedStrings: true,
-      });
+      const searchResults = await this.measure(
+        'lexical_search',
+        options.eventBus,
+        options.runId,
+        () =>
+          searchService.search({
+            query,
+            cwd: this.repoRoot,
+            maxMatchesPerFile: 5,
+            fixedStrings: true,
+          }),
+        (r) => ({ matchCount: r.matches.length }),
+      );
 
       const lexicalMatches = searchResults.matches;
 
+      const semantic = await this.semanticSearch({
+        query,
+        eventBus: options.eventBus,
+        runId: options.runId,
+        artifactsRoot,
+        stepIndex: stepsCompleted,
+      });
+
+      if (semantic.hits.length > 0) {
+        contextPaths.push(path.join(artifactsRoot, `semantic_hits_step_${stepsCompleted}.json`));
+      }
+
       // Build all matches including touched files
-      const allMatches = [...lexicalMatches];
+      const allMatches = [
+        ...lexicalMatches,
+        ...semantic.matches.map((h) => ({
+          path: h.path,
+          line: h.line,
+          column: 0,
+          matchText: 'SEMANTIC_MATCH',
+          lineText: '',
+          score: h.score,
+        })),
+      ];
 
       for (const touched of touchedFiles) {
         allMatches.push({
@@ -76,35 +261,35 @@ export class ContextBuilderService {
         : allMatches;
 
       const extractor = new SnippetExtractor();
-      const candidates = await extractor.extractSnippets(limitedMatches, { cwd: this.repoRoot });
+      const candidates = await this.measure(
+        'snippet_extraction',
+        options.eventBus,
+        options.runId,
+        () => extractor.extractSnippets(limitedMatches, { cwd: this.repoRoot }),
+        (c) => ({ candidateCount: c.length }),
+      );
 
       const packer = new SimpleContextPacker();
-      contextPack = packer.pack(step, signals, candidates, {
-        tokenBudget: this.config.context?.tokenBudget || 8000,
-      });
+      contextPack = await this.measure(
+        'context_packing',
+        options.eventBus,
+        options.runId,
+        () =>
+          packer.pack(query, signals, candidates, {
+            tokenBudget: this.config.context?.tokenBudget || 8000,
+          }),
+        (p) => ({ itemCount: p.items.length, estimatedTokens: p.estimatedTokens }),
+      );
     } catch {
       // Ignore context errors
     }
 
-    const fuser = new SimpleContextFuser(this.config.security);
-    const fusionBudgets = {
-      maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
-      maxMemoryChars: this.config.memory?.maxChars ?? 2000,
-      maxSignalsChars: 1000,
-      maxContextStackChars: this.config.contextStack?.enabled
-        ? this.config.contextStack.promptBudgetChars
-        : 0,
-      maxContextStackFrames: this.config.contextStack?.enabled
-        ? this.config.contextStack.promptMaxFrames
-        : 0,
-    };
-
-    const fusedContext = fuser.fuse({
-      goal: `Goal: ${goal}\nCurrent Step: ${step}`,
-      repoPack: contextPack ?? { items: [], totalChars: 0, estimatedTokens: 0 },
+    const fusedContext = this.fuseContext({
+      goalText: goalForFusion,
+      contextPack,
       memoryHits,
       signals,
-      budgets: fusionBudgets,
+      contextStack,
     });
 
     // Save context artifacts
@@ -120,8 +305,9 @@ export class ContextBuilderService {
 
     await fs.writeFile(fusedJsonPath, JSON.stringify(fusedContext.metadata, null, 2));
     await fs.writeFile(fusedTxtPath, fusedContext.prompt);
+    contextPaths.push(fusedJsonPath, fusedTxtPath);
 
-    return { fusedContext, contextPack };
+    return { fusedContext, contextPack, contextPaths };
   }
 
   /**
