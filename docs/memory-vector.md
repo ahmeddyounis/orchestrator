@@ -23,7 +23,6 @@ Embeddings are configured via `memory.vector.embedder` (for example: `memory.vec
 1.  **`local-hash` (Default):** A simple, fast, and entirely local method that generates a hash-based representation. This does not require any external services or API keys. It provides basic semantic capabilities but is less sophisticated than provider-based embeddings.
 
 2.  **Provider-based (`openai`):** Uses an external embedding model from OpenAI. This produces higher-quality embeddings, leading to better search results. However, it requires sending content to a third-party API and may incur costs.
-
     - Requires `OPENAI_API_KEY` to be set in your environment.
 
 ### Privacy and Data Storage
