@@ -57,6 +57,7 @@ import {
   ContextBuilderService,
   ContextStackService,
   RunMemoryService,
+  RunSummaryService,
   VerificationService,
   shouldAllowEmptyDiffForStep,
   shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
@@ -122,6 +123,7 @@ export class Orchestrator {
   private contextBuilder: ContextBuilderService;
   private contextStackService: ContextStackService;
   private runMemoryService: RunMemoryService;
+  private runSummaryService: RunSummaryService;
   private indexAutoUpdate: IndexAutoUpdateService;
   private escalationCount = 0;
 
@@ -140,6 +142,10 @@ export class Orchestrator {
     this.contextBuilder = new ContextBuilderService(this.config, this.repoRoot);
     this.contextStackService = new ContextStackService(this.config, this.repoRoot);
     this.runMemoryService = new RunMemoryService(this.config, this.repoRoot, this.git);
+    this.runSummaryService = new RunSummaryService(this.config, this.repoRoot, {
+      costTracker: this.costTracker,
+      toolPolicy: this.toolPolicy,
+    });
     this.indexAutoUpdate = new IndexAutoUpdateService({
       config: this.config,
       repoRoot: this.repoRoot,
@@ -200,118 +206,6 @@ export class Orchestrator {
       eventBus,
       suppress: this.suppressEpisodicMemoryWrite,
     });
-  }
-
-  private async _buildRunSummary(
-    runId: string,
-    goal: string,
-    startTime: number,
-    status: 'success' | 'failure',
-    options: RunOptions,
-    runResult: Partial<RunResult>,
-    artifacts: {
-      root: string;
-      trace: string;
-      summary: string;
-      patchesDir: string;
-      manifest: string;
-    },
-    l3Metadata?: {
-      bestOfN: number;
-      candidatesGenerated: number;
-      candidatesEvaluated: number;
-      selectedCandidateId?: string;
-      passingCandidateSelected: boolean;
-      reviewerInvoked: boolean;
-      judgeInvoked: boolean;
-      judgeInvocationReason?: string;
-      evaluationReportPaths?: string[];
-      selectionRankingPath?: string;
-    },
-  ): Promise<RunSummary> {
-    const finishedAt = new Date();
-    const patchStats = runResult.filesChanged
-      ? {
-          filesChanged: runResult.filesChanged.length,
-          linesAdded: 0, // Note: Not easily available, default to 0
-          linesDeleted: 0, // Note: Not easily available, default to 0
-          finalDiffPath:
-            runResult.patchPaths && runResult.patchPaths.length > 0
-              ? runResult.patchPaths[runResult.patchPaths.length - 1]
-              : undefined,
-        }
-      : undefined;
-
-    const costSummary = this.costTracker?.getSummary();
-
-    return {
-      schemaVersion: 1,
-      runId,
-      command: ['run', goal],
-      goal,
-      repoRoot: this.repoRoot,
-      repoId: this.repoRoot, // Consider a more stable repo ID
-      startedAt: new Date(startTime).toISOString(),
-      finishedAt: finishedAt.toISOString(),
-      durationMs: finishedAt.getTime() - startTime,
-      status,
-      stopReason: runResult.stopReason,
-      thinkLevel: parseInt(options.thinkLevel.slice(1), 10),
-      escalated: this.escalationCount > 0,
-      selectedProviders: {
-        planner: this.config.defaults?.planner || 'default',
-        executor: this.config.defaults?.executor || 'default',
-        reviewer: this.config.defaults?.reviewer,
-      },
-      budgets: {
-        maxIterations: this.config.budget?.iter ?? DEFAULT_BUDGET.iter,
-        maxToolRuns: 999, // Not yet implemented
-        maxWallTimeMs: this.config.budget?.time ?? DEFAULT_BUDGET.time,
-        maxCostUsd: this.config.budget?.cost,
-      },
-      patchStats,
-      verification: runResult.verification
-        ? {
-            enabled: runResult.verification.enabled,
-            passed: runResult.verification.passed,
-            failedChecks: runResult.verification.failedChecks?.length,
-            reportPaths: runResult.verification.reportPaths,
-          }
-        : undefined,
-      tools: {
-        enabled: this.toolPolicy !== undefined,
-        runs: [], // Not yet implemented
-      },
-      memory: {
-        enabled: this.config.memory?.enabled ?? false,
-        // Deferring detailed stats for now
-      },
-      indexing: {
-        enabled: this.config.indexing?.enabled ?? false,
-        autoUpdated: false, // Deferring detailed stats for now
-      },
-      costs: {
-        perProvider: costSummary?.providers || {},
-        totals: {
-          inputTokens: costSummary?.total.inputTokens || 0,
-          outputTokens: costSummary?.total.outputTokens || 0,
-          totalTokens: costSummary?.total.totalTokens || 0,
-          estimatedCostUsd: costSummary?.total.estimatedCostUsd ?? null,
-        },
-      },
-      artifacts: {
-        manifestPath: artifacts.manifest,
-        tracePath: artifacts.trace,
-        patchPaths: runResult.patchPaths,
-        contextPaths: [], // Not yet implemented
-        toolLogPaths: [], // Not yet implemented
-      },
-      telemetry: {
-        enabled: this.config.telemetry?.enabled ?? false,
-        mode: this.config.telemetry?.mode ?? 'local',
-      },
-      l3: l3Metadata,
-    };
   }
 
   async runL0(goal: string, runId: string): Promise<RunResult> {
@@ -496,15 +390,16 @@ END_DIFF
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        'failure',
-        { thinkLevel: 'L0' },
+        status: 'failure',
+        thinkLevel: 'L0',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       try {
@@ -548,15 +443,16 @@ END_DIFF
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        'failure',
-        { thinkLevel: 'L0' },
+        status: 'failure',
+        thinkLevel: 'L0',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       try {
@@ -703,15 +599,16 @@ END_DIFF
       };
     }
 
-    const summary = await this._buildRunSummary(
+    const summary = this.runSummaryService.build({
       runId,
       goal,
       startTime,
-      runResult.status,
-      { thinkLevel: 'L0' },
+      status: runResult.status,
+      thinkLevel: 'L0',
       runResult,
       artifacts,
-    );
+      escalationCount: this.escalationCount,
+    });
     await SummaryWriter.write(summary, artifacts.root);
 
     try {
@@ -867,15 +764,16 @@ END_DIFF
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        'failure',
-        { thinkLevel: 'L1' },
+        status: 'failure',
+        thinkLevel: 'L1',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
@@ -973,15 +871,16 @@ END_DIFF
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
         status,
-        { thinkLevel: 'L1' },
+        thinkLevel: 'L1',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
@@ -1411,15 +1310,16 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
     }
 
     if (l1Result.stopReason === 'budget_exceeded') {
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        l1Result.status,
-        { thinkLevel: 'L2' },
-        l1Result,
+        status: l1Result.status,
+        thinkLevel: 'L2',
+        runResult: l1Result,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await this.writeEpisodicMemory(
         summary,
         {
@@ -1433,15 +1333,16 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        l1Result.status,
-        { thinkLevel: 'L2' },
-        l1Result,
+        status: l1Result.status,
+        thinkLevel: 'L2',
+        runResult: l1Result,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await this.writeEpisodicMemory(
         summary,
         {
@@ -1494,15 +1395,16 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        'success',
-        { thinkLevel: 'L2' },
+        status: 'success',
+        thinkLevel: 'L2',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
@@ -1606,15 +1508,16 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
             lastFailureSignature: verification.failureSignature,
           };
 
-          const summary = await this._buildRunSummary(
+          const summary = this.runSummaryService.build({
             runId,
             goal,
             startTime,
-            'failure',
-            { thinkLevel: 'L2' },
+            status: 'failure',
+            thinkLevel: 'L2',
             runResult,
             artifacts,
-          );
+            escalationCount: this.escalationCount,
+          });
           await SummaryWriter.write(summary, artifacts.root);
 
           await this.writeEpisodicMemory(
@@ -1977,15 +1880,16 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           },
         };
 
-        const summary = await this._buildRunSummary(
+        const summary = this.runSummaryService.build({
           runId,
           goal,
           startTime,
-          'success',
-          { thinkLevel: 'L2' },
+          status: 'success',
+          thinkLevel: 'L2',
           runResult,
           artifacts,
-        );
+          escalationCount: this.escalationCount,
+        });
         await SummaryWriter.write(summary, artifacts.root);
 
         await this.writeEpisodicMemory(
@@ -2038,15 +1942,16 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
       lastFailureSignature: verification.failureSignature,
     };
 
-    const summary = await this._buildRunSummary(
+    const summary = this.runSummaryService.build({
       runId,
       goal,
       startTime,
-      'failure',
-      { thinkLevel: 'L2' },
+      status: 'failure',
+      thinkLevel: 'L2',
       runResult,
       artifacts,
-    );
+      escalationCount: this.escalationCount,
+    });
     await SummaryWriter.write(summary, artifacts.root);
 
     await this.writeEpisodicMemory(
@@ -2147,15 +2052,16 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        'failure',
-        { thinkLevel: 'L3' },
+        status: 'failure',
+        thinkLevel: 'L3',
         runResult,
         artifacts,
-      );
+        escalationCount: this.escalationCount,
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
@@ -2352,16 +2258,17 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
         },
       };
 
-      const summary = await this._buildRunSummary(
+      const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
         status,
-        { thinkLevel: 'L3' },
+        thinkLevel: 'L3',
         runResult,
         artifacts,
+        escalationCount: this.escalationCount,
         l3Metadata,
-      );
+      });
       await SummaryWriter.write(summary, artifacts.root);
 
       await this.writeEpisodicMemory(
