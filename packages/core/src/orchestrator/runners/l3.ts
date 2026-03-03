@@ -1,6 +1,5 @@
 import { ContextSignal, GitService, PatchApplier, SimpleContextPacker } from '@orchestrator/repo';
 import type { Config, ToolPolicy } from '@orchestrator/shared';
-import { SummaryWriter } from '@orchestrator/shared';
 import type { UserInterface } from '@orchestrator/exec';
 import fs from 'fs/promises';
 import * as fsSync from 'fs';
@@ -25,13 +24,17 @@ import { Diagnoser } from '../l3/diagnoser';
 import { ProceduralMemoryImpl } from '../procedural_memory';
 import { VerificationRunner } from '../../verify/runner';
 import type { VerificationProfile } from '../../verify/types';
-import type { ContextBuilderService, ContextStackService } from '../services';
-import { buildContextSignals, shouldAcceptEmptyDiffAsNoopForSatisfiedStep } from '../services';
-import type {
-  RunFinalizerService,
-  RunInitializationService,
-  RunMemoryService,
-  RunSummaryService,
+import {
+  buildContextSignals,
+  createRunSession,
+  shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
+  type ContextBuilderService,
+  type ContextStackService,
+  type RunFinalizerService,
+  type RunInitializationService,
+  type RunMemoryService,
+  type RunSession,
+  type RunSummaryService,
 } from '../services';
 import { readPlanExecutionSteps } from './plan-execution';
 
@@ -53,23 +56,85 @@ export interface RunL3Deps {
   suppressEpisodicMemoryWrite: boolean;
 }
 
-export async function runL3(goal: string, runId: string, deps: RunL3Deps): Promise<RunResult> {
-  const startTime = Date.now();
-  const runContext = await deps.initService.initializeRun(runId, goal);
-  const { artifacts, logger, eventBus: eventBusObj } = runContext;
-  const contextStack = await deps.contextStackService.setupForRun({
-    runId,
-    artifactsRoot: artifacts.root,
-    eventBus: eventBusObj,
-  });
+export interface RunL3Options {
+  session?: RunSession;
+  emitRunStarted?: boolean;
+  initializeManifest?: boolean;
+}
+
+export async function runL3(
+  goal: string,
+  runId: string,
+  deps: RunL3Deps,
+  options: RunL3Options = {},
+): Promise<RunResult> {
+  const session =
+    options.session ??
+    (await createRunSession({
+      runId,
+      goal,
+      initService: deps.initService,
+      contextStackService: deps.contextStackService,
+    }));
+
+  const { runContext, contextStack } = session;
+  const { artifacts, logger } = runContext;
   const eventBus = contextStack.eventBus;
   deps.registry.bindEventBus?.(eventBus, runId);
   const baseRef = await deps.git.getHeadSha();
 
-  await deps.initService.emitRunStarted(eventBus, runId, goal);
+  const startTime = runContext.startTime;
 
-  // Initialize manifest
-  await deps.initService.initializeManifest(artifacts, runId, goal, true);
+  if (options.emitRunStarted ?? true) {
+    await deps.initService.emitRunStarted(eventBus, runId, goal);
+  }
+
+  if (options.initializeManifest ?? true) {
+    await deps.initService.initializeManifest(artifacts, runId, goal, true);
+  }
+
+  // L3 metadata tracking
+  const l3Metadata = {
+    bestOfN: deps.config.l3?.bestOfN ?? 3,
+    candidatesGenerated: 0,
+    candidatesEvaluated: 0,
+    selectedCandidateId: undefined as string | undefined,
+    passingCandidateSelected: false,
+    reviewerInvoked: false,
+    judgeInvoked: false,
+    judgeInvocationReason: undefined as string | undefined,
+    evaluationReportPaths: [] as string[],
+    selectionRankingPath: undefined as string | undefined,
+  };
+
+  const patchPaths: string[] = [];
+  const contextPaths: string[] = [];
+  const touchedFiles = new Set<string>();
+
+  const finish = async (
+    status: 'success' | 'failure',
+    stopReason: RunResult['stopReason'] | undefined,
+    summaryMsg: string,
+  ): Promise<RunResult> => {
+    return deps.runFinalizerService.finalize({
+      runId,
+      goal,
+      startTime,
+      status,
+      thinkLevel: 'L3',
+      stopReason,
+      summaryMsg,
+      artifacts,
+      baseRef,
+      patchPaths,
+      contextPaths,
+      touchedFiles,
+      eventBus,
+      escalationCount: deps.escalationCount,
+      l3Metadata,
+      suppressEpisodicMemoryWrite: deps.suppressEpisodicMemoryWrite,
+    });
+  };
 
   const plannerId = deps.config.defaults?.planner || 'openai';
   const executorId = deps.config.defaults?.executor || 'openai';
@@ -116,51 +181,7 @@ export async function runL3(goal: string, runId: string, deps: RunL3Deps): Promi
   );
 
   if (steps.length === 0) {
-    const msg = 'Planning failed to produce any steps.';
-    await eventBus.emit({
-      type: 'RunFinished',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { status: 'failure', summary: msg },
-    });
-
-    const runResult: RunResult = {
-      status: 'failure',
-      runId,
-      summary: msg,
-      memory: deps.config.memory,
-      verification: {
-        enabled: false,
-        passed: false,
-        summary: 'Not run',
-      },
-    };
-
-    const summary = deps.runSummaryService.build({
-      runId,
-      goal,
-      startTime,
-      status: 'failure',
-      thinkLevel: 'L3',
-      runResult,
-      artifacts,
-      escalationCount: deps.escalationCount,
-    });
-    await SummaryWriter.write(summary, artifacts.root);
-
-    await deps.runMemoryService.writeEpisodicMemory(
-      summary,
-      {
-        artifactsRoot: artifacts.root,
-      },
-      {
-        eventBus,
-        suppress: deps.suppressEpisodicMemoryWrite,
-      },
-    );
-
-    return runResult;
+    return finish('failure', undefined, 'Planning failed to produce any steps.');
   }
 
   const executionSteps = await readPlanExecutionSteps(artifacts.root, steps);
@@ -175,20 +196,6 @@ export async function runL3(goal: string, runId: string, deps: RunL3Deps): Promi
   );
 
   const budget = { ...DEFAULT_BUDGET, ...deps.config.budget };
-
-  // L3 metadata tracking
-  const l3Metadata = {
-    bestOfN: deps.config.l3?.bestOfN ?? 3,
-    candidatesGenerated: 0,
-    candidatesEvaluated: 0,
-    selectedCandidateId: undefined as string | undefined,
-    passingCandidateSelected: false,
-    reviewerInvoked: false,
-    judgeInvoked: false,
-    judgeInvocationReason: undefined as string | undefined,
-    evaluationReportPaths: [] as string[],
-    selectionRankingPath: undefined as string | undefined,
-  };
 
   // Set up verification runner for candidate evaluation
   const proceduralMemory = new ProceduralMemoryImpl(deps.config, deps.repoRoot);
@@ -240,9 +247,6 @@ export async function runL3(goal: string, runId: string, deps: RunL3Deps): Promi
   );
 
   let stepsCompleted = 0;
-  const patchPaths: string[] = [];
-  const contextPaths: string[] = [];
-  const touchedFiles = new Set<string>();
 
   const baseSignals: ContextSignal[] = [];
   let consecutiveInvalidDiffs = 0;
@@ -285,31 +289,6 @@ export async function runL3(goal: string, runId: string, deps: RunL3Deps): Promi
       // Non-fatal
     }
   }
-
-  const finish = async (
-    status: 'success' | 'failure',
-    stopReason: RunResult['stopReason'] | undefined,
-    summaryMsg: string,
-  ): Promise<RunResult> => {
-    return deps.runFinalizerService.finalize({
-      runId,
-      goal,
-      startTime,
-      status,
-      thinkLevel: 'L3',
-      stopReason,
-      summaryMsg,
-      artifacts,
-      baseRef,
-      patchPaths,
-      contextPaths,
-      touchedFiles,
-      eventBus,
-      escalationCount: deps.escalationCount,
-      l3Metadata,
-      suppressEpisodicMemoryWrite: deps.suppressEpisodicMemoryWrite,
-    });
-  };
 
   for (const execStep of executionSteps) {
     const { step, ancestors, id: stepId } = execStep;

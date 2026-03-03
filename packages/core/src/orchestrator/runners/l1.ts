@@ -1,5 +1,5 @@
 import { PatchApplier } from '@orchestrator/repo';
-import { SummaryWriter } from '@orchestrator/shared';
+import { updateManifest } from '@orchestrator/shared';
 import fs from 'fs/promises';
 import path from 'path';
 import { ExecutionService } from '../../exec/service';
@@ -11,19 +11,20 @@ import { ResearchService } from '../../research/service';
 import type { ProviderRegistry } from '../../registry';
 import { DEFAULT_BUDGET } from '../../config/budget';
 import type { RunResult } from '../../orchestrator';
-import type { ContextBuilderService, ContextStackService } from '../services';
 import {
   buildContextSignals,
   buildPatchApplyRetryContext,
+  createRunSession,
   extractPatchErrorKind,
   shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
   shouldAllowEmptyDiffForStep,
-} from '../services';
-import type {
-  RunFinalizerService,
-  RunInitializationService,
-  RunMemoryService,
-  RunSummaryService,
+  type ContextBuilderService,
+  type ContextStackService,
+  type RunFinalizerService,
+  type RunInitializationService,
+  type RunMemoryService,
+  type RunSession,
+  type RunSummaryService,
 } from '../services';
 import { readPlanExecutionSteps } from './plan-execution';
 
@@ -43,23 +44,97 @@ export interface RunL1Deps {
   suppressEpisodicMemoryWrite: boolean;
 }
 
-export async function runL1(goal: string, runId: string, deps: RunL1Deps): Promise<RunResult> {
-  const startTime = Date.now();
-  const runContext = await deps.initService.initializeRun(runId, goal);
-  const { artifacts, logger, eventBus: eventBusObj } = runContext;
-  const contextStack = await deps.contextStackService.setupForRun({
-    runId,
-    artifactsRoot: artifacts.root,
-    eventBus: eventBusObj,
-  });
+export interface RunL1Options {
+  session?: RunSession;
+  emitRunStarted?: boolean;
+  initializeManifest?: boolean;
+  finalizeRun?: boolean;
+}
+
+export async function runL1(
+  goal: string,
+  runId: string,
+  deps: RunL1Deps,
+  options: RunL1Options = {},
+): Promise<RunResult> {
+  const session =
+    options.session ??
+    (await createRunSession({
+      runId,
+      goal,
+      initService: deps.initService,
+      contextStackService: deps.contextStackService,
+    }));
+
+  const { runContext, contextStack } = session;
+  const { artifacts, logger } = runContext;
   const eventBus = contextStack.eventBus;
   deps.registry.bindEventBus?.(eventBus, runId);
   const baseRef = await deps.git.getHeadSha();
 
-  await deps.initService.emitRunStarted(eventBus, runId, goal);
+  const startTime = runContext.startTime;
 
-  // Initialize manifest
-  await deps.initService.initializeManifest(artifacts, runId, goal, true);
+  if (options.emitRunStarted ?? true) {
+    await deps.initService.emitRunStarted(eventBus, runId, goal);
+  }
+
+  if (options.initializeManifest ?? true) {
+    await deps.initService.initializeManifest(artifacts, runId, goal, true);
+  }
+
+  const patchPaths: string[] = [];
+  const contextPaths: string[] = [];
+  const touchedFiles = new Set<string>();
+
+  const finish = async (
+    status: 'success' | 'failure',
+    stopReason: RunResult['stopReason'] | undefined,
+    summaryMsg: string,
+  ): Promise<RunResult> => {
+    if (options.finalizeRun ?? true) {
+      return deps.runFinalizerService.finalize({
+        runId,
+        goal,
+        startTime,
+        status,
+        thinkLevel: 'L1',
+        stopReason,
+        summaryMsg,
+        artifacts,
+        baseRef,
+        patchPaths,
+        contextPaths,
+        touchedFiles,
+        eventBus,
+        escalationCount: deps.escalationCount,
+        suppressEpisodicMemoryWrite: deps.suppressEpisodicMemoryWrite,
+      });
+    }
+
+    try {
+      await updateManifest(artifacts.manifest, (manifest) => {
+        manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
+        manifest.contextPaths = [...(manifest.contextPaths ?? []), ...contextPaths];
+      });
+    } catch {
+      // Non-fatal: artifact updates should not fail the run.
+    }
+
+    return {
+      status,
+      runId,
+      summary: summaryMsg,
+      filesChanged: Array.from(touchedFiles),
+      patchPaths,
+      stopReason,
+      memory: deps.config.memory,
+      verification: {
+        enabled: false,
+        passed: false,
+        summary: 'Not run',
+      },
+    };
+  };
 
   const plannerId = deps.config.defaults?.planner || 'openai';
   const executorId = deps.config.defaults?.executor || 'openai';
@@ -106,51 +181,7 @@ export async function runL1(goal: string, runId: string, deps: RunL1Deps): Promi
   );
 
   if (steps.length === 0) {
-    const msg = 'Planning failed to produce any steps.';
-    await eventBus.emit({
-      type: 'RunFinished',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { status: 'failure', summary: msg },
-    });
-
-    const runResult: RunResult = {
-      status: 'failure',
-      runId,
-      summary: msg,
-      memory: deps.config.memory,
-      verification: {
-        enabled: false,
-        passed: false,
-        summary: 'Not run',
-      },
-    };
-
-    const summary = deps.runSummaryService.build({
-      runId,
-      goal,
-      startTime,
-      status: 'failure',
-      thinkLevel: 'L1',
-      runResult,
-      artifacts,
-      escalationCount: deps.escalationCount,
-    });
-    await SummaryWriter.write(summary, artifacts.root);
-
-    await deps.runMemoryService.writeEpisodicMemory(
-      summary,
-      {
-        artifactsRoot: artifacts.root,
-      },
-      {
-        eventBus,
-        suppress: deps.suppressEpisodicMemoryWrite,
-      },
-    );
-
-    return runResult;
+    return finish('failure', undefined, 'Planning failed to produce any steps.');
   }
 
   const executionSteps = await readPlanExecutionSteps(artifacts.root, steps);
@@ -173,33 +204,6 @@ export async function runL1(goal: string, runId: string, deps: RunL1Deps): Promi
     error: string;
     stopReason?: RunResult['stopReason'];
   }> = [];
-  const patchPaths: string[] = [];
-  const contextPaths: string[] = [];
-  const touchedFiles = new Set<string>();
-
-  const finish = async (
-    status: 'success' | 'failure',
-    stopReason: RunResult['stopReason'] | undefined,
-    summaryMsg: string,
-  ): Promise<RunResult> => {
-    return deps.runFinalizerService.finalize({
-      runId,
-      goal,
-      startTime,
-      status,
-      thinkLevel: 'L1',
-      stopReason,
-      summaryMsg,
-      artifacts,
-      baseRef,
-      patchPaths,
-      contextPaths,
-      touchedFiles,
-      eventBus,
-      escalationCount: deps.escalationCount,
-      suppressEpisodicMemoryWrite: deps.suppressEpisodicMemoryWrite,
-    });
-  };
 
   const maxStepAttempts = deps.config.execution?.maxStepAttempts ?? 6;
   const continueOnStepFailure = deps.config.execution?.continueOnStepFailure ?? false;
