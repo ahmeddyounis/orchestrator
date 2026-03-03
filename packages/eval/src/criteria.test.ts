@@ -6,12 +6,14 @@ import * as path from 'path';
 import { vi } from 'vitest';
 
 describe('Success Criteria Evaluators', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..', '..');
+
   const mockSummary: RunSummary = {
     schemaVersion: 1,
     runId: 'test-run',
     command: ['run', 'goal'],
     goal: 'test goal',
-    repoRoot: process.cwd(),
+    repoRoot,
     startedAt: new Date().toISOString(),
     finishedAt: new Date().toISOString(),
     durationMs: 1000,
@@ -65,6 +67,14 @@ describe('Success Criteria Evaluators', () => {
       expect(result.passed).toBe(true);
     });
 
+    it('should pass if an absolute path is within repo root', async () => {
+      const result = await file_contains(mockSummary, {
+        path: testFile,
+        substring: 'hello',
+      });
+      expect(result.passed).toBe(true);
+    });
+
     it('should fail if file does not contain substring', async () => {
       const result = await file_contains(mockSummary, {
         path: path.relative(mockSummary.repoRoot, testFile),
@@ -95,6 +105,15 @@ describe('Success Criteria Evaluators', () => {
         substring: 'hello',
       });
       expect(result.passed).toBe(false);
+    });
+
+    it('should fail if path escapes repo root', async () => {
+      const result = await file_contains(mockSummary, {
+        path: path.join('..', 'package.json'),
+        substring: 'orchestrator-monorepo',
+      });
+      expect(result.passed).toBe(false);
+      expect(result.message).toContain('within repo root');
     });
   });
 

@@ -8,6 +8,17 @@ interface FileContainsDetails {
   regex?: string;
 }
 
+function resolveWithinRepo(repoRoot: string, requestedPath: string): string | null {
+  const root = path.resolve(repoRoot);
+  const resolved = path.resolve(root, requestedPath);
+  const rel = path.relative(root, resolved);
+
+  if (rel === '') return resolved;
+  if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return null;
+
+  return resolved;
+}
+
 function parseDetails(details: unknown): FileContainsDetails | null {
   if (!details || typeof details !== 'object') {
     return null;
@@ -42,7 +53,13 @@ export const file_contains: CriterionEvaluator = async (summary, details) => {
     };
   }
 
-  const filePath = path.join(summary.repoRoot, parsed.path);
+  const filePath = resolveWithinRepo(summary.repoRoot, parsed.path);
+  if (!filePath) {
+    return {
+      passed: false,
+      message: 'File path must be within repo root.',
+    };
+  }
 
   try {
     const content = await fs.readFile(filePath, 'utf-8');
