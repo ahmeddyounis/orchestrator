@@ -32,6 +32,18 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@orchestrator/*/*'],
+              message:
+                "Import from the package entrypoint (e.g. '@orchestrator/core') instead of deep imports; add an export in the package's public API if needed.",
+            },
+          ],
+        },
+      ],
     },
   },
   {
