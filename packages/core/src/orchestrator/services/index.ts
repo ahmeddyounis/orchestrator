@@ -4,6 +4,7 @@ export * from './context-stack';
 export * from './run-memory';
 export * from './run-finalizer';
 export * from './run-summary';
+export * from './run-session';
 export * from './types';
 export * from './verification-service';
 export * from './run-helpers';
