@@ -6,10 +6,14 @@ import { RateLimitError, TimeoutError, ConfigError } from '../errors';
 import { AdapterContext } from '../types';
 
 const mockCreate = vi.fn();
+const mockOpenAIConstructor = vi.fn();
 
 vi.mock('openai', () => {
   return {
     default: class MockOpenAI {
+      constructor(options: unknown) {
+        mockOpenAIConstructor(options);
+      }
       chat = {
         completions: {
           create: mockCreate,
@@ -43,6 +47,26 @@ describe('OpenAIAdapter', () => {
       model: 'gpt-4',
       api_key: 'test-key',
     });
+  });
+
+  it('passes baseURL and organization to the OpenAI client', () => {
+    vi.clearAllMocks();
+
+    new OpenAIAdapter({
+      type: 'openai',
+      model: 'gpt-4',
+      api_key: 'test-key',
+      baseURL: 'https://example.com',
+      organization: 'org_123',
+    } as any);
+
+    expect(mockOpenAIConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'test-key',
+        baseURL: 'https://example.com',
+        organization: 'org_123',
+      }),
+    );
   });
 
   it('generate returns text and usage', async () => {

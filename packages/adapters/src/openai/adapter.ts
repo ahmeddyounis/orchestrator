@@ -16,6 +16,7 @@ import { executeProviderRequest } from '../common';
 export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapter {
   private client: OpenAI;
   private model: string;
+  private defaultTimeoutMs?: number;
   protected readonly errorConfig: ErrorTypeConfig;
 
   constructor(config: ProviderConfig) {
@@ -27,9 +28,18 @@ export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapte
     }
     super();
     this.model = config.model;
+    this.defaultTimeoutMs = config.timeoutMs;
+
+    const baseURLRaw = (config as { baseURL?: unknown }).baseURL;
+    const baseURL = typeof baseURLRaw === 'string' ? baseURLRaw : undefined;
+
+    const organizationRaw = (config as { organization?: unknown }).organization;
+    const organization = typeof organizationRaw === 'string' ? organizationRaw : undefined;
+
     this.client = new OpenAI({
       apiKey,
-      baseURL: undefined, // Could be added to config if needed
+      baseURL,
+      organization,
     });
     this.errorConfig = {
       isAPIError: (error: unknown): error is APIErrorLike =>
@@ -60,7 +70,12 @@ export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapte
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    return executeProviderRequest(ctx, 'openai', this.model, async (signal) => {
+    const effectiveCtx: AdapterContext = {
+      ...ctx,
+      timeoutMs: ctx.timeoutMs ?? this.defaultTimeoutMs,
+    };
+
+    return executeProviderRequest(effectiveCtx, 'openai', this.model, async (signal) => {
       try {
         const messages = this.mapMessages(req.messages);
         const tools = this.mapTools(req.tools);
@@ -117,32 +132,42 @@ export class OpenAIAdapter extends BaseProviderAdapter implements ProviderAdapte
 
   async *stream(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent> {
     try {
-      const stream = await executeProviderRequest(ctx, 'openai', this.model, async (signal) => {
-        try {
-          const messages = this.mapMessages(req.messages);
-          const tools = this.mapTools(req.tools);
+      const effectiveCtx: AdapterContext = {
+        ...ctx,
+        timeoutMs: ctx.timeoutMs ?? this.defaultTimeoutMs,
+      };
 
-          return await this.client.chat.completions.create(
-            {
-              model: this.model,
-              messages,
-              tools: tools.length > 0 ? tools : undefined,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              tool_choice: req.toolChoice as any,
-              max_tokens: req.maxTokens,
-              temperature: req.temperature ?? 0.2,
-              response_format: req.jsonMode ? { type: 'json_object' } : undefined,
-              stream: true,
-              stream_options: { include_usage: true },
-            },
-            {
-              signal,
-            },
-          );
-        } catch (error) {
-          throw this.mapError(error);
-        }
-      });
+      const stream = await executeProviderRequest(
+        effectiveCtx,
+        'openai',
+        this.model,
+        async (signal) => {
+          try {
+            const messages = this.mapMessages(req.messages);
+            const tools = this.mapTools(req.tools);
+
+            return await this.client.chat.completions.create(
+              {
+                model: this.model,
+                messages,
+                tools: tools.length > 0 ? tools : undefined,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                tool_choice: req.toolChoice as any,
+                max_tokens: req.maxTokens,
+                temperature: req.temperature ?? 0.2,
+                response_format: req.jsonMode ? { type: 'json_object' } : undefined,
+                stream: true,
+                stream_options: { include_usage: true },
+              },
+              {
+                signal,
+              },
+            );
+          } catch (error) {
+            throw this.mapError(error);
+          }
+        },
+      );
 
       for await (const chunk of stream) {
         if (chunk.usage) {

@@ -17,6 +17,7 @@ import { executeProviderRequest } from '../common';
 export class AnthropicAdapter extends BaseProviderAdapter implements ProviderAdapter {
   private client: Anthropic;
   private model: string;
+  private defaultTimeoutMs?: number;
   protected readonly errorConfig: ErrorTypeConfig;
 
   constructor(config: ProviderConfig) {
@@ -28,8 +29,18 @@ export class AnthropicAdapter extends BaseProviderAdapter implements ProviderAda
     }
     super();
     this.model = config.model;
+    this.defaultTimeoutMs = config.timeoutMs;
+
+    const baseURLRaw = (config as { baseURL?: unknown }).baseURL;
+    const baseURL = typeof baseURLRaw === 'string' ? baseURLRaw : undefined;
+
+    const maxRetriesRaw = (config as { maxRetries?: unknown }).maxRetries;
+    const maxRetries = typeof maxRetriesRaw === 'number' ? maxRetriesRaw : undefined;
+
     this.client = new Anthropic({
       apiKey,
+      baseURL,
+      maxRetries,
     });
     this.errorConfig = {
       isAPIError: (error: unknown): error is APIErrorLike =>
@@ -61,7 +72,12 @@ export class AnthropicAdapter extends BaseProviderAdapter implements ProviderAda
   }
 
   async generate(req: ModelRequest, ctx: AdapterContext): Promise<ModelResponse> {
-    return executeProviderRequest(ctx, 'anthropic', this.model, async (signal) => {
+    const effectiveCtx: AdapterContext = {
+      ...ctx,
+      timeoutMs: ctx.timeoutMs ?? this.defaultTimeoutMs,
+    };
+
+    return executeProviderRequest(effectiveCtx, 'anthropic', this.model, async (signal) => {
       try {
         const { system, messages } = this.mapMessages(req.messages);
         const tools = this.mapTools(req.tools);
@@ -110,29 +126,39 @@ export class AnthropicAdapter extends BaseProviderAdapter implements ProviderAda
 
   async *stream(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent> {
     try {
-      const stream = await executeProviderRequest(ctx, 'anthropic', this.model, async (signal) => {
-        try {
-          const { system, messages } = this.mapMessages(req.messages);
-          const tools = this.mapTools(req.tools);
+      const effectiveCtx: AdapterContext = {
+        ...ctx,
+        timeoutMs: ctx.timeoutMs ?? this.defaultTimeoutMs,
+      };
 
-          return await this.client.messages.create(
-            {
-              model: this.model,
-              max_tokens: req.maxTokens || 1024,
-              system,
-              messages,
-              tools: tools.length > 0 ? tools : undefined,
-              temperature: req.temperature,
-              stream: true,
-            },
-            {
-              signal,
-            },
-          );
-        } catch (error) {
-          throw this.mapError(error);
-        }
-      });
+      const stream = await executeProviderRequest(
+        effectiveCtx,
+        'anthropic',
+        this.model,
+        async (signal) => {
+          try {
+            const { system, messages } = this.mapMessages(req.messages);
+            const tools = this.mapTools(req.tools);
+
+            return await this.client.messages.create(
+              {
+                model: this.model,
+                max_tokens: req.maxTokens || 1024,
+                system,
+                messages,
+                tools: tools.length > 0 ? tools : undefined,
+                temperature: req.temperature,
+                stream: true,
+              },
+              {
+                signal,
+              },
+            );
+          } catch (error) {
+            throw this.mapError(error);
+          }
+        },
+      );
 
       for await (const chunk of stream) {
         if (chunk.type === 'message_start') {

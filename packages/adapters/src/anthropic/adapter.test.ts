@@ -6,9 +6,13 @@ import { RateLimitError, TimeoutError, ConfigError } from '../errors';
 import { AdapterContext } from '../types';
 
 const mockCreate = vi.fn();
+const mockAnthropicConstructor = vi.fn();
 
 vi.mock('@anthropic-ai/sdk', () => {
   const MockAnthropic = class {
+    constructor(options: unknown) {
+      mockAnthropicConstructor(options);
+    }
     messages = {
       create: mockCreate,
     };
@@ -45,6 +49,26 @@ describe('AnthropicAdapter', () => {
       model: 'claude-3-5-sonnet-20240620',
       api_key: 'test-key',
     });
+  });
+
+  it('passes baseURL and maxRetries to the Anthropic client', () => {
+    vi.clearAllMocks();
+
+    new AnthropicAdapter({
+      type: 'anthropic',
+      model: 'claude-3-5-sonnet-20240620',
+      api_key: 'test-key',
+      baseURL: 'https://example.com',
+      maxRetries: 5,
+    } as any);
+
+    expect(mockAnthropicConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKey: 'test-key',
+        baseURL: 'https://example.com',
+        maxRetries: 5,
+      }),
+    );
   });
 
   it('generate returns text and usage', async () => {
