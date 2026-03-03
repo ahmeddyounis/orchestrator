@@ -5,7 +5,7 @@ import path from 'path';
 import archiver from 'archiver';
 import { ConfigLoader } from '@orchestrator/core';
 import { findRepoRoot } from '@orchestrator/repo';
-import { redactObject } from '@orchestrator/shared';
+import { redact, redactObject, SecretScanner } from '@orchestrator/shared';
 import chalk from 'chalk';
 
 type RunEntry = { runId: string; startedAtMs: number; mtimeMs: number };
@@ -91,6 +91,25 @@ function getVersionInfo() {
   }
 }
 
+function redactConfigText(raw: string): string {
+  // 1) Key-based best-effort redaction for common secret keys (YAML/JSON-ish)
+  let text = raw;
+  text = text.replace(
+    /^(\s*)(token|secret|api[_-]?key|auth|password)\s*:\s*(\S[^\n#]*)(\s*#.*)?$/gim,
+    (_m, indent: string, key: string, _value: string, comment?: string) =>
+      `${indent}${key}: [REDACTED:${key}]${comment ?? ''}`,
+  );
+
+  // 2) Pattern-based redaction for common secrets anywhere in the text
+  const scanner = new SecretScanner();
+  const findings = scanner.scan(text);
+  if (findings.length > 0) {
+    text = redact(text, findings);
+  }
+
+  return text;
+}
+
 export const registerExportBundleCommand = (program: Command) => {
   const command = new Command('export-bundle');
 
@@ -154,7 +173,8 @@ export const registerExportBundleCommand = (program: Command) => {
       const configPath = path.join(repoRoot, '.orchestrator.yaml');
       try {
         if ((await fsp.stat(configPath)).isFile()) {
-          archive.file(configPath, { name: '.orchestrator.yaml' });
+          const raw = await fsp.readFile(configPath, 'utf-8');
+          archive.append(redactConfigText(raw), { name: '.orchestrator.yaml' });
         }
       } catch {
         // ignore
