@@ -30,7 +30,8 @@ export interface IndexStatus {
 
 async function loadIndex(config: OrchestratorConfig): Promise<StoredIndexFile | null> {
   if (!config.indexing?.path) return null;
-  const indexPath = path.join(config.rootDir, config.indexing.path);
+  const rawPath = config.indexing.path;
+  const indexPath = path.isAbsolute(rawPath) ? rawPath : path.join(config.rootDir, rawPath);
   return loadIndexFile(indexPath);
 }
 
@@ -90,10 +91,13 @@ export async function getIndexStatus(config: OrchestratorConfig): Promise<IndexS
   }
 
   const drift = await checkDrift(index, config.indexing?.ignore);
+  const rawPath = config.indexing?.path;
+  const indexPath =
+    rawPath && path.isAbsolute(rawPath) ? rawPath : path.join(config.rootDir, rawPath ?? '');
 
   return {
     isIndexed: true,
-    indexPath: path.join(config.rootDir, config.indexing!.path!),
+    indexPath,
     builtAt: new Date(index.builtAt).toISOString(),
     updatedAt: new Date(index.updatedAt).toISOString(),
     fileCount: index.files.length,

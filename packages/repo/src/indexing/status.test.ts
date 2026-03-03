@@ -114,6 +114,43 @@ describe('getIndexStatus', () => {
     expect(status.hashedCount).toBe(2);
   });
 
+  it('uses absolute indexing.path as-is (does not join rootDir)', async () => {
+    mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
+    scanSpy.mockResolvedValue({
+      repoRoot: '/app',
+      files: [
+        {
+          path: 'file1.ts',
+          absPath: '/app/file1.ts',
+          mtimeMs: 1000,
+          sizeBytes: 100,
+          isText: true,
+          ext: '.ts',
+        },
+        {
+          path: 'file2.ts',
+          absPath: '/app/file2.ts',
+          mtimeMs: 2000,
+          sizeBytes: 200,
+          isText: true,
+          ext: '.ts',
+        },
+      ],
+    });
+
+    const config = {
+      ...baseConfig,
+      indexing: {
+        ...baseConfig.indexing,
+        path: '/abs/index.json',
+      },
+    };
+
+    const status = await getIndexStatus(config);
+    expect(mockedStore.loadIndex).toHaveBeenCalledWith('/abs/index.json');
+    expect(status.indexPath).toBe('/abs/index.json');
+  });
+
   it('should detect changed files', async () => {
     mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
     scanSpy.mockResolvedValue({
