@@ -4,3 +4,7 @@ export const stripAnsi = (str: string): string => {
   // eslint-disable-next-line no-control-regex
   return str.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '');
 };
+
+export function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

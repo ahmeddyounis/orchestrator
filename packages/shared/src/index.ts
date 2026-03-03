@@ -25,7 +25,5 @@ export * from './observability';
 
 export * from './eval';
 
-export * from './config/schema';
-
 // Re-export security types
 export type { VectorRedactionOptions } from './security/secrets';

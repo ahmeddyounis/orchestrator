@@ -1,4 +1,4 @@
-import { PatchError, PatchErrorKind } from '@orchestrator/shared';
+import { PatchError, PatchErrorKind, escapeRegExp } from '@orchestrator/shared';
 import { SearchService } from '@orchestrator/repo';
 import { collectHunkFailures, readFileContext } from '../patch_utils';
 import path from 'path';
@@ -6,10 +6,6 @@ import path from 'path';
 export interface NoopAcceptanceResult {
   allow: boolean;
   reason?: string;
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizeSlashes(s: string): string {

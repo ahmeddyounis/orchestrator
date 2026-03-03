@@ -51,6 +51,7 @@ export class ContextBuilderService {
         query: step,
         cwd: this.repoRoot,
         maxMatchesPerFile: 5,
+        fixedStrings: true,
       });
 
       const lexicalMatches = searchResults.matches;

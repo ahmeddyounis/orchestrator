@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { escapeRegExp } from '@orchestrator/shared';
 import { ParsedCommand, ToolClassification } from './types';
 
 function normalizeBin(bin: string): string {
@@ -84,10 +85,6 @@ export function classifyCommand(parsed: ParsedCommand): ToolClassification {
 export function isNetworkCommand(parsed: ParsedCommand): boolean {
   const category = classifyCommand(parsed).category;
   return category === 'network' || category === 'install';
-}
-
-function escapeRegExp(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function matchesDenylist(command: string, patterns: string[]): boolean {

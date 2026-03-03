@@ -10,6 +10,7 @@ import {
   SummaryWriter,
   ConfigError,
   redactObject,
+  escapeRegExp,
   ContextStackStore,
   ContextStackRecorder,
   renderContextStackForPrompt,
@@ -631,7 +632,8 @@ export class Orchestrator {
     if (keywords.length > 0) {
       const terms = keywords.slice(0, 3);
       if (terms.length > 0) {
-        const regex = `(${terms.join('|')})`;
+        const escapedTerms = terms.map((term) => escapeRegExp(term));
+        const regex = `(${escapedTerms.join('|')})`;
         try {
           const results = await searchService.search({
             query: regex,
@@ -1384,6 +1386,7 @@ END_DIFF
               query: contextQuery,
               cwd: this.repoRoot,
               maxMatchesPerFile: 5,
+              fixedStrings: true,
             }),
           (r) => ({ matchCount: r.matches.length }),
         );
@@ -2910,6 +2913,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           query: contextQuery,
           cwd: this.repoRoot,
           maxMatchesPerFile: 5,
+          fixedStrings: true,
         });
 
         const lexicalMatches = searchResults.matches;

@@ -243,6 +243,7 @@ export class PlanService {
         query: goal,
         cwd: repoRoot,
         maxMatchesPerFile: 5,
+        fixedStrings: true,
       });
 
       await this.eventBus.emit({
