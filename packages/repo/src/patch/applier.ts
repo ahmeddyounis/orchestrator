@@ -168,6 +168,8 @@ export class PatchApplier {
     let currentHasOldHeader = false;
     let currentHasNewHeader = false;
     let inFileBlock = false;
+    let currentOldPath: string | undefined;
+    let currentNewPath: string | undefined;
 
     // Track each "diff --git" block to ensure it eventually contains file headers.
     let currentDiffGitStartLine: number | undefined;
@@ -177,6 +179,8 @@ export class PatchApplier {
       currentHasOldHeader = false;
       currentHasNewHeader = false;
       inFileBlock = false;
+      currentOldPath = undefined;
+      currentNewPath = undefined;
     };
 
     for (let idx = 0; idx < lines.length; idx++) {
@@ -203,6 +207,13 @@ export class PatchApplier {
         currentHasOldHeader = true;
         currentHasNewHeader = false;
         inFileBlock = false;
+        currentOldPath = this.normalizeDiffHeaderPath(line.substring(4));
+        currentNewPath = undefined;
+
+        if (currentOldPath) {
+          const securityError = this.validateFileInDiff(currentOldPath, allowBinary);
+          if (securityError) return { error: securityError, stats };
+        }
         continue;
       }
 
@@ -223,16 +234,25 @@ export class PatchApplier {
 
         currentHasNewHeader = true;
         inFileBlock = true;
+        currentNewPath = this.normalizeDiffHeaderPath(line.substring(4));
 
-        // Validate file path if this is a "+++ b/" header
-        if (line.startsWith('+++ b/')) {
-          stats.fileCount++;
-          const filePath = line.substring(6).trim();
-
-          const securityError = this.validateFileInDiff(filePath, allowBinary);
+        if (currentNewPath) {
+          const securityError = this.validateFileInDiff(currentNewPath, allowBinary);
           if (securityError) return { error: securityError, stats };
         }
 
+        if (!currentOldPath && !currentNewPath) {
+          return {
+            error: this.makeValidationError(
+              `Invalid diff: both file header paths are /dev/null (line ${lineNumber})`,
+              lineNumber,
+              'A file diff must refer to at least one real path. Use /dev/null only for additions or deletions.',
+            ),
+            stats,
+          };
+        }
+
+        stats.fileCount++;
         continue;
       }
 
@@ -442,14 +462,59 @@ export class PatchApplier {
   }
 
   private extractAffectedFiles(diffText: string): string[] {
-    const files: string[] = [];
+    const files = new Set<string>();
     const lines = diffText.split('\n');
+
     for (const line of lines) {
-      if (line.startsWith('+++ b/')) {
-        files.push(line.substring(6).trim());
+      // Primary: `diff --git a/<old> b/<new>`
+      if (line.startsWith('diff --git ')) {
+        const m = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+        if (m) {
+          const aPath = this.normalizeDiffHeaderPath(`a/${m[1]}`);
+          const bPath = this.normalizeDiffHeaderPath(`b/${m[2]}`);
+          if (aPath) files.add(aPath);
+          if (bPath) files.add(bPath);
+        }
+        continue;
+      }
+
+      // Fallback: header paths (supports non-git diffs too).
+      if (line.startsWith('--- ')) {
+        const oldPath = this.normalizeDiffHeaderPath(line.substring(4));
+        if (oldPath) files.add(oldPath);
+        continue;
+      }
+
+      if (line.startsWith('+++ ')) {
+        const newPath = this.normalizeDiffHeaderPath(line.substring(4));
+        if (newPath) files.add(newPath);
+        continue;
       }
     }
-    return files;
+
+    return Array.from(files);
+  }
+
+  private normalizeDiffHeaderPath(raw: string): string | undefined {
+    let p = raw.trim();
+    if (!p) return undefined;
+
+    if (p.startsWith('"')) {
+      const endQuote = p.indexOf('"', 1);
+      if (endQuote > 0) p = p.slice(1, endQuote);
+    } else {
+      const tabIdx = p.indexOf('\t');
+      if (tabIdx !== -1) p = p.slice(0, tabIdx);
+    }
+
+    p = p.trim();
+    if (!p) return undefined;
+
+    if (p === '/dev/null' || p === 'dev/null') return undefined;
+    if (p.startsWith('a/') || p.startsWith('b/')) p = p.slice(2);
+    if (!p) return undefined;
+
+    return p;
   }
 
   private execGitApply(repoRoot: string, diffText: string, dryRun: boolean): Promise<void> {

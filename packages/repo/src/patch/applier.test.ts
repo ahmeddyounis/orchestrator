@@ -65,6 +65,33 @@ describe('PatchApplier', () => {
     expect(content).toBe('Hello Universe\n');
   });
 
+  it('applies a deletion patch and reports the deleted file', async () => {
+    const filePath = path.join(tmpDir, 'delete.txt');
+    await fs.writeFile(filePath, 'Bye World\n');
+    await run('git', ['add', 'delete.txt'], tmpDir);
+    await run('git', ['commit', '-m', 'Add delete target'], tmpDir);
+
+    const diffText =
+      [
+        'diff --git a/delete.txt b/delete.txt',
+        'deleted file mode 100644',
+        '--- a/delete.txt',
+        '+++ /dev/null',
+        '@@ -1 +0,0 @@',
+        '-Bye World',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    if (!result.applied) {
+      console.error('Apply failed:', result.error);
+    }
+    expect(result.applied).toBe(true);
+    expect(result.filesChanged).toContain('delete.txt');
+
+    await expect(fs.stat(filePath)).rejects.toThrow();
+  });
+
   it('applies patches with incorrect hunk counts (--recount)', async () => {
     const filePath = path.join(tmpDir, 'test.txt');
     await fs.writeFile(filePath, 'Hello World\n');
@@ -121,6 +148,21 @@ describe('PatchApplier', () => {
       '+++ b/../secret.txt',
       '@@ -0,0 +1 @@',
       '+hacked',
+      '',
+    ].join('\n');
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('security');
+  });
+
+  it('refuses path traversal in deletion patches', async () => {
+    const diffText = [
+      'diff --git a/../secret.txt b/../secret.txt',
+      '--- a/../secret.txt',
+      '+++ /dev/null',
+      '@@ -1 +0,0 @@',
+      '-hacked',
       '',
     ].join('\n');
 
