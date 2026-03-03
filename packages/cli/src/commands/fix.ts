@@ -234,6 +234,8 @@ export function registerFixCommand(program: Command) {
 
       renderer.render(output);
 
+      await registry.shutdownAll();
+
       if (result.status === 'success') {
         process.exit(0);
       } else {

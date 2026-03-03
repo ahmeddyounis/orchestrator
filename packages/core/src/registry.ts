@@ -82,12 +82,15 @@ export class ProviderRegistry {
       return null;
     }
 
-    // Create a temporary adapter to get capabilities
-    // This is a trade-off: we instantiate to validate, but catch errors early
+    // Create a temporary adapter to get capabilities.
+    // This is a trade-off: we instantiate to validate, but catch errors early.
+    // If the adapter supports shutdown, we trigger it best-effort to avoid leaving
+    // background resources running (e.g., plugins that started init).
+    let tempAdapter: ProviderAdapter | undefined;
     try {
       // For validation, we create with a dummy config to get capabilities
       // Some adapters may throw during construction, which is also validation
-      const tempAdapter = factory({
+      tempAdapter = factory({
         ...providerConfig,
         api_key: providerConfig.api_key || 'validation-placeholder',
       });
@@ -96,6 +99,8 @@ export class ProviderRegistry {
     } catch (_error) {
       // Construction failed - this is also a form of validation failure
       return null;
+    } finally {
+      void Promise.resolve(tempAdapter?.shutdown?.()).catch(() => undefined);
     }
   }
 
@@ -236,5 +241,22 @@ export class ProviderRegistry {
     });
 
     return { planner, executor, reviewer };
+  }
+
+  async shutdownAll(): Promise<{ errors: Array<{ providerId: string; error: unknown }> }> {
+    const entries = [...this.adapters.entries()];
+    const errors: Array<{ providerId: string; error: unknown }> = [];
+
+    for (const [providerId, adapter] of entries) {
+      if (!adapter.shutdown) continue;
+      try {
+        await adapter.shutdown();
+      } catch (error) {
+        errors.push({ providerId, error });
+      }
+    }
+
+    this.adapters.clear();
+    return { errors };
   }
 }

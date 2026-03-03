@@ -263,6 +263,108 @@ describe('ProviderRegistry', () => {
     expect(adapter).toBeInstanceOf(CostTrackingAdapter);
   });
 
+  it('shutdownAll calls adapter shutdown hooks and clears the cache', async () => {
+    const shutdown1 = vi.fn().mockResolvedValue(undefined);
+    const shutdown2 = vi.fn().mockResolvedValue(undefined);
+
+    const registry = new ProviderRegistry({
+      verification: {} as any,
+      configVersion: 1,
+      thinkLevel: 'L1',
+      memory,
+      providers: {
+        p1: { type: 'mock-type', model: 'p1', api_key: 'sk-1' },
+        p2: { type: 'mock-type', model: 'p2', api_key: 'sk-2' },
+      },
+    });
+
+    registry.registerFactory('mock-type', (cfg) => {
+      const shutdown = cfg.model === 'p1' ? shutdown1 : shutdown2;
+      return {
+        id: () => 'mock',
+        capabilities: () => mockCapabilities,
+        generate: async () => ({}),
+        shutdown,
+      };
+    });
+
+    const first = registry.getAdapter('p1');
+    registry.getAdapter('p2');
+
+    await registry.shutdownAll();
+
+    expect(shutdown1).toHaveBeenCalledTimes(1);
+    expect(shutdown2).toHaveBeenCalledTimes(1);
+
+    const second = registry.getAdapter('p1');
+    expect(second).not.toBe(first);
+  });
+
+  it('shutdownAll forwards through CostTrackingAdapter wrappers', async () => {
+    const baseShutdown = vi.fn().mockResolvedValue(undefined);
+    const registry = new ProviderRegistry(
+      {
+        verification: {} as any,
+        configVersion: 1,
+        thinkLevel: 'L1',
+        memory,
+        providers: {
+          p1: { type: 'mock-type', model: 'm1', api_key: 'sk-test' },
+        },
+      } as Config,
+      { recordUsage: vi.fn() } as any,
+    );
+
+    registry.registerFactory('mock-type', () => {
+      return {
+        id: () => 'mock',
+        capabilities: () => mockCapabilities,
+        generate: async () => ({}),
+        shutdown: baseShutdown,
+      };
+    });
+
+    registry.getAdapter('p1');
+    await registry.shutdownAll();
+    expect(baseShutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('shutdownAll collects errors and continues shutting down', async () => {
+    const registry = new ProviderRegistry({
+      verification: {} as any,
+      configVersion: 1,
+      thinkLevel: 'L1',
+      memory,
+      providers: {
+        p1: { type: 'mock-type', model: 'p1', api_key: 'sk-1' },
+        p2: { type: 'mock-type', model: 'p2', api_key: 'sk-2' },
+      },
+    });
+
+    const shutdown1 = vi.fn().mockRejectedValue(new Error('boom'));
+    const shutdown2 = vi.fn().mockResolvedValue(undefined);
+
+    registry.registerFactory('mock-type', (cfg) => {
+      const shutdown = cfg.model === 'p1' ? shutdown1 : shutdown2;
+      return {
+        id: () => 'mock',
+        capabilities: () => mockCapabilities,
+        generate: async () => ({}),
+        shutdown,
+      };
+    });
+
+    registry.getAdapter('p1');
+    registry.getAdapter('p2');
+
+    const { errors } = await registry.shutdownAll();
+
+    expect(shutdown1).toHaveBeenCalledTimes(1);
+    expect(shutdown2).toHaveBeenCalledTimes(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.providerId).toBe('p1');
+  });
+
   describe('config validation', () => {
     it('validates provider config against adapter capabilities', () => {
       const capsWithRequirements: ProviderCapabilities = {

@@ -434,28 +434,32 @@ export class EvalRunner {
 
     const git = new GitService({ repoRoot: workDir });
 
-    const orchestrator = await Orchestrator.create({
-      config,
-      git,
-      registry,
-      repoRoot: workDir,
-      costTracker,
-      toolPolicy: allowAllToolPolicy(), // Evals run with full tool access
-      ui: new NoopUserInterface(), // Evals are non-interactive
-    });
+    try {
+      const orchestrator = await Orchestrator.create({
+        config,
+        git,
+        registry,
+        repoRoot: workDir,
+        costTracker,
+        toolPolicy: allowAllToolPolicy(), // Evals run with full tool access
+        ui: new NoopUserInterface(), // Evals are non-interactive
+      });
 
-    const thinkLevel = task.thinkLevel === 'auto' ? 'L1' : task.thinkLevel || 'L1';
+      const thinkLevel = task.thinkLevel === 'auto' ? 'L1' : task.thinkLevel || 'L1';
 
-    if (task.command !== 'run') {
-      throw new UsageError(`Eval task command '${task.command}' not yet supported.`);
+      if (task.command !== 'run') {
+        throw new UsageError(`Eval task command '${task.command}' not yet supported.`);
+      }
+
+      const result = await orchestrator.run(task.goal, { thinkLevel });
+
+      const runDir = path.join(workDir, '.orchestrator', 'runs', result.runId);
+      const summary = await this.loadRunSummary(runDir);
+
+      return { runId: result.runId, runDir, summary };
+    } finally {
+      await registry.shutdownAll();
     }
-
-    const result = await orchestrator.run(task.goal, { thinkLevel });
-
-    const runDir = path.join(workDir, '.orchestrator', 'runs', result.runId);
-    const summary = await this.loadRunSummary(runDir);
-
-    return { runId: result.runId, runDir, summary };
   }
 
   private async loadRunSummary(runDir: string): Promise<RunSummary> {

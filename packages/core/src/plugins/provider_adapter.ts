@@ -12,6 +12,7 @@ import type {
   PreparedPlugin,
   ProviderAdapterPlugin,
 } from '@orchestrator/plugin-sdk';
+import { setTimeout as setTimeoutCb } from 'node:timers';
 
 function toPluginContext(ctx: AdapterContext): PluginContext {
   return {
@@ -44,6 +45,8 @@ export class PluginProviderAdapter implements ProviderAdapter {
     };
 
     this.initPromise = this.plugin.init(args.config, initCtx);
+    // Prevent unhandled promise rejections if init fails and the adapter is never used.
+    void this.initPromise.catch(() => undefined);
 
     if (this.plugin.stream) {
       this.stream = (req, ctx) => this.streamWithInit(req, ctx);
@@ -73,5 +76,18 @@ export class PluginProviderAdapter implements ProviderAdapter {
     for await (const event of this.plugin.stream(req, toPluginContext(ctx))) {
       yield event;
     }
+  }
+
+  async shutdown(): Promise<void> {
+    // Try to wait for init to settle, but don't block shutdown forever.
+    await Promise.race([
+      this.initPromise.catch(() => undefined),
+      new Promise<void>((resolve) => {
+        const timer = setTimeoutCb(resolve, 5000);
+        timer.unref();
+      }),
+    ]);
+
+    await this.plugin.shutdown();
   }
 }
