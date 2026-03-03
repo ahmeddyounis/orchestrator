@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { SearchEngine, SearchOptions, SearchResult, SearchMatch } from './types';
 import * as readline from 'node:readline';
+import { normalizePath } from '@orchestrator/shared';
 
 export class RipgrepSearch implements SearchEngine {
   private _isAvailable: boolean | null = null;
@@ -59,7 +60,7 @@ export class RipgrepSearch implements SearchEngine {
         const event = JSON.parse(line);
         if (event.type === 'match') {
           const data = event.data;
-          const filePath = data.path.text;
+          const filePath = normalizePath(data.path.text);
           const lineText = data.lines.text;
           const lineNumber = data.line_number;
 

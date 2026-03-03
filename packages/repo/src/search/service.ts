@@ -2,15 +2,17 @@ import { EventEmitter } from 'node:events';
 import { SearchEngine, SearchOptions, SearchResult, SearchMatch } from './types';
 import { RipgrepSearch } from './ripgrep';
 import { JsFallbackSearch } from './simple';
+import { LRUCache, normalizePath } from '@orchestrator/shared';
 import { hash } from 'ohash';
 import rfdc from 'rfdc';
 
 const deepClone = rfdc();
+const SEARCH_CACHE_MAX_SIZE = 50;
 
 export class SearchService extends EventEmitter {
   private rg: RipgrepSearch;
   private js: JsFallbackSearch;
-  private searchCache: Map<string, SearchResult> = new Map();
+  private searchCache: LRUCache<string, SearchResult> = new LRUCache(SEARCH_CACHE_MAX_SIZE);
 
   constructor(rgPath?: string) {
     super();
@@ -19,12 +21,18 @@ export class SearchService extends EventEmitter {
   }
 
   async search(options: SearchOptions): Promise<SearchResult> {
-    const cacheKey = hash(options);
-    if (this.searchCache.has(cacheKey)) {
-      return deepClone(this.searchCache.get(cacheKey)!);
+    const normalizedOptions: SearchOptions = {
+      ...options,
+      targetDir: options.targetDir ? normalizePath(options.targetDir) : undefined,
+    };
+
+    const cacheKey = hash(normalizedOptions);
+    const cached = this.searchCache.get(cacheKey);
+    if (cached) {
+      return deepClone(cached);
     }
 
-    this.emit('RepoSearchStarted', { options });
+    this.emit('RepoSearchStarted', { options: normalizedOptions });
 
     let engine: SearchEngine;
     const rgAvailable = await this.rg.isAvailable();
@@ -36,13 +44,13 @@ export class SearchService extends EventEmitter {
       this.emit('warn', 'Ripgrep not available, falling back to JS search (slower)');
     }
 
-    const result = await engine.search(options);
+    const result = await engine.search(normalizedOptions);
 
     // Post-processing: Deduplication & Limiting per file
     // Note: JS fallback already implements maxMatchesPerFile optimization, but we enforce it here uniformly
     // just in case, and also for `rg` which streams all matches.
 
-    result.matches = this.processMatches(result.matches, options);
+    result.matches = this.processMatches(result.matches, normalizedOptions);
 
     this.emit('RepoSearchFinished', { stats: result.stats });
 

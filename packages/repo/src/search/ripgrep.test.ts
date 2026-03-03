@@ -79,6 +79,25 @@ describe('RipgrepSearch', () => {
     expect(result.stats.matchesFound).toBe(1);
   });
 
+  it('normalizes Windows paths to forward slashes', async () => {
+    const output = JSON.stringify({
+      type: 'match',
+      data: {
+        path: { text: 'subdir\\file.ts' },
+        lines: { text: 'hello world\n' },
+        line_number: 10,
+        submatches: [{ start: 6, end: 11, match: { text: 'world' } }],
+      },
+    });
+
+    mockSpawn.mockReturnValueOnce(createMockChildProcess([output], 0));
+
+    const search = new RipgrepSearch();
+    const result = await search.search({ query: 'world', cwd: '/test' });
+
+    expect(result.matches[0].path).toBe('subdir/file.ts');
+  });
+
   it('adds --fixed-strings when fixedStrings is true', async () => {
     mockSpawn.mockReturnValueOnce(createMockChildProcess([], 0));
 

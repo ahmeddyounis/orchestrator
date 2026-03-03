@@ -1,7 +1,7 @@
 import nodeFs from 'node:fs/promises';
 import path from 'node:path';
 import ignore from 'ignore';
-import { LRUCache } from '@orchestrator/shared';
+import { LRUCache, normalizePath } from '@orchestrator/shared';
 import { RepoSnapshot, RepoFileMeta, ScanOptions } from './types';
 import { isBinaryFile, DEFAULT_IGNORES } from './utils';
 import { hash } from 'ohash';
@@ -85,7 +85,9 @@ export class RepoScanner {
         if (stoppedEarly) break;
         if (stopForMaxFiles()) break;
         const entryName = entry.name;
-        const entryRelativePath = relativeDir ? path.join(relativeDir, entryName) : entryName;
+        const entryRelativePath = normalizePath(
+          relativeDir ? path.join(relativeDir, entryName) : entryName,
+        );
 
         if (entry.isDirectory()) {
           // For directories, append slash to match directory patterns in ignore
