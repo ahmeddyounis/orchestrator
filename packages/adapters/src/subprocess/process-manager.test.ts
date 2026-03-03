@@ -73,7 +73,8 @@ describe('ProcessManager', () => {
 
       pm.kill();
     } catch (e) {
-      console.warn('PTY test skipped or failed:', e);
+      const message = e instanceof Error ? e.message : String(e);
+      console.warn(`PTY test skipped or failed: ${message}`);
     }
   });
 

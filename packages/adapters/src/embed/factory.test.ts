@@ -67,6 +67,18 @@ describe('createEmbedder', () => {
     await expect(embedder.embedTexts(['hello'])).resolves.toEqual([[1, 2, 3]]);
   });
 
+  it('throws if OPENAI_API_KEY is missing', () => {
+    delete process.env.OPENAI_API_KEY;
+    expect(() =>
+      createEmbedder({
+        provider: 'openai',
+        model: 'text-embedding-3-small',
+        dims: 1536,
+        batchSize: 1,
+      }),
+    ).toThrow(/OPENAI_API_KEY/);
+  });
+
   it('throws for unsupported providers', () => {
     expect(() =>
       createEmbedder({

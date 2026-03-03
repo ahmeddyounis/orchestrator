@@ -9,8 +9,9 @@ export function createEmbedder(config: EmbeddingsConfig): Embedder {
   switch (config.provider) {
     case 'openai':
       embedder = new OpenAIEmbedder({
-        apiKey: process.env.OPENAI_API_KEY!,
+        apiKeyEnv: 'OPENAI_API_KEY',
         model: config.model,
+        dimensions: config.dims,
       });
       break;
     case 'local-hash':
