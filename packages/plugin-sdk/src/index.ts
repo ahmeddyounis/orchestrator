@@ -43,12 +43,14 @@ export type {
 // Loader exports
 export {
   loadPlugin,
+  preparePlugin,
   safeLoadPlugin,
   validateManifest,
   PluginValidationError,
   PluginVersionMismatchError,
   type LoadPluginResult,
   type LoadPluginOptions,
+  type PreparedPlugin,
 } from './loader';
 
 // Permission exports

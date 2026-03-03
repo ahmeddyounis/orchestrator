@@ -44,6 +44,21 @@ export interface LoadPluginOptions {
   pluginContent?: string | Buffer;
 }
 
+/**
+ * Result of preparing a plugin export for instantiation.
+ *
+ * Preparation validates the manifest, checks SDK version compatibility, and
+ * verifies security requirements (signatures/permissions) if configured.
+ *
+ * The returned factory can be used to create and initialize new plugin
+ * instances without re-running validation logic.
+ */
+export interface PreparedPlugin<T extends PluginLifecycle = PluginLifecycle> {
+  manifest: PluginManifest;
+  createPlugin: () => T;
+  create: (config: PluginConfig, ctx: PluginContext) => Promise<T>;
+}
+
 // Re-export error class for backward compatibility
 export { PluginValidationError } from '@orchestrator/shared';
 
@@ -81,18 +96,18 @@ export function validateManifest(manifest: unknown): manifest is PluginManifest 
 }
 
 /**
- * Validate and load a plugin from an export object.
- * Throws PluginValidationError or PluginVersionMismatchError on failure.
- * Throws PluginSignatureError if signature verification fails.
- * Throws PluginPermissionError if permissions are insufficient.
+ * Validate and prepare a plugin export for instantiation.
+ *
+ * This performs all validation and security checks, but does not call `init()`.
+ * Consumers can call `prepared.create(...)` to create and initialize new plugin
+ * instances as needed.
  */
-export async function loadPlugin<T extends PluginLifecycle>(
+export function preparePlugin<T extends PluginLifecycle>(
   pluginExport: PluginExport<T>,
-  config: PluginConfig,
-  ctx: PluginContext,
   options: LoadPluginOptions = {},
-): Promise<T> {
+): PreparedPlugin<T> {
   const securityCtx = options.securityContext || DEFAULT_SECURITY_CONTEXT;
+
   // Extract name for error reporting (before validation)
   const rawManifest = pluginExport.manifest as unknown as Record<string, unknown> | undefined;
   const pluginName = typeof rawManifest?.name === 'string' ? rawManifest.name : 'unknown';
@@ -128,13 +143,31 @@ export async function loadPlugin<T extends PluginLifecycle>(
     }
   }
 
-  // Create plugin instance
-  const plugin = createPlugin();
+  return {
+    manifest,
+    createPlugin,
+    create: async (config: PluginConfig, ctx: PluginContext) => {
+      const plugin = createPlugin();
+      await plugin.init(config, ctx);
+      return plugin;
+    },
+  };
+}
 
-  // Initialize plugin
-  await plugin.init(config, ctx);
-
-  return plugin;
+/**
+ * Validate and load a plugin from an export object.
+ * Throws PluginValidationError or PluginVersionMismatchError on failure.
+ * Throws PluginSignatureError if signature verification fails.
+ * Throws PluginPermissionError if permissions are insufficient.
+ */
+export async function loadPlugin<T extends PluginLifecycle>(
+  pluginExport: PluginExport<T>,
+  config: PluginConfig,
+  ctx: PluginContext,
+  options: LoadPluginOptions = {},
+): Promise<T> {
+  const prepared = preparePlugin(pluginExport, options);
+  return prepared.create(config, ctx);
 }
 
 /**

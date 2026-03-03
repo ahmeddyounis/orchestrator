@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { loadPlugin, safeLoadPlugin, PluginVersionMismatchError } from './loader';
+import { loadPlugin, preparePlugin, safeLoadPlugin, PluginVersionMismatchError } from './loader';
 import { DEV_SECURITY_CONTEXT, type PluginSecurityContext } from './security';
 import type { PluginConfig, PluginContext, PluginExport, PluginLifecycle } from './interfaces';
 import {
@@ -145,6 +145,33 @@ describe('loadPlugin', () => {
         pluginContent: 'plugin',
       }),
     ).rejects.toBeInstanceOf(PluginSignatureError);
+  });
+});
+
+describe('preparePlugin', () => {
+  it('validates plugin export without calling init until created', async () => {
+    const plugin = createTestPlugin('ok');
+    const pluginExport: PluginExport = {
+      manifest: {
+        name: 'ok',
+        type: 'provider',
+        sdkVersion: { minVersion: 1 },
+        version: '1.0.0',
+      },
+      createPlugin: () => plugin,
+    };
+
+    const prepared = preparePlugin(pluginExport, { securityContext: DEV_SECURITY_CONTEXT });
+
+    expect(prepared.manifest.name).toBe('ok');
+    expect(plugin.init).not.toHaveBeenCalled();
+
+    const ctx = createCtx();
+    const config: PluginConfig = { mode: 'test' };
+    const instance = await prepared.create(config, ctx);
+
+    expect(instance).toBe(plugin);
+    expect(plugin.init).toHaveBeenCalledWith(config, ctx);
   });
 });
 
