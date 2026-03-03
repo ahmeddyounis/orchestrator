@@ -79,7 +79,7 @@ export class ContextBuilderService {
       const candidates = await extractor.extractSnippets(limitedMatches, { cwd: this.repoRoot });
 
       const packer = new SimpleContextPacker();
-      contextPack = packer.pack(step, [], candidates, {
+      contextPack = packer.pack(step, signals, candidates, {
         tokenBudget: this.config.context?.tokenBudget || 8000,
       });
     } catch {

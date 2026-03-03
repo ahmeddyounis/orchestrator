@@ -80,12 +80,13 @@ describe('ContextBuilderService', () => {
     );
 
     const touchedFiles = new Set<string>(['src/touched.ts']);
+    const signals = [{ type: 'error', data: { stack: 'src/touched.ts:1:1' }, weight: 2 }] as any;
     const result = await service.buildStepContext({
       goal: 'Fix the thing',
       step: 'Update (A) + docs!',
       touchedFiles,
       memoryHits: [],
-      signals: [],
+      signals,
       eventBus: { emit: vi.fn() } as any,
       runId: 'run-1',
       artifactsRoot,
@@ -94,6 +95,12 @@ describe('ContextBuilderService', () => {
 
     expect(searchSpy).toHaveBeenCalledWith(
       expect.objectContaining({ query: 'Update (A) + docs!', cwd: repoRoot }),
+    );
+    expect(packSpy).toHaveBeenCalledWith(
+      'Update (A) + docs!',
+      signals,
+      expect.any(Array),
+      expect.objectContaining({ tokenBudget: 1234 }),
     );
     expect(result.contextPack).toBeTruthy();
 
