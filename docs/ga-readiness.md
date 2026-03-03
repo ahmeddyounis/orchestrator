@@ -53,6 +53,15 @@ plugins:
   enabled: true
   allowlistIds:
     - '@orchestrator/plugin-docs'
+  security:
+    enforcePermissions: true
+    # Recommended for production: require signatures and pin trusted signing keys.
+    # requireSignatures: true
+    # trustedKeys:
+    #   "<fingerprint>": |
+    #     -----BEGIN PUBLIC KEY-----
+    #     ...
+    #     -----END PUBLIC KEY-----
 ```
 
 See the [Plugins documentation](plugins.md) for more details.

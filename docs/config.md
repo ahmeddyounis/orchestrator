@@ -36,7 +36,7 @@ providers:
 
 Each provider must include:
 
-- `type`: one of `openai`, `anthropic`, `claude_code`, `gemini_cli`, `codex_cli`, `fake`
+- `type`: one of `openai`, `anthropic`, `claude_code`, `gemini_cli`, `codex_cli`, `fake`, or the `manifest.name` of a loaded provider plugin (see **Plugins** below)
 - `model`: a string (adapter-specific; required by config validation)
 
 Hosted providers typically use one of:
@@ -81,6 +81,43 @@ providers:
     command: codex
     args: []
 ```
+
+## Plugins
+
+Plugins are disabled by default. When enabled, Orchestrator discovers plugin modules from `plugins.paths` and validates them on startup.
+
+```yaml
+plugins:
+  enabled: true
+  paths:
+    - .orchestrator/plugins
+  # Optional: only load these plugin IDs (manifest.name).
+  allowlistIds:
+    - my-provider-plugin
+  # Optional: per-plugin defaults. For provider plugins, these defaults are merged into the
+  # provider config (provider config wins) before calling plugin `init()`.
+  config:
+    my-provider-plugin:
+      baseUrl: http://localhost:1234
+  security:
+    # Backward-compatible default is false; turn on for stricter supply-chain guarantees.
+    requireSignatures: false
+    # If true, enforce manifest permission requirements against grantedPermissions.
+    enforcePermissions: true
+    # Map of signing key fingerprint -> PEM public key.
+    trustedKeys: {}
+    # Permissions granted to plugins (keys like "network:http", "filesystem:read", ...).
+    grantedPermissions:
+      network:http: true
+      filesystem:read: true
+```
+
+Notes:
+
+- `paths` entries that are not absolute are resolved relative to the repo root. If any path is relative, `~/.orchestrator/plugins` is also searched.
+- `allowlistIds` matches plugin `manifest.name`.
+- If `security.requireSignatures: true`, plugin manifests must include `signature`, and the signature `keyFingerprint` must exist in `plugins.security.trustedKeys`.
+- If `security.enforcePermissions: true`, `manifest.permissions.required` is checked against `plugins.security.grantedPermissions`.
 
 ## Defaults
 

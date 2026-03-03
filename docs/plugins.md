@@ -180,6 +180,25 @@ const response = await plugin.generate(
 );
 ```
 
+### Preparing a Plugin (validate without init)
+
+If you need to validate a plugin export once (manifest, SDK version, signature/permissions) but instantiate it later, use `preparePlugin`:
+
+```typescript
+import fs from 'node:fs';
+import { preparePlugin, DEV_SECURITY_CONTEXT } from '@orchestrator/plugin-sdk';
+
+const prepared = preparePlugin(myPluginExport, {
+  // Optional: enables signature verification (and permission checks).
+  pluginContent: fs.readFileSync('/path/to/plugin.js'),
+  // Optional: configure signature/permission policy.
+  securityContext: DEV_SECURITY_CONTEXT,
+});
+
+// Later:
+const plugin = await prepared.create({ apiKey: process.env.MY_API_KEY }, ctx);
+```
+
 ## Creating an Embedder Plugin
 
 Embedder plugins implement `EmbedderPlugin` to provide text embeddings:
