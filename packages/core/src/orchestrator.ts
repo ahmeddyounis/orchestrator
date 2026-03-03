@@ -11,9 +11,6 @@ import {
   ConfigError,
   redactObject,
   escapeRegExp,
-  ContextStackStore,
-  ContextStackRecorder,
-  renderContextStackForPrompt,
 } from '@orchestrator/shared';
 import {
   ContextSignal,
@@ -67,6 +64,7 @@ import { ProceduralMemoryImpl } from './orchestrator/procedural_memory';
 import {
   RunInitializationService,
   ContextBuilderService,
+  ContextStackService,
   VerificationService,
   shouldAllowEmptyDiffForStep,
   shouldAcceptEmptyDiffAsNoopForSatisfiedStep,
@@ -130,6 +128,7 @@ export class Orchestrator {
   private suppressEpisodicMemoryWrite = false;
   private initService: RunInitializationService;
   private contextBuilder: ContextBuilderService;
+  private contextStackService: ContextStackService;
   private indexAutoUpdate: IndexAutoUpdateService;
   private escalationCount = 0;
 
@@ -146,6 +145,7 @@ export class Orchestrator {
     this.ui = options.ui;
     this.initService = new RunInitializationService(this.config, this.repoRoot);
     this.contextBuilder = new ContextBuilderService(this.config, this.repoRoot);
+    this.contextStackService = new ContextStackService(this.config, this.repoRoot);
     this.indexAutoUpdate = new IndexAutoUpdateService({
       config: this.config,
       repoRoot: this.repoRoot,
@@ -161,74 +161,6 @@ export class Orchestrator {
     pluginManager.registerProviderPlugins(options.registry);
 
     return new Orchestrator(options, loadedPlugins);
-  }
-
-  private async setupContextStackForRun(args: {
-    runId: string;
-    artifactsRoot: string;
-    eventBus: EventBus;
-  }): Promise<{
-    eventBus: EventBus;
-    store?: ContextStackStore;
-    getContextStackText: () => string;
-    snapshotPath?: string;
-  }> {
-    const cfg = this.config.contextStack;
-    const enabled = cfg?.enabled ?? false;
-
-    if (!enabled) {
-      return { eventBus: args.eventBus, getContextStackText: () => '' };
-    }
-
-    const filePath = ContextStackStore.resolvePath(this.repoRoot, this.config);
-    const store = new ContextStackStore({
-      filePath,
-      security: this.config.security,
-      maxFrames: cfg.maxFrames,
-      maxBytes: cfg.maxBytes,
-    });
-
-    try {
-      await store.load();
-    } catch {
-      // Non-fatal: missing/invalid stack should not block a run.
-    }
-
-    const snapshotPath = path.join(args.artifactsRoot, 'context_stack.snapshot.jsonl');
-    try {
-      await store.snapshotTo(snapshotPath);
-    } catch {
-      // Non-fatal: snapshot is best-effort.
-    }
-
-    const recorder = new ContextStackRecorder(store, {
-      repoRoot: this.repoRoot,
-      runId: args.runId,
-      runArtifactsRoot: args.artifactsRoot,
-      enabled: true,
-    });
-
-    const wrappedEventBus: EventBus = {
-      emit: async (e) => {
-        await args.eventBus.emit(e);
-        try {
-          const safe = this.config.security?.redaction?.enabled
-            ? (redactObject(e) as OrchestratorEvent)
-            : e;
-          await recorder.onEvent(safe);
-        } catch {
-          // ignore
-        }
-      },
-    };
-
-    const getContextStackText = (): string =>
-      renderContextStackForPrompt(store.getAllFrames(), {
-        maxChars: cfg.promptBudgetChars,
-        maxFrames: cfg.promptMaxFrames,
-      });
-
-    return { eventBus: wrappedEventBus, store, getContextStackText, snapshotPath };
   }
 
   async run(goal: string, options: RunOptions): Promise<RunResult> {
@@ -509,7 +441,7 @@ export class Orchestrator {
     const runContext = await this.initService.initializeRun(runId, goal);
     const { artifacts, logger, eventBus: eventBusObj } = runContext;
 
-    const contextStack = await this.setupContextStackForRun({
+    const contextStack = await this.contextStackService.setupForRun({
       runId,
       artifactsRoot: artifacts.root,
       eventBus: eventBusObj,
@@ -977,7 +909,7 @@ END_DIFF
     const startTime = Date.now();
     const runContext = await this.initService.initializeRun(runId, goal);
     const { artifacts, logger, eventBus: eventBusObj } = runContext;
-    const contextStack = await this.setupContextStackForRun({
+    const contextStack = await this.contextStackService.setupForRun({
       runId,
       artifactsRoot: artifacts.root,
       eventBus: eventBusObj,
@@ -1715,7 +1647,7 @@ Please regenerate a unified diff that applies cleanly to the current code.`;
 
     const runContext = await this.initService.initializeRun(runId, goal);
     const { artifacts, logger, eventBus: eventBusObj } = runContext;
-    const contextStack = await this.setupContextStackForRun({
+    const contextStack = await this.contextStackService.setupForRun({
       runId,
       artifactsRoot: artifacts.root,
       eventBus: eventBusObj,
@@ -2389,7 +2321,7 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
     const startTime = Date.now();
     const runContext = await this.initService.initializeRun(runId, goal);
     const { artifacts, logger, eventBus: eventBusObj } = runContext;
-    const contextStack = await this.setupContextStackForRun({
+    const contextStack = await this.contextStackService.setupForRun({
       runId,
       artifactsRoot: artifacts.root,
       eventBus: eventBusObj,
