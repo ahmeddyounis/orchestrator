@@ -23,8 +23,6 @@ import {
   PatchApplier,
   SimpleContextPacker,
   SnippetExtractor,
-  getIndexStatus,
-  IndexUpdater,
   SemanticIndexStore,
   SemanticSearchService,
 } from '@orchestrator/repo';
@@ -59,6 +57,7 @@ import { DEFAULT_BUDGET } from './config/budget';
 import { PluginLoader, LoadedPlugin } from './plugins/loader';
 import { PluginProviderAdapter } from './plugins/provider_adapter';
 import { SimpleContextFuser } from './context';
+import { IndexAutoUpdateService } from './indexing/auto_update';
 import { CandidateGenerator, StepContext, Candidate } from './orchestrator/l3/candidate_generator';
 import {
   CandidateEvaluator,
@@ -133,6 +132,7 @@ export class Orchestrator {
   private suppressEpisodicMemoryWrite = false;
   private initService: RunInitializationService;
   private contextBuilder: ContextBuilderService;
+  private indexAutoUpdate: IndexAutoUpdateService;
   private escalationCount = 0;
 
   private constructor(
@@ -148,6 +148,10 @@ export class Orchestrator {
     this.ui = options.ui;
     this.initService = new RunInitializationService(this.config, this.repoRoot);
     this.contextBuilder = new ContextBuilderService(this.config, this.repoRoot);
+    this.indexAutoUpdate = new IndexAutoUpdateService({
+      config: this.config,
+      repoRoot: this.repoRoot,
+    });
   }
 
   public static async create(options: OrchestratorOptions): Promise<Orchestrator> {
@@ -264,7 +268,7 @@ export class Orchestrator {
           await logger.log(redactedEvent);
         },
       };
-      await this.autoUpdateIndex(eventBus, runId);
+      await this.indexAutoUpdate.maybeAutoUpdateIndex({ eventBus, runId });
     }
 
     if (options.thinkLevel === 'L0') {
@@ -275,81 +279,6 @@ export class Orchestrator {
       return this.runL2(goal, runId);
     } else {
       return this.runL1(goal, runId);
-    }
-  }
-
-  private async autoUpdateIndex(eventBus: EventBus, runId: string): Promise<void> {
-    const cfg = this.config.indexing;
-    if (!this.config.memory?.enabled || !cfg?.enabled || !cfg.autoUpdateOnRun) {
-      return;
-    }
-
-    try {
-      const orchestratorConfig = {
-        ...this.config,
-        rootDir: this.repoRoot,
-        orchestratorDir: path.join(this.repoRoot, '.orchestrator'),
-      };
-      const status = await getIndexStatus(orchestratorConfig);
-
-      if (!status.isIndexed) {
-        // TODO: Could auto-build here based on config
-        console.warn('Auto-update skipped: index does not exist.');
-        return;
-      }
-
-      const drift = status.drift;
-      if (!drift || !drift.hasDrift) {
-        return; // No drift
-      }
-
-      const totalDrift = drift.addedCount + drift.removedCount + drift.changedCount;
-      if (totalDrift > (cfg.maxAutoUpdateFiles ?? 5000)) {
-        console.warn(
-          `Index drift (${totalDrift} files) exceeds limit (${cfg.maxAutoUpdateFiles}). Skipping auto-update.`,
-        );
-        return;
-      }
-
-      await eventBus.emit({
-        type: 'IndexAutoUpdateStarted',
-        schemaVersion: 1,
-        runId,
-        timestamp: new Date().toISOString(),
-        payload: {
-          fileCount: totalDrift,
-          reason: 'Pre-run check detected drift.',
-        },
-      });
-
-      const indexPath = path.isAbsolute(cfg.path) ? cfg.path : path.join(this.repoRoot, cfg.path);
-      const updater = new IndexUpdater(indexPath);
-      const result = await updater.update(this.repoRoot);
-
-      await eventBus.emit({
-        type: 'IndexAutoUpdateFinished',
-        schemaVersion: 1,
-        runId,
-        timestamp: new Date().toISOString(),
-        payload: {
-          filesAdded: result.added.length,
-          filesRemoved: result.removed.length,
-          filesChanged: result.changed.length,
-        },
-      });
-
-      await eventBus.emit({
-        type: 'MemoryStalenessReconciled',
-        schemaVersion: 1,
-        runId,
-        timestamp: new Date().toISOString(),
-        payload: {
-          details: 'Index updated, subsequent memory retrievals will use fresh data.',
-        },
-      });
-    } catch (error) {
-      console.warn('Auto-update of index failed:', error);
-      // Non-fatal
     }
   }
 
