@@ -100,5 +100,16 @@ export function matchesDenylist(command: string, patterns: string[]): boolean {
 }
 
 export function matchesAllowlist(command: string, prefixes: string[]): boolean {
-  return prefixes.some((prefix) => prefix && command.startsWith(prefix));
+  const cmd = command.trimStart();
+
+  return prefixes.some((rawPrefix) => {
+    const prefix = rawPrefix?.trim();
+    if (!prefix) return false;
+    if (!cmd.startsWith(prefix)) return false;
+
+    if (cmd.length === prefix.length) return true;
+
+    const nextChar = cmd[prefix.length];
+    return typeof nextChar === 'string' && /\s/.test(nextChar);
+  });
 }

@@ -253,6 +253,21 @@ describe('matchesAllowlist', () => {
   it('matches prefixes', () => {
     expect(matchesAllowlist('npm run test', ['npm run'])).toBe(true);
   });
+
+  it('matches exact command', () => {
+    expect(matchesAllowlist('ls', ['ls'])).toBe(true);
+  });
+
+  it('matches prefix on token boundary', () => {
+    expect(matchesAllowlist('ls -la', ['ls'])).toBe(true);
+  });
+
+  it('does not match partial command names', () => {
+    expect(matchesAllowlist('lsof -i', ['ls'])).toBe(false);
+    expect(matchesAllowlist('lsusb', ['ls'])).toBe(false);
+    expect(matchesAllowlist('npmrun test', ['npm run'])).toBe(false);
+  });
+
   it('does not match other commands', () => {
     expect(matchesAllowlist('rm -rf /', ['npm run'])).toBe(false);
   });
