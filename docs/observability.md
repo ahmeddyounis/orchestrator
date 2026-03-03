@@ -18,6 +18,8 @@ Each `run_id` is a unique timestamp. This directory is your single source of tru
 - **`tool_logs/`**: A directory containing the `stdout` and `stderr` output from any shell commands that were run (like tests or linting).
 - **`manifest.json`**: A machine-readable index of key artifact paths for the run.
 - **`effective-config.json`**: The fully resolved configuration used for the run.
+- **`fused_context_step_*.{txt,json}`**: The fused prompt text + metadata used per step.
+- **`semantic_hits_step_*.json` / `memory_hits_step_*.json`** (optional): Raw retrieval artifacts when semantic indexing / memory retrieval is enabled.
 
 ## The `report` Command
 

@@ -29,15 +29,17 @@ The Orchestrator is designed for transparency. After each run, it saves detailed
 
 Key artifacts include:
 
-- `fused_context.json`: A JSON file containing the final, fully assembled context that was sent to the AI. This is the "source of truth" for what the agent knew.
-- `provenance.json`: A detailed report that explains _why_ each piece of information was included in the context. It shows the source of each item, its original score, and any truncation that was applied.
+- `fused_context_step_<index>_<slug>.txt`: The final fused prompt text for a step (what gets sent to providers).
+- `fused_context_step_<index>_<slug>.json`: Metadata describing what was included (repo items, memory hits, signals, context stack), including truncation flags.
+- `semantic_hits_step_<index>.json` (optional): Raw semantic-search hits when semantic indexing is enabled.
+- `memory_hits_step_<index>.json` (optional): Raw memory retrieval hits (lexical/vector) for that step.
 
 ### Example: Verifying Memory Usage
 
 If you want to verify that a specific memory was used in a run, you can:
 
 1.  Find the `run_id` for your latest run.
-2.  Open the `provenance.json` file in that run's directory.
-3.  Search for the memory item in the `sections` array. The provenance data will show you its source path and how it was ranked.
+2.  Open the `fused_context_step_<index>_<slug>.json` file for the step you're interested in.
+3.  Inspect `metadata.memoryHits` (included/truncated) and cross-reference with `memory_hits_step_<index>.json` for the raw retrieval results.
 
 This allows you to trust and verify that the agent is using its memory correctly and to debug cases where its behavior is unexpected.
