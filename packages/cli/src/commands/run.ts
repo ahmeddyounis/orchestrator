@@ -97,6 +97,9 @@ export function registerRunCommand(program: Command) {
       if (globalOpts.verbose) renderer.log(`Running goal: "${goal}"`);
 
       const repoRoot = await findRepoRoot();
+      type ExecutionConfig = NonNullable<Config['execution']>;
+      type ExecutionResearchConfig = NonNullable<ExecutionConfig['research']>;
+      type PatchReviewLoopConfig = NonNullable<ExecutionConfig['reviewLoop']>;
 
       let thinkLevel = options.think;
       if (thinkLevel === 'auto') {
@@ -114,8 +117,7 @@ export function registerRunCommand(program: Command) {
       }
 
       // Handle verification flags
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const verification: any = {};
+      const verification: DeepPartial<Config['verification']> = {};
       if (options.verify) {
         if (options.verify === 'off') {
           verification.enabled = false;
@@ -127,8 +129,7 @@ export function registerRunCommand(program: Command) {
         }
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const autoVerification: any = {};
+      const autoVerification: DeepPartial<Config['verification']['auto']> = {};
       if (options.verifyScope) {
         autoVerification.testScope = options.verifyScope;
       }
@@ -176,12 +177,11 @@ export function registerRunCommand(program: Command) {
       }
       if (options.planResearchNoSynth === true) planningResearch.synthesize = false;
       if (Object.keys(planningResearch).length > 0) {
-        planning.research = planningResearch as NonNullable<Config['planning']>['research'];
+        planning.research = planningResearch;
       }
 
       // Execution research flags
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const execResearch: any = {};
+      const execResearch: DeepPartial<ExecutionResearchConfig> = {};
       if (options.execResearch === true) execResearch.enabled = true;
       if (options.execResearchCount !== undefined) {
         const n = Number(options.execResearchCount);
@@ -286,8 +286,7 @@ export function registerRunCommand(program: Command) {
       }
 
       // Patch review loop flags
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const reviewLoop: any = {};
+      const reviewLoop: DeepPartial<PatchReviewLoopConfig> = {};
       if (options.reviewLoopMax !== undefined) {
         const maxReviews = Number(options.reviewLoopMax);
         if (!Number.isInteger(maxReviews) || maxReviews < 1) {
@@ -300,6 +299,12 @@ export function registerRunCommand(program: Command) {
       if (options.reviewLoop || options.reviewLoopMax !== undefined) {
         reviewLoop.enabled = true;
       }
+
+      const tools: DeepPartial<ToolPolicy> = {};
+      if (options.tools === false) tools.enabled = false;
+      // Only set when explicitly enabled so config defaults still apply.
+      if (options.yes === true) tools.autoApprove = true;
+      if (options.nonInteractive === true) tools.interactive = false;
 
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
@@ -320,16 +325,11 @@ export function registerRunCommand(program: Command) {
             reviewLoop: Object.keys(reviewLoop).length > 0 ? reviewLoop : undefined,
             research: Object.keys(execResearch).length > 0 ? execResearch : undefined,
             tools: {
-              enabled: options.tools === false ? false : undefined,
-              autoApprove: options.yes,
-              interactive: options.nonInteractive ? false : undefined,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any,
+              ...tools,
+            },
             sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
+          },
+          memory: Object.keys(memory).length > 0 ? memory : undefined,
           verification: Object.keys(verification).length > 0 ? verification : undefined,
         },
       });

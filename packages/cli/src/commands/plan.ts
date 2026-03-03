@@ -161,7 +161,7 @@ export function registerPlanCommand(program: Command) {
       if (options.researchNoSynth === true) research.synthesize = false;
 
       if (Object.keys(research).length > 0) {
-        planning.research = research as NonNullable<Config['planning']>['research'];
+        planning.research = research;
       }
 
       const flags: DeepPartial<Config> = {

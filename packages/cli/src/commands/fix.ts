@@ -129,13 +129,18 @@ export function registerFixCommand(program: Command) {
         memory.vector = vector;
       }
 
+      const tools: DeepPartial<ToolPolicy> = {};
+      if (options.tools === false) tools.enabled = false;
+      // Only set when explicitly enabled so config defaults still apply.
+      if (options.yes === true) tools.autoApprove = true;
+      if (options.nonInteractive === true) tools.interactive = false;
+
       const config = ConfigLoader.load({
         configPath: globalOpts.config,
         flags: {
           thinkLevel,
           budget: Object.keys(options.budget || {}).length > 0 ? options.budget : undefined,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          memory: Object.keys(memory).length > 0 ? (memory as any) : undefined,
+          memory: Object.keys(memory).length > 0 ? memory : undefined,
           defaults: {
             planner: options.planner,
             executor: options.executor,
@@ -146,14 +151,10 @@ export function registerFixCommand(program: Command) {
             : undefined,
           execution: {
             tools: {
-              enabled: options.tools === false ? false : undefined,
-              autoApprove: options.yes,
-              interactive: options.nonInteractive ? false : undefined,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any,
+              ...tools,
+            },
             sandbox: options.sandbox ? { mode: options.sandbox } : undefined,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any,
+          },
         },
       });
 
