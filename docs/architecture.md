@@ -2,6 +2,9 @@
 
 This document describes the high-level architecture of the Orchestrator system.
 
+See `docs/architecture-invariants.md` for the rules we try to enforce across packages (dependency
+direction, public API boundaries, lifecycle/shutdown, and observability).
+
 ## Overview
 
 The Orchestrator is a modular monorepo designed to keep core orchestration logic independent from
