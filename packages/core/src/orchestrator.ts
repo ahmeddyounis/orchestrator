@@ -34,7 +34,6 @@ import {
   createMemoryStore,
 } from '@orchestrator/memory';
 import { createEmbedder } from '@orchestrator/adapters';
-import type { PreparedPlugin, ProviderAdapterPlugin } from '@orchestrator/plugin-sdk';
 import { ProviderRegistry, EventBus } from './registry';
 import { PatchStore } from './exec/patch_store';
 import { PlanService } from './plan/service';
@@ -54,8 +53,8 @@ import * as fsSync from 'fs';
 import { createHash } from 'crypto';
 import { CostTracker } from './cost/tracker';
 import { DEFAULT_BUDGET } from './config/budget';
-import { PluginLoader, LoadedPlugin } from './plugins/loader';
-import { PluginProviderAdapter } from './plugins/provider_adapter';
+import type { LoadedPlugin } from './plugins/loader';
+import { PluginManager } from './plugins/manager';
 import { SimpleContextFuser } from './context';
 import { IndexAutoUpdateService } from './indexing/auto_update';
 import { CandidateGenerator, StepContext, Candidate } from './orchestrator/l3/candidate_generator';
@@ -158,29 +157,9 @@ export class Orchestrator {
     const logger = new JsonlLogger(
       path.join(options.repoRoot, '.orchestrator', 'logs', 'plugins.jsonl'),
     );
-    const pluginLoader = new PluginLoader(options.config, logger, options.repoRoot);
-    const loadedPlugins = await pluginLoader.loadPlugins();
-    const pluginConfigByName = options.config.plugins?.config ?? {};
-
-    const toObjectRecord = (value: unknown): Record<string, unknown> => {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-      return value as Record<string, unknown>;
-    };
-
-    for (const loadedPlugin of loadedPlugins) {
-      if (loadedPlugin.manifest.type === 'provider') {
-        const pluginDefaults = toObjectRecord(pluginConfigByName[loadedPlugin.manifest.name]);
-        const prepared = loadedPlugin.prepared as unknown as PreparedPlugin<ProviderAdapterPlugin>;
-        options.registry.registerFactory(loadedPlugin.manifest.name, (providerConfig) => {
-          return new PluginProviderAdapter({
-            pluginName: loadedPlugin.manifest.name,
-            prepared,
-            config: { ...pluginDefaults, ...providerConfig },
-            logger,
-          });
-        });
-      }
-    }
+    const pluginManager = new PluginManager(options.config, logger, options.repoRoot);
+    const loadedPlugins = await pluginManager.load();
+    pluginManager.registerProviderPlugins(options.registry);
 
     return new Orchestrator(options, loadedPlugins);
   }
