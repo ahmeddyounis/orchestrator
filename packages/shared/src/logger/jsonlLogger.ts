@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import path from 'path';
 import { OrchestratorEvent } from '../types/events';
 import { redactForLogs } from '../redaction';
 import type { Logger } from './types';
@@ -16,6 +17,7 @@ export class JsonlLogger implements Logger {
     const redactedEvent = redactForLogs(event);
     const line = JSON.stringify(redactedEvent) + '\n';
     try {
+      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       await fs.appendFile(this.filePath, line, 'utf8');
     } catch (error) {
       console.error(`Failed to write to log file at ${this.filePath}`, error);

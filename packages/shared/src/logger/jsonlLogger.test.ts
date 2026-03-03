@@ -34,6 +34,25 @@ describe('JsonlLogger', () => {
     expect(content.trim()).toBe(JSON.stringify(event1));
   });
 
+  it('creates parent directory if missing', async () => {
+    tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
+    const logPath = join(tmpDir, 'nested', 'trace.jsonl');
+    const logger = new JsonlLogger(logPath);
+
+    const event: RunStarted = {
+      schemaVersion: 1,
+      timestamp: '2023-01-01T00:00:00Z',
+      runId: 'run-1',
+      type: 'RunStarted',
+      payload: { taskId: 't1', goal: 'test' },
+    };
+
+    await logger.log(event);
+
+    const content = await fs.readFile(logPath, 'utf8');
+    expect(content.trim()).toBe(JSON.stringify(event));
+  });
+
   it('appends multiple events', async () => {
     tmpDir = await fs.mkdtemp(join(os.tmpdir(), 'orch-logger-test-'));
     const logPath = join(tmpDir, 'trace.jsonl');
