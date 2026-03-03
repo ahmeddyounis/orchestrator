@@ -17,3 +17,4 @@ export * from './exec/ui';
 export * from './orchestrator';
 export * from './orchestrator/l3';
 export * from './plugins/loader';
+export * from './plugins/manager';

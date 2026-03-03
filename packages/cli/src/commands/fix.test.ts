@@ -10,6 +10,7 @@ const {
   orchestratorCreateSpy,
   orchestratorRunSpy,
   registryRegisterFactorySpy,
+  registryShutdownAllSpy,
   costTrackerGetSummarySpy,
   ensureCleanWorkingTreeSpy,
   createAndCheckoutBranchSpy,
@@ -23,6 +24,7 @@ const {
   orchestratorCreateSpy: vi.fn(),
   orchestratorRunSpy: vi.fn(),
   registryRegisterFactorySpy: vi.fn(),
+  registryShutdownAllSpy: vi.fn(),
   costTrackerGetSummarySpy: vi.fn(),
   ensureCleanWorkingTreeSpy: vi.fn(),
   createAndCheckoutBranchSpy: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock('@orchestrator/core', () => ({
   ProviderRegistry: vi.fn().mockImplementation(function () {
     return {
       registerFactory: registryRegisterFactorySpy,
+      shutdownAll: registryShutdownAllSpy,
     };
   }),
   CostTracker: vi.fn().mockImplementation(function () {
@@ -105,6 +108,7 @@ describe('registerFixCommand', () => {
     } as any);
     parseBudgetSpy.mockReturnValue({});
     costTrackerGetSummarySpy.mockReturnValue({ total: { totalTokens: 0 } });
+    registryShutdownAllSpy.mockResolvedValue({ errors: [] });
     orchestratorCreateSpy.mockResolvedValue({
       run: orchestratorRunSpy,
     });

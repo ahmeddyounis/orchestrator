@@ -413,7 +413,11 @@ export function registerRunCommand(program: Command) {
 
       renderer.render(output);
 
-      await registry.shutdownAll();
+      const { errors: shutdownErrors } = await registry.shutdownAll();
+      if (shutdownErrors.length > 0 && globalOpts.verbose) {
+        const providers = shutdownErrors.map((e) => e.providerId).join(', ');
+        renderer.log(`Warning: failed to shutdown providers: ${providers}`);
+      }
 
       if (result.status === 'success') {
         process.exit(0);

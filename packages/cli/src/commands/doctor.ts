@@ -2,8 +2,24 @@ import { Command } from 'commander';
 import { promises as fs } from 'fs';
 import path from 'path';
 import which from 'which';
-import { isWindows, isWSL, Config, type Logger } from '@orchestrator/shared';
-import { ConfigLoader, PluginLoader } from '@orchestrator/core';
+import {
+  isWindows,
+  isWSL,
+  Config,
+  ConfigError,
+  ProviderConfig,
+  type Logger,
+} from '@orchestrator/shared';
+import { ConfigLoader, PluginLoader, PluginManager, ProviderRegistry } from '@orchestrator/core';
+import {
+  AnthropicAdapter,
+  ClaudeCodeAdapter,
+  CodexCliAdapter,
+  FakeAdapter,
+  GeminiCliAdapter,
+  OpenAIAdapter,
+  SubprocessProviderAdapter,
+} from '@orchestrator/adapters';
 import chalk from 'chalk';
 import { findRepoRoot } from '@orchestrator/repo';
 
@@ -12,6 +28,16 @@ const CHECKS = {
   WARN: chalk.yellow('!'),
   FAIL: chalk.red('✖'),
 };
+
+type CheckResult = [string, string];
+
+function printResult([status, message]: CheckResult): void {
+  const lines = message.split('\n');
+  console.log(`${status} ${lines[0]}`);
+  for (const line of lines.slice(1)) {
+    console.log(`  ${line}`);
+  }
+}
 
 async function checkExecutable(name: string): Promise<[string, string]> {
   try {
@@ -79,6 +105,69 @@ async function checkLocalProviderExecutables(config: Config): Promise<[string, s
   }
 
   return await Promise.all([...commandsToCheck].map((cmd) => checkExecutable(cmd)));
+}
+
+function registerBuiltInProviderFactories(registry: ProviderRegistry): void {
+  registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
+  registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
+  registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
+  registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
+  registry.registerFactory('codex_cli', (cfg: ProviderConfig) => new CodexCliAdapter(cfg));
+  registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
+  registry.registerFactory('subprocess', (cfg: ProviderConfig) => {
+    if (!cfg.command) {
+      throw new ConfigError(`Provider type 'subprocess' requires 'command' in config.`);
+    }
+    return new SubprocessProviderAdapter({
+      command: [cfg.command, ...(cfg.args ?? [])],
+      cwdMode: cfg.cwdMode,
+      envAllowlist: cfg.env,
+    });
+  });
+}
+
+async function checkProviderAdapters(config: Config, repoRoot: string): Promise<CheckResult[]> {
+  const providers = config.providers;
+  if (!providers || Object.keys(providers).length === 0) {
+    return [[CHECKS.WARN, 'No providers configured.']];
+  }
+
+  const { logger } = createBufferedLogger();
+  const registry = new ProviderRegistry(config);
+  registerBuiltInProviderFactories(registry);
+
+  const pluginManager = new PluginManager(config, logger, repoRoot);
+  await pluginManager.load();
+  pluginManager.registerProviderPlugins(registry);
+
+  const results: CheckResult[] = [];
+
+  const entries = Object.entries(providers).sort(([a], [b]) => a.localeCompare(b));
+  for (const [providerId, providerConfig] of entries) {
+    try {
+      registry.getAdapter(providerId);
+      results.push([
+        CHECKS.OK,
+        `Provider '${providerId}' (${providerConfig.type}) initialized successfully.`,
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.push([
+        CHECKS.FAIL,
+        `Provider '${providerId}' (${providerConfig.type}) failed to initialize: ${message}`,
+      ]);
+    }
+  }
+
+  const { errors } = await registry.shutdownAll();
+  if (errors.length > 0) {
+    const ids = [...new Set(errors.map((e) => e.providerId))]
+      .sort((a, b) => a.localeCompare(b))
+      .join(', ');
+    results.push([CHECKS.WARN, `Some providers failed to shutdown cleanly: ${ids}`]);
+  }
+
+  return results;
 }
 
 function providerRequiresApiKey(type: string): boolean {
@@ -182,12 +271,16 @@ export const registerDoctorCommand = (program: Command) => {
     console.log(chalk.bold('Orchestrator Environment Checkup'));
 
     const results: Array<[string, string]> = [];
+    const record = (result: [string, string]) => {
+      results.push(result);
+      printResult(result);
+    };
 
     console.log('---------------------------------');
     console.log(chalk.bold('System Environment'));
-    results.push(await checkWSL());
-    results.push(await checkExecutable('git'));
-    results.push(await checkExecutable('rg'));
+    record(await checkWSL());
+    record(await checkExecutable('git'));
+    record(await checkExecutable('rg'));
 
     try {
       const globalOpts = program.opts();
@@ -195,21 +288,26 @@ export const registerDoctorCommand = (program: Command) => {
       const config = ConfigLoader.load({ cwd: repoRoot, configPath: globalOpts.config });
 
       console.log('\n' + chalk.bold('Configuration Checks (`.orchestrator.yaml`)'));
-      results.push(await checkProviderConfig(config));
-      results.push(...(await checkLocalProviderExecutables(config)));
-      results.push(await checkPluginStatus(config, repoRoot));
-      results.push(...checkToolExecPolicy(config));
+      record(await checkProviderConfig(config));
+      for (const result of await checkLocalProviderExecutables(config)) {
+        record(result);
+      }
+      record(await checkPluginStatus(config, repoRoot));
+      for (const result of checkToolExecPolicy(config)) {
+        record(result);
+      }
+
+      console.log('\n' + chalk.bold('Provider Adapters'));
+      for (const result of await checkProviderAdapters(config, repoRoot)) {
+        record(result);
+      }
 
       console.log('\n' + chalk.bold('Project Status'));
-      results.push(await checkIndexingStatus(repoRoot, config));
+      record(await checkIndexingStatus(repoRoot, config));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      results.push([CHECKS.FAIL, `Failed to load configuration: ${message}`]);
+      record([CHECKS.FAIL, `Failed to load configuration: ${message}`]);
     }
-
-    results.forEach(([status, message]) => {
-      console.log(`${status} ${message}`);
-    });
 
     console.log('---------------------------------');
 
