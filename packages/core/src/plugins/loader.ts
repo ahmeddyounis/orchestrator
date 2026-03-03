@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { pathToFileURL } from 'url';
 
 export interface LoadedPlugin<T extends PluginLifecycle = PluginLifecycle> {
   manifest: PluginManifest;
@@ -31,14 +32,21 @@ export class PluginLoader {
       return [];
     }
 
-    const pluginPaths = (pluginsConfig.paths || []).flatMap((p) => {
+    const pluginPaths: string[] = [];
+    let includeHomePluginsDir = false;
+    for (const p of pluginsConfig.paths || []) {
       if (path.isAbsolute(p)) {
-        return [p];
+        pluginPaths.push(p);
+        continue;
       }
-      return [path.join(this.repoRoot, p), path.join(os.homedir(), '.orchestrator', 'plugins')];
-    });
+      includeHomePluginsDir = true;
+      pluginPaths.push(path.join(this.repoRoot, p));
+    }
+    if (includeHomePluginsDir) {
+      pluginPaths.push(path.join(os.homedir(), '.orchestrator', 'plugins'));
+    }
 
-    const discoveredFiles = await this.discoverPlugins(pluginPaths);
+    const discoveredFiles = await this.discoverPlugins([...new Set(pluginPaths)]);
     const loadedPlugins = await this.loadPluginFiles(discoveredFiles);
 
     return loadedPlugins;
@@ -67,8 +75,12 @@ export class PluginLoader {
 
     for (const file of pluginFiles) {
       try {
-        const pluginExport = await import(file);
-        const manifest = pluginExport.manifest as PluginManifest;
+        const moduleNs = await import(pathToFileURL(file).href);
+        const pluginExport =
+          typeof moduleNs?.manifest === 'object' && typeof moduleNs?.createPlugin === 'function'
+            ? moduleNs
+            : (moduleNs.default as typeof moduleNs);
+        const manifest = pluginExport?.manifest as PluginManifest;
 
         if (!manifest) {
           this.logger.warn(`Plugin ${file} is missing a manifest.`);
