@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_TRUSTED_PERMISSIONS, PluginPermissionSchema } from '../security/plugin-security';
 
 export const SemanticIndexingConfigSchema = z
   .object({
@@ -436,6 +437,20 @@ export const PluginsConfigSchema = z.object({
   enabled: z.boolean().default(false),
   paths: z.array(z.string()).default(['.orchestrator/plugins']),
   allowlistIds: z.array(z.string()).optional(),
+  config: z.record(z.string(), z.unknown()).default({}),
+  security: z
+    .object({
+      requireSignatures: z.boolean().default(false),
+      enforcePermissions: z.boolean().default(true),
+      trustedKeys: z.record(z.string(), z.string()).default({}),
+      grantedPermissions: PluginPermissionSchema.default(DEFAULT_TRUSTED_PERMISSIONS),
+    })
+    .default({
+      requireSignatures: false,
+      enforcePermissions: true,
+      trustedKeys: {},
+      grantedPermissions: DEFAULT_TRUSTED_PERMISSIONS,
+    }),
 });
 
 const PlanningReviewConfigSchema = z.object({

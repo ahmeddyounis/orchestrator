@@ -4,6 +4,8 @@ import {
   safeLoadPlugin,
   PluginContext,
   LoadPluginResult,
+  DEFAULT_TRUSTED_PERMISSIONS,
+  type PluginSecurityContext,
 } from '@orchestrator/plugin-sdk';
 import { Config, Logger } from '@orchestrator/shared';
 import * as path from 'path';
@@ -54,11 +56,18 @@ export class PluginLoader {
 
   private async discoverPlugins(pluginDirs: string[]): Promise<string[]> {
     const files: string[] = [];
-    for (const dir of pluginDirs) {
+    for (const dir of [...pluginDirs].sort((a, b) => a.localeCompare(b))) {
       try {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
+        const entries = (await fs.readdir(dir, { withFileTypes: true })).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
         for (const entry of entries) {
-          if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.mjs'))) {
+          if (
+            entry.isFile() &&
+            (entry.name.endsWith('.js') ||
+              entry.name.endsWith('.mjs') ||
+              entry.name.endsWith('.cjs'))
+          ) {
             files.push(path.join(dir, entry.name));
           }
         }
@@ -66,15 +75,30 @@ export class PluginLoader {
         this.logger.debug(`Could not read plugin directory: ${dir}`);
       }
     }
-    return files;
+    return files.sort((a, b) => a.localeCompare(b));
+  }
+
+  private buildSecurityContext(): PluginSecurityContext {
+    const security = this.config.plugins?.security;
+    const trustedKeys = new Map(Object.entries(security?.trustedKeys ?? {}));
+
+    return {
+      trustedKeys,
+      requireSignatures: security?.requireSignatures ?? false,
+      enforcePermissions: security?.enforcePermissions ?? true,
+      grantedPermissions: security?.grantedPermissions ?? DEFAULT_TRUSTED_PERMISSIONS,
+    };
   }
 
   private async loadPluginFiles(pluginFiles: string[]): Promise<Array<LoadedPlugin>> {
     const plugins: Array<LoadedPlugin> = [];
     const allowlist = this.config.plugins?.allowlistIds;
+    const pluginConfigByName = this.config.plugins?.config ?? {};
+    const securityContext = this.buildSecurityContext();
 
     for (const file of pluginFiles) {
       try {
+        const fileBuffer = await fs.readFile(file);
         const moduleNs = await import(pathToFileURL(file).href);
         const pluginExport =
           typeof moduleNs?.manifest === 'object' && typeof moduleNs?.createPlugin === 'function'
@@ -92,12 +116,21 @@ export class PluginLoader {
           continue;
         }
 
+        const rawPluginConfig = pluginConfigByName[manifest.name];
+        const pluginConfig =
+          rawPluginConfig && typeof rawPluginConfig === 'object' && !Array.isArray(rawPluginConfig)
+            ? (rawPluginConfig as Record<string, unknown>)
+            : {};
+
         const ctx: PluginContext = {
           runId: `plugin-load:${manifest.name}`,
           logger: this.logger.child({ plugin: manifest.name }),
         };
 
-        const result: LoadPluginResult = await safeLoadPlugin(pluginExport, {}, ctx);
+        const result: LoadPluginResult = await safeLoadPlugin(pluginExport, pluginConfig, ctx, {
+          pluginContent: fileBuffer,
+          securityContext,
+        });
 
         if (!result.success) {
           this.logger.warn(`Failed to load plugin ${manifest.name}: ${result.error}`);
@@ -105,7 +138,6 @@ export class PluginLoader {
         }
 
         if (result.plugin && result.manifest) {
-          const fileBuffer = await fs.readFile(file);
           const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
           plugins.push({
             manifest: result.manifest,
