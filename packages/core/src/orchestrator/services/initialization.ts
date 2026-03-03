@@ -2,6 +2,7 @@ import {
   Config,
   createRunDir,
   MANIFEST_VERSION,
+  updateManifest,
   writeManifest,
   JsonlLogger,
   OrchestratorEvent,
@@ -11,6 +12,7 @@ import { EventBus } from '../../registry';
 import { ConfigLoader } from '../../config/loader';
 import { RunArtifacts, RunContext } from './types';
 import path from 'path';
+import * as fsSync from 'fs';
 
 /**
  * Service responsible for initializing run artifacts and context
@@ -67,6 +69,19 @@ export class RunInitializationService {
     goal: string,
     includeContextPaths = false,
   ): Promise<void> {
+    if (fsSync.existsSync(artifacts.manifest)) {
+      if (includeContextPaths) {
+        try {
+          await updateManifest(artifacts.manifest, (manifest) => {
+            manifest.contextPaths = manifest.contextPaths ?? [];
+          });
+        } catch {
+          // Non-fatal: backfilling best-effort.
+        }
+      }
+      return;
+    }
+
     const startedAt = new Date().toISOString();
     await writeManifest(artifacts.manifest, {
       schemaVersion: MANIFEST_VERSION,
