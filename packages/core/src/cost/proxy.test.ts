@@ -103,4 +103,19 @@ describe('CostTrackingAdapter', () => {
     }
     expect(events).toEqual([]);
   });
+
+  it('forwards shutdown to the base adapter when present', async () => {
+    const tracker = { recordUsage: vi.fn() };
+    const shutdown = vi.fn().mockResolvedValue(undefined);
+    const base: ProviderAdapter = {
+      id: () => 'base',
+      capabilities,
+      generate: vi.fn().mockResolvedValue({ text: 'unused' }),
+      shutdown,
+    };
+
+    const adapter = new CostTrackingAdapter('provider-1', base, tracker as any);
+    await adapter.shutdown();
+    expect(shutdown).toHaveBeenCalledTimes(1);
+  });
 });

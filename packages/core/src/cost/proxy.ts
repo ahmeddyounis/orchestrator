@@ -40,4 +40,8 @@ export class CostTrackingAdapter implements ProviderAdapter {
       yield event;
     }
   }
+
+  async shutdown(): Promise<void> {
+    await this.adapter.shutdown?.();
+  }
 }

@@ -43,6 +43,12 @@ export interface ProviderAdapter {
    * @returns An async iterable of stream events
    */
   stream?(req: ModelRequest, ctx: AdapterContext): AsyncIterable<StreamEvent>;
+
+  /**
+   * Optional cleanup hook to release resources (optional).
+   * Called when an adapter is being unloaded or when the process is shutting down.
+   */
+  shutdown?(): Promise<void> | void;
 }
 
 /**
