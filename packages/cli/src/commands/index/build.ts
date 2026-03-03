@@ -1,6 +1,13 @@
 import { Command } from 'commander';
 import path from 'node:path';
-import { IndexBuilder, findRepoRoot, SemanticIndexBuilder, emitter } from '@orchestrator/repo';
+import {
+  IndexBuilder,
+  findRepoRoot,
+  SemanticIndexBuilder,
+  emitter,
+  saveIndexAtomic,
+  legacyIndexToDocument,
+} from '@orchestrator/repo';
 import { ConfigLoader, reconcileMemoryStaleness, type DeepPartial } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
 import type { Config } from '@orchestrator/shared';
@@ -50,9 +57,16 @@ export function registerIndexBuildCommand(parent: Command) {
         maxFileSizeBytes: config.indexing?.maxFileSizeBytes ?? 2 * 1024 * 1024,
       });
 
+      const indexRelPath = config.indexing?.path ?? '.orchestrator/index/index.json';
+      const indexPath = path.isAbsolute(indexRelPath)
+        ? indexRelPath
+        : path.join(repoRoot, indexRelPath);
+
       const startTime = Date.now();
       const index = await builder.build(repoRoot);
       const durationMs = Date.now() - startTime;
+
+      await saveIndexAtomic(indexPath, legacyIndexToDocument(repoId, index));
 
       let markedStaleCount = 0;
       let clearedStaleCount = 0;
@@ -115,6 +129,7 @@ export function registerIndexBuildCommand(parent: Command) {
 
       if (globalOpts.json) {
         const output: Record<string, unknown> = {
+          indexPath,
           index,
           reconciliation: {
             markedStale: markedStaleCount,
@@ -126,7 +141,7 @@ export function registerIndexBuildCommand(parent: Command) {
         }
         console.log(JSON.stringify(output, null, 2));
       } else {
-        console.log(`Successfully built index at: ${repoRoot}/.orchestrator/index`);
+        console.log(`Successfully built index at: ${indexPath}`);
         console.log(`- Took ${durationMs}ms`);
         console.log(`- Indexed ${index.stats.fileCount} files`);
         console.log(`- Hashed ${index.stats.hashedCount} files`);

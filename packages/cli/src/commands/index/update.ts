@@ -7,7 +7,7 @@ import {
   SemanticIndexUpdater,
   emitter,
   loadIndex,
-  type Index,
+  documentToLegacyIndex,
 } from '@orchestrator/repo';
 import { ConfigLoader, reconcileMemoryStaleness, type DeepPartial } from '@orchestrator/core';
 import { createMemoryStore } from '@orchestrator/memory';
@@ -83,11 +83,11 @@ export function registerIndexUpdateCommand(parent: Command) {
             },
           });
 
-          const updatedIndex = loadIndex(indexPath) as unknown as Index | null;
-          if (updatedIndex) {
+          const updatedIndexDoc = await loadIndex(indexPath);
+          if (updatedIndexDoc) {
             const stalenessResult = await reconcileMemoryStaleness(
               repoId,
-              updatedIndex,
+              documentToLegacyIndex(updatedIndexDoc),
               memoryStore,
             );
             markedStaleCount = stalenessResult.markedStaleCount;
