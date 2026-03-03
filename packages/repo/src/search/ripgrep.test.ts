@@ -3,6 +3,7 @@ import { RipgrepSearch } from './ripgrep';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { EventEmitter } from 'node:events';
+import { ToolError } from '@orchestrator/shared';
 
 vi.mock('node:child_process', () => ({
   spawn: vi.fn(),
@@ -132,5 +133,21 @@ describe('RipgrepSearch', () => {
 
     expect(result.matches).toHaveLength(1);
     expect(result.matches[0].path).toBe('file.ts');
+  });
+
+  it('treats exit code 1 (no matches) as success', async () => {
+    mockSpawn.mockReturnValueOnce(createMockChildProcess([], 1));
+
+    const search = new RipgrepSearch();
+    const result = await search.search({ query: 'world', cwd: '/test' });
+    expect(result.matches).toHaveLength(0);
+    expect(result.stats.matchesFound).toBe(0);
+  });
+
+  it('throws ToolError on exit code 2', async () => {
+    mockSpawn.mockReturnValueOnce(createMockChildProcess([], 2));
+
+    const search = new RipgrepSearch();
+    await expect(search.search({ query: 'world', cwd: '/test' })).rejects.toBeInstanceOf(ToolError);
   });
 });

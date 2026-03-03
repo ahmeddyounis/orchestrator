@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { SearchEngine, SearchOptions, SearchResult, SearchMatch } from './types';
 import * as readline from 'node:readline';
-import { normalizePath } from '@orchestrator/shared';
+import { normalizePath, ToolError } from '@orchestrator/shared';
 
 export class RipgrepSearch implements SearchEngine {
   private _isAvailable: boolean | null = null;
@@ -49,6 +49,20 @@ export class RipgrepSearch implements SearchEngine {
     const matches: SearchMatch[] = [];
     let matchesCount = 0;
 
+    const stderrTailMaxChars = 16_000;
+    let stderrTail = '';
+    child.stderr?.on('data', (data) => {
+      const chunk = data.toString();
+      stderrTail = (stderrTail + chunk).slice(-stderrTailMaxChars);
+    });
+
+    const exitPromise = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve, reject) => {
+        child.on('close', (code, signal) => resolve({ code, signal }));
+        child.on('error', (err) => reject(err));
+      },
+    );
+
     const rl = readline.createInterface({
       input: child.stdout,
       crlfDelay: Infinity,
@@ -88,20 +102,24 @@ export class RipgrepSearch implements SearchEngine {
       }
     }
 
-    return new Promise((resolve, reject) => {
-      child.on('close', () => {
-        resolve({
-          matches,
-          stats: {
-            durationMs: Date.now() - startTime,
-            matchesFound: matchesCount,
-            engine: 'ripgrep',
-          },
-        });
-      });
-      child.on('error', (err) => {
-        reject(err);
-      });
-    });
+    const { code, signal } = await exitPromise;
+    // rg exit codes: 0 => matches, 1 => no matches, 2 => error.
+    if (code !== 0 && code !== 1) {
+      throw new ToolError(
+        `Ripgrep search failed (exit code ${code ?? -1}${signal ? `; signal ${signal}` : ''})`,
+        {
+          details: stderrTail.trim().length > 0 ? stderrTail.trim() : undefined,
+        },
+      );
+    }
+
+    return {
+      matches,
+      stats: {
+        durationMs: Date.now() - startTime,
+        matchesFound: matchesCount,
+        engine: 'ripgrep',
+      },
+    };
   }
 }
