@@ -5,20 +5,20 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 
-import { Orchestrator } from '../../core/src/orchestrator';
+import { Orchestrator } from './orchestrator';
 import {
   Config,
   ConfigSchema,
   ToolPolicy,
   type ModelRequest,
   type ModelResponse,
-} from '../../shared/src/index';
-import { GitService } from './git';
-import { createMemoryStore } from '../../memory/src/index';
-import { ProviderRegistry } from '../../core/src/registry';
-import { UserInterface } from '../../exec/src/index';
-import { ProviderAdapter } from '../../adapters/src/index';
-import type { AdapterContext } from '../../adapters/src/types';
+} from '@orchestrator/shared';
+import { GitService } from '@orchestrator/repo';
+import { createMemoryStore } from '@orchestrator/memory';
+import { ProviderRegistry } from './registry';
+import { UserInterface } from '@orchestrator/exec';
+import { ProviderAdapter } from '@orchestrator/adapters';
+import type { AdapterContext } from '@orchestrator/adapters';
 
 const execAsync = promisify(exec);
 
