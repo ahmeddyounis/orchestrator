@@ -25,7 +25,7 @@ export class VerificationService {
     this.profile = {
       enabled: config.verification?.enabled ?? true,
       mode: config.verification?.mode || 'auto',
-      steps: [],
+      steps: config.verification?.steps ?? [],
       auto: {
         enableLint: config.verification?.auto?.enableLint ?? true,
         enableTypecheck: config.verification?.auto?.enableTypecheck ?? true,

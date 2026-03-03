@@ -32,6 +32,15 @@ describe('VerificationService', () => {
         verification: {
           enabled: false,
           mode: 'custom',
+          steps: [
+            {
+              name: 'lint',
+              command: 'pnpm lint',
+              required: true,
+              timeoutMs: 123,
+              allowNetwork: false,
+            },
+          ],
           auto: {
             enableLint: false,
             enableTypecheck: false,
@@ -51,7 +60,15 @@ describe('VerificationService', () => {
     expect(service.getProfile()).toEqual({
       enabled: false,
       mode: 'custom',
-      steps: [],
+      steps: [
+        {
+          name: 'lint',
+          command: 'pnpm lint',
+          required: true,
+          timeoutMs: 123,
+          allowNetwork: false,
+        },
+      ],
       auto: {
         enableLint: false,
         enableTypecheck: false,
