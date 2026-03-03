@@ -24,6 +24,8 @@ Embeddings are configured via `memory.vector.embedder` (for example: `memory.vec
 
 2.  **Provider-based (`openai`):** Uses an external embedding model from OpenAI. This produces higher-quality embeddings, leading to better search results. However, it requires sending content to a third-party API and may incur costs.
 
+    - Requires `OPENAI_API_KEY` to be set in your environment.
+
 ### Privacy and Data Storage
 
 A critical aspect of vector memory is understanding what data is stored where.
