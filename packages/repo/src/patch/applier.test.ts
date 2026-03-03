@@ -65,6 +65,35 @@ describe('PatchApplier', () => {
     expect(content).toBe('Hello Universe\n');
   });
 
+  it('allows filenames containing ".." when not traversing', async () => {
+    const filePath = path.join(tmpDir, 'foo..bar.txt');
+    await fs.writeFile(filePath, 'Hello World\n');
+    await run('git', ['add', 'foo..bar.txt'], tmpDir);
+    await run('git', ['commit', '-m', 'Add dotted file'], tmpDir);
+
+    const diffText =
+      [
+        'diff --git a/foo..bar.txt b/foo..bar.txt',
+        'index 557db03..980a0d5 100644',
+        '--- a/foo..bar.txt',
+        '+++ b/foo..bar.txt',
+        '@@ -1 +1 @@',
+        '-Hello World',
+        '+Hello Universe',
+        '',
+      ].join('\n') + '\n';
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    if (!result.applied) {
+      console.error('Apply failed:', result.error);
+    }
+    expect(result.applied).toBe(true);
+    expect(result.filesChanged).toContain('foo..bar.txt');
+
+    const content = await fs.readFile(filePath, 'utf-8');
+    expect(content).toBe('Hello Universe\n');
+  });
+
   it('applies a deletion patch and reports the deleted file', async () => {
     const filePath = path.join(tmpDir, 'delete.txt');
     await fs.writeFile(filePath, 'Bye World\n');
@@ -154,6 +183,40 @@ describe('PatchApplier', () => {
     const result = await applier.applyUnifiedDiff(tmpDir, diffText);
     expect(result.applied).toBe(false);
     expect(result.error?.type).toBe('security');
+  });
+
+  it('refuses patches targeting .git internals', async () => {
+    const diffText = [
+      'diff --git a/.git/hooks/post-checkout b/.git/hooks/post-checkout',
+      'new file mode 100755',
+      '--- /dev/null',
+      '+++ b/.git/hooks/post-checkout',
+      '@@ -0,0 +1 @@',
+      '+echo hacked',
+      '',
+    ].join('\n');
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('security');
+    expect(result.error?.message).toContain('Reserved path');
+  });
+
+  it('refuses patches targeting orchestrator internal state', async () => {
+    const diffText = [
+      'diff --git a/.orchestrator/evil.txt b/.orchestrator/evil.txt',
+      'new file mode 100644',
+      '--- /dev/null',
+      '+++ b/.orchestrator/evil.txt',
+      '@@ -0,0 +1 @@',
+      '+evil',
+      '',
+    ].join('\n');
+
+    const result = await applier.applyUnifiedDiff(tmpDir, diffText);
+    expect(result.applied).toBe(false);
+    expect(result.error?.type).toBe('security');
+    expect(result.error?.message).toContain('Reserved path');
   });
 
   it('refuses path traversal in deletion patches', async () => {

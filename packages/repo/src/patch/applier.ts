@@ -413,19 +413,6 @@ export class PatchApplier {
     // Normalize backslashes to forward slashes for consistent checking
     const normalizedPath = decodedPath.replace(/\\/g, '/');
 
-    // Check for path traversal in both original and decoded forms
-    const traversalPatterns = [
-      '../', // Standard Unix traversal
-      '..\\', // Windows traversal (before normalization)
-      '..', // Just ".." could be dangerous at path boundaries
-    ];
-
-    for (const pattern of traversalPatterns) {
-      if (filePath.includes(pattern) || normalizedPath.includes(pattern)) {
-        return `Path traversal detected: ${filePath}`;
-      }
-    }
-
     // Check for absolute paths (Unix-style)
     if (normalizedPath.startsWith('/')) {
       return `Absolute path not allowed: ${filePath}`;
@@ -442,9 +429,25 @@ export class PatchApplier {
       return `UNC path not allowed: ${filePath}`;
     }
 
+    const pathForParts = normalizedPath.replace(/^(?:\.\/)+/, '');
+    const pathParts = pathForParts.split('/');
+
+    // Check for path traversal after decoding and normalization.
+    for (const part of pathParts) {
+      if (part === '..') {
+        return `Path traversal detected: ${filePath}`;
+      }
+    }
+
+    // Block patches targeting orchestrator internal state or git internals.
+    // Note: `.orchestrator` is a runtime artifacts directory and `.git` is security-sensitive.
+    const firstMeaningfulPart = pathParts.find((p) => p !== '' && p !== '.');
+    if (firstMeaningfulPart === '.git' || firstMeaningfulPart === '.orchestrator') {
+      return `Reserved path not allowed: ${filePath}`;
+    }
+
     // Check for suspicious device paths (Windows)
     const windowsDevices = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
-    const pathParts = normalizedPath.split('/');
     for (const part of pathParts) {
       if (windowsDevices.test(part)) {
         return `Reserved Windows device name detected: ${filePath}`;
