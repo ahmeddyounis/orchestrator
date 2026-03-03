@@ -4,7 +4,9 @@ This document describes the high-level architecture of the Orchestrator system.
 
 ## Overview
 
-The Orchestrator is designed as a modular monorepo, separating concerns into distinct packages.
+The Orchestrator is a modular monorepo designed to keep core orchestration logic independent from
+I/O, provider SDKs, and CLI concerns. Most features are implemented as composable services with
+explicit boundaries between packages.
 
 ## Package Responsibilities
 
@@ -19,15 +21,52 @@ The Orchestrator is designed as a modular monorepo, separating concerns into dis
 | **@orchestrator/adapters** | Adapters for integrating with external tools, APIs, or services.                         |
 | **@orchestrator/shared**   | Common utilities, types, and helpers used across multiple packages.                      |
 
-## Data Flow (High Level)
+## Dependency Direction (intended)
 
-_(Placeholder: Diagram or description of how data moves from CLI -> Core -> Exec -> Adapters)_
+Most dependencies should flow “up” toward the CLI:
 
-1. **CLI** receives a command from the user.
-2. **Core** processes the intent and orchestrates the workflow.
-3. **Exec** executes the specific steps defined in the workflow.
-4. **Memory** is consulted or updated to maintain context.
-5. **Adapters** are used to interact with the outside world (file system, network, etc.) via **Repo**.
+`shared` → (`repo`, `adapters`, `plugin-sdk`) → (`memory`, `exec`) → `core` → `cli`
+
+Notes:
+
+- `@orchestrator/shared` should not depend on any other workspace packages.
+- `@orchestrator/plugin-sdk` defines stable plugin-facing types and utilities and should remain
+  minimally coupled (primarily depends on `shared`).
+- `@orchestrator/core` is allowed to compose across packages, but should avoid leaking internal
+  implementation details across its public API.
+
+## Data Flow (high level)
+
+### Typical `orchestrator run`
+
+```mermaid
+flowchart LR
+  U["User"] --> CLI["@orchestrator/cli"]
+  CLI --> CFG["ConfigLoader (.orchestrator.yaml)"]
+  CLI --> REG["ProviderRegistry (+ built-in factories)"]
+  CLI --> CORE["@orchestrator/core Orchestrator"]
+
+  CORE --> PLUG["PluginLoader (discover + validate)"]
+  PLUG --> REG
+
+  CORE --> REPO["@orchestrator/repo (scan/index/search)"]
+  CORE --> MEM["@orchestrator/memory (episodic/procedural/vector)"]
+  CORE --> EXEC["@orchestrator/exec (tools, patching, review loop)"]
+
+  CORE --> ADP["@orchestrator/adapters (LLM providers)"]
+  REG --> ADP
+```
+
+### In more detail
+
+1. **CLI** parses flags, finds repo root, loads config, and creates a `ProviderRegistry`.
+2. **Registry** is seeded with built-in adapter factories (OpenAI, Anthropic, local CLIs, etc.).
+3. **Core** creates an `Orchestrator` and loads plugins (if enabled) from configured paths.
+   - Provider plugins are registered into the same registry as additional adapter factories.
+4. **Core orchestration loop** plans (optional), builds context, requests candidates, evaluates them,
+   applies patches, and runs verification.
+5. **Repo/Exec/Memory** are consulted throughout for scanning, indexing, tool execution, and state.
+6. **Adapters** are the only place that talks to external LLM APIs / local provider CLIs.
 
 ## Adding a New Package
 
