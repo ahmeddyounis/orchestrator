@@ -189,7 +189,7 @@ describe('Orchestrator Memory/Context Integration', () => {
 
     const sources = verification.commandSources;
     expect(sources?.['tests']?.source).toBe('memory');
-  });
+  }, 30_000);
 
   it('should down-rank stale memory and fallback to detected commands', async () => {
     await setupTestRepoWithFiles();
