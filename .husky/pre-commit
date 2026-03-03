@@ -1,8 +1,12 @@
 #!/bin/sh
 
 # Run format check, lint, and typecheck before committing
+set -e
+
 echo "Running pre-commit checks..."
 
-pnpm format:check && pnpm lint && pnpm typecheck
+pnpm format:check
+pnpm lint
+pnpm typecheck
 
 echo "Pre-commit checks passed!"
