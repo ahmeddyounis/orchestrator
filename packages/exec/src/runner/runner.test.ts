@@ -147,6 +147,32 @@ describe('SafeCommandRunner', () => {
     await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(ToolError);
   });
 
+  it('should respect per-tool timeout overrides', async () => {
+    const req: ToolRunRequest = {
+      command: 'node -e "process.exit(0)"',
+      reason: 'test',
+      cwd: '/tmp',
+    };
+    const policy = {
+      ...defaultPolicy,
+      timeoutMs: 1000,
+      toolTimeouts: {
+        node: { timeoutMs: 1000 },
+        'node -e': { timeoutMs: 10 },
+      },
+    } as ToolPolicy;
+
+    const mockChild = new EventEmitter() as any;
+    mockChild.stdout = new EventEmitter();
+    mockChild.stderr = new EventEmitter();
+    mockChild.pid = 123;
+    vi.mocked(spawn).mockReturnValue(mockChild);
+
+    (fs.readFileSync as unknown as Mock).mockReturnValue('partial output');
+
+    await expect(runner.run(req, policy, mockUi, mockCtx)).rejects.toThrow(ToolError);
+  });
+
   it('should truncate output if limit exceeded', async () => {
     const req: ToolRunRequest = { command: 'echo long', reason: 'test', cwd: '/tmp' };
     const policy = { ...defaultPolicy, maxOutputBytes: 5 };

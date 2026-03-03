@@ -8,6 +8,7 @@ import {
   ToolRunResult,
   ToolError,
   UsageError,
+  ToolTimeoutConfig,
 } from '@orchestrator/shared';
 import { parseCommand } from '../classify/parser';
 import * as classifier from '../classify/classifier';
@@ -90,6 +91,49 @@ function getSafeEnv(
   }
 
   return safeEnv;
+}
+
+function matchesPrefixOnBoundary(command: string, prefix: string): boolean {
+  const cmd = command.trimStart();
+  const p = prefix.trim();
+
+  if (!p) return false;
+  if (!cmd.startsWith(p)) return false;
+  if (cmd.length === p.length) return true;
+
+  const nextChar = cmd[p.length];
+  return typeof nextChar === 'string' && /\s/.test(nextChar);
+}
+
+function normalizeToolBin(bin: string): string {
+  if (!bin) return '';
+  const base = bin.replace(/\\/g, '/').split('/').pop() ?? bin;
+  return base.toLowerCase().replace(/\.(exe|cmd|bat)$/i, '');
+}
+
+function resolveToolTimeoutConfig(
+  command: string,
+  parsedBin: string,
+  policy: Pick<ToolPolicy, 'toolTimeouts'>,
+): ToolTimeoutConfig | undefined {
+  const timeouts = policy.toolTimeouts;
+  if (!timeouts) return undefined;
+
+  let bestKey: string | undefined;
+  for (const key of Object.keys(timeouts)) {
+    if (matchesPrefixOnBoundary(command, key)) {
+      if (!bestKey || key.trim().length > bestKey.trim().length) {
+        bestKey = key;
+      }
+    }
+  }
+  if (bestKey) return timeouts[bestKey];
+
+  const normalizedBin = normalizeToolBin(parsedBin);
+  if (normalizedBin && normalizedBin in timeouts) return timeouts[normalizedBin];
+  if (parsedBin && parsedBin in timeouts) return timeouts[parsedBin];
+
+  return undefined;
 }
 
 export interface RunnerContext {
@@ -214,6 +258,11 @@ export class SafeCommandRunner {
     stdoutPath: string,
     stderrPath: string,
   ): Promise<ToolRunResult> {
+    const parsed = parseCommand(req.command);
+    const toolTimeout = resolveToolTimeoutConfig(req.command, parsed.bin, policy);
+    const timeoutMs = toolTimeout?.timeoutMs ?? policy.timeoutMs;
+    const gracePeriodMs = Math.max(0, Math.floor(toolTimeout?.gracePeriodMs ?? 0));
+
     // Shell policy enforcement
     const needsShell = isShellCommand(req.command);
     if (needsShell && !policy.allowShell) {
@@ -233,7 +282,6 @@ export class SafeCommandRunner {
       bin = req.command;
       args = [];
     } else {
-      const parsed = parseCommand(req.command);
       if (!parsed.bin) {
         throw new ToolError(`Could not parse command: ${req.command}`);
       }
@@ -282,6 +330,15 @@ export class SafeCommandRunner {
           settled = true;
           if (child.pid) {
             killProcessTree(child.pid, 'SIGTERM');
+            if (!isWindows() && gracePeriodMs > 0) {
+              setTimeout(() => {
+                try {
+                  killProcessTree(child.pid!, 'SIGKILL');
+                } catch {
+                  // ignore
+                }
+              }, gracePeriodMs);
+            }
           }
 
           const partialStdout = fs.readFileSync(stdoutPath, 'utf8').slice(0, 1000);
@@ -290,12 +347,12 @@ export class SafeCommandRunner {
           stdoutStream.end();
           stderrStream.end();
           reject(
-            new ToolError(`Command timed out after ${policy.timeoutMs}ms`, {
+            new ToolError(`Command timed out after ${timeoutMs}ms`, {
               details: { partialStdout, partialStderr },
             }),
           );
         }
-      }, policy.timeoutMs);
+      }, timeoutMs);
 
       // Output handling
       child.stdout.on('data', (chunk: Buffer) => {
