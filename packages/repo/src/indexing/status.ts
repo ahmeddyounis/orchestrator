@@ -3,7 +3,8 @@ import { loadIndex as loadIndexFile, type IndexFile as StoredIndexFile } from '.
 import { RepoScanner } from '../scanner';
 import path from 'path';
 
-type IndexRecord = StoredIndexFile['files'][number];
+type DriftIndex = Pick<StoredIndexFile, 'repoRoot' | 'files'>;
+type IndexRecord = DriftIndex['files'][number];
 
 export interface IndexDrift {
   hasDrift: boolean;
@@ -33,7 +34,7 @@ async function loadIndex(config: OrchestratorConfig): Promise<StoredIndexFile | 
   return loadIndexFile(indexPath);
 }
 
-export async function checkDrift(index: StoredIndexFile, ignore?: string[]): Promise<IndexDrift> {
+export async function checkDrift(index: DriftIndex, ignore?: string[]): Promise<IndexDrift> {
   const scanner = new RepoScanner();
   const snapshot = await scanner.scan(index.repoRoot, {
     excludes: ignore,
