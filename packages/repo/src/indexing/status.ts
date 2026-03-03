@@ -1,8 +1,9 @@
 import { OrchestratorConfig } from '@orchestrator/shared';
-import { Index, IndexFile } from './types';
-import { loadIndex as loadIndexFile } from './store';
+import { loadIndex as loadIndexFile, type IndexFile as StoredIndexFile } from './store';
 import { RepoScanner } from '../scanner';
 import path from 'path';
+
+type IndexRecord = StoredIndexFile['files'][number];
 
 export interface IndexDrift {
   hasDrift: boolean;
@@ -26,20 +27,19 @@ export interface IndexStatus {
   drift?: IndexDrift;
 }
 
-function loadIndex(config: OrchestratorConfig): Index | null {
+async function loadIndex(config: OrchestratorConfig): Promise<StoredIndexFile | null> {
   if (!config.indexing?.path) return null;
   const indexPath = path.join(config.rootDir, config.indexing.path);
-  // This is a hack until we unify Index and IndexFile
-  return loadIndexFile(indexPath) as unknown as Index | null;
+  return loadIndexFile(indexPath);
 }
 
-export async function checkDrift(index: Index, ignore?: string[]): Promise<IndexDrift> {
+export async function checkDrift(index: StoredIndexFile, ignore?: string[]): Promise<IndexDrift> {
   const scanner = new RepoScanner();
   const snapshot = await scanner.scan(index.repoRoot, {
     excludes: ignore,
   });
 
-  const indexedFiles = new Map(index.files.map((f: IndexFile) => [f.path, f]));
+  const indexedFiles = new Map<string, IndexRecord>(index.files.map((f) => [f.path, f]));
   const physicalFiles = new Map(snapshot.files.map((f) => [f.path, f]));
 
   const changes = {
@@ -83,7 +83,7 @@ export async function checkDrift(index: Index, ignore?: string[]): Promise<Index
 }
 
 export async function getIndexStatus(config: OrchestratorConfig): Promise<IndexStatus> {
-  const index = loadIndex(config);
+  const index = await loadIndex(config);
   if (!index) {
     return { isIndexed: false };
   }

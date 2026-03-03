@@ -67,13 +67,13 @@ describe('getIndexStatus', () => {
   });
 
   it('should report isIndexed: false when no index is found', async () => {
-    mockedStore.loadIndex.mockReturnValue(null);
+    mockedStore.loadIndex.mockResolvedValue(null);
     const status = await getIndexStatus(baseConfig);
     expect(status.isIndexed).toBe(false);
   });
 
   it('should report no drift when index and files match', async () => {
-    mockedStore.loadIndex.mockReturnValue(baseIndex as any);
+    mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
     scanSpy.mockResolvedValue({
       repoRoot: '/app',
       files: [
@@ -115,7 +115,7 @@ describe('getIndexStatus', () => {
   });
 
   it('should detect changed files', async () => {
-    mockedStore.loadIndex.mockReturnValue(baseIndex as any);
+    mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
     scanSpy.mockResolvedValue({
       repoRoot: '/app',
       files: [
@@ -145,7 +145,7 @@ describe('getIndexStatus', () => {
   });
 
   it('should detect added files', async () => {
-    mockedStore.loadIndex.mockReturnValue(baseIndex as any);
+    mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
     scanSpy.mockResolvedValue({
       repoRoot: '/app',
       files: [
@@ -182,7 +182,7 @@ describe('getIndexStatus', () => {
   });
 
   it('should detect removed files', async () => {
-    mockedStore.loadIndex.mockReturnValue(baseIndex as any);
+    mockedStore.loadIndex.mockResolvedValue(baseIndex as any);
     scanSpy.mockResolvedValue({
       repoRoot: '/app',
       files: [
@@ -204,7 +204,7 @@ describe('getIndexStatus', () => {
   });
 
   it('should handle a mix of changes', async () => {
-    mockedStore.loadIndex.mockReturnValue({
+    mockedStore.loadIndex.mockResolvedValue({
       ...baseIndex,
       stats: { ...baseIndex.stats, fileCount: 3 },
       files: [
