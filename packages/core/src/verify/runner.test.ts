@@ -137,12 +137,38 @@ describe('VerificationRunner', () => {
     expect(report.commandSources).toEqual({ 'custom-1': { source: 'custom' } });
     expect(mocks.run).toHaveBeenCalledWith(
       expect.objectContaining({ command: 'echo hello' }),
-      expect.anything(),
+      expect.objectContaining({ timeoutMs: 123 }),
       expect.anything(),
       expect.anything(),
     );
     expect(mocks.detect).not.toHaveBeenCalled();
     expect(mocks.memoryFind).not.toHaveBeenCalled();
+  });
+
+  it('can override networkPolicy for custom steps', async () => {
+    const runnerWithNetworkDeny = new VerificationRunner(
+      mockMemory,
+      { networkPolicy: 'deny' } as any,
+      mockUI,
+      mockEventBus,
+      '/app',
+    );
+    const customProfile: VerificationProfile = {
+      ...mockProfile,
+      mode: 'custom',
+      steps: [
+        { name: 'net', command: 'curl http://example.com', required: true, allowNetwork: true },
+      ],
+    };
+
+    await runnerWithNetworkDeny.run(customProfile, 'custom', {}, mockCtx);
+
+    expect(mocks.run).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'curl http://example.com' }),
+      expect.objectContaining({ networkPolicy: 'allow' }),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('skips disabled tasks in auto mode', async () => {

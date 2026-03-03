@@ -30,6 +30,7 @@ interface CommandToRun {
   name: string;
   command: string;
   timeoutMs?: number;
+  allowNetwork?: boolean;
 }
 
 export class VerificationRunner {
@@ -69,6 +70,7 @@ export class VerificationRunner {
           name: step.name,
           command: step.command,
           timeoutMs: step.timeoutMs,
+          allowNetwork: step.allowNetwork,
         });
         commandSources[step.name] = { source: 'custom' };
       }
@@ -145,6 +147,16 @@ export class VerificationRunner {
 
     for (const cmd of commandsToRun) {
       try {
+        const effectivePolicy: ToolPolicy = {
+          ...this.toolPolicy,
+          ...(cmd.timeoutMs !== undefined
+            ? { timeoutMs: cmd.timeoutMs, toolTimeouts: undefined }
+            : {}),
+          ...(cmd.allowNetwork !== undefined
+            ? { networkPolicy: cmd.allowNetwork ? 'allow' : 'deny' }
+            : {}),
+        };
+
         const result = await this.runner.run(
           {
             command: cmd.command,
@@ -152,7 +164,7 @@ export class VerificationRunner {
             reason: `Verification: ${cmd.name}`,
             classification: 'test',
           },
-          this.toolPolicy,
+          effectivePolicy,
           this.ui,
           ctx,
         );
