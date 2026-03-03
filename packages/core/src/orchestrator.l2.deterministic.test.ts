@@ -47,6 +47,11 @@ async function copyDirectory(src: string, dest: string) {
   }
 }
 
+async function readRunManifest(repoRoot: string, runId: string): Promise<any> {
+  const manifestPath = path.join(repoRoot, '.orchestrator', 'runs', runId, 'manifest.json');
+  return JSON.parse(await fs.readFile(manifestPath, 'utf-8'));
+}
+
 class FakeExecutor implements ProviderAdapter {
   private responses: string[];
   private callCount = 0;
@@ -233,6 +238,16 @@ describe('Orchestrator L2 Deterministic', () => {
     const fixedFileContent = await fs.readFile(path.join(testRepoPath, 'src/index.ts'), 'utf-8');
     expect(fixedFileContent).toContain('const x: number = 0;');
 
+    const manifest = await readRunManifest(testRepoPath, runId);
+    expect(manifest.finishedAt).toBeTruthy();
+    expect(manifest.patchPaths).toEqual(expect.arrayContaining(['patches/final.diff.patch']));
+    expect(manifest.verificationPaths).toEqual(
+      expect.arrayContaining([
+        'verification_report_initial.json',
+        'verification_report_iter_1.json',
+      ]),
+    );
+
     vi.restoreAllMocks();
   }, 30000);
 
@@ -322,6 +337,16 @@ describe('Orchestrator L2 Deterministic', () => {
     );
     expect(fixedFileContent).toContain('expect(add(1, 2)).toBe(3);');
 
+    const manifest = await readRunManifest(testRepoPath, runId);
+    expect(manifest.finishedAt).toBeTruthy();
+    expect(manifest.patchPaths).toEqual(expect.arrayContaining(['patches/final.diff.patch']));
+    expect(manifest.verificationPaths).toEqual(
+      expect.arrayContaining([
+        'verification_report_initial.json',
+        'verification_report_iter_1.json',
+      ]),
+    );
+
     vi.restoreAllMocks();
   }, 30000);
 
@@ -397,6 +422,16 @@ describe('Orchestrator L2 Deterministic', () => {
     expect(result.verification?.passed).toBe(false);
     const finalFileContent = await fs.readFile(path.join(testRepoPath, 'src/index.ts'), 'utf-8');
     expect(finalFileContent).toContain("const x: number = 'not a number';");
+
+    const manifest = await readRunManifest(testRepoPath, runId);
+    expect(manifest.finishedAt).toBeTruthy();
+    expect(manifest.patchPaths).toEqual(expect.arrayContaining(['patches/final.diff.patch']));
+    expect(manifest.verificationPaths).toEqual(
+      expect.arrayContaining([
+        'verification_report_initial.json',
+        'verification_report_iter_1.json',
+      ]),
+    );
 
     vi.restoreAllMocks();
   }, 30000);
