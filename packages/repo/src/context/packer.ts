@@ -1,4 +1,5 @@
 import { Snippet } from '../snippets/types';
+import { normalizePath } from '@orchestrator/shared';
 import {
   ContextPacker,
   ContextPack,
@@ -6,6 +7,80 @@ import {
   ContextSignal,
   ContextItem,
 } from './types';
+
+const PATH_LIKE_RE = /(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9]{1,10}/g;
+
+function normalizeSignalPath(input: string): string {
+  let p = normalizePath(String(input ?? '').trim());
+  // Strip common "path:line:col" suffixes.
+  p = p.replace(/\((\d+,\d+)\)$/, '');
+  p = p.replace(/:(\d+)(?::(\d+))?$/, '');
+  return p;
+}
+
+function extractPathHintsFromSignalData(data: unknown): string[] {
+  const out: string[] = [];
+  const add = (p: string) => {
+    const normalized = normalizeSignalPath(p);
+    if (!normalized) return;
+    out.push(normalized);
+  };
+
+  if (!data) return [];
+
+  if (typeof data === 'string') {
+    const matches = data.match(PATH_LIKE_RE) ?? [];
+    for (const m of matches) add(m);
+    return out;
+  }
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (typeof item === 'string') add(item);
+    }
+    return out;
+  }
+
+  if (typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.path === 'string') add(obj.path);
+    if (typeof obj.file === 'string') add(obj.file);
+    if (typeof obj.stack === 'string') {
+      const matches = obj.stack.match(PATH_LIKE_RE) ?? [];
+      for (const m of matches) add(m);
+    }
+    if (Array.isArray(obj.paths)) {
+      for (const p of obj.paths) {
+        if (typeof p === 'string') add(p);
+      }
+    }
+    if (Array.isArray(obj.files)) {
+      for (const f of obj.files) {
+        if (typeof f === 'string') add(f);
+      }
+    }
+  }
+
+  return out;
+}
+
+function matchesPathHint(snippetPath: string, hint: string): boolean {
+  const s = normalizePath(snippetPath);
+  const h = normalizePath(hint);
+  if (!h) return false;
+
+  if (s === h) return true;
+  if (s.endsWith(h)) return true;
+  if (h.endsWith(s)) return true;
+
+  // If we only have a basename-like hint, match on basename.
+  if (!h.includes('/')) {
+    const sBase = s.split('/').pop();
+    return sBase === h;
+  }
+
+  return false;
+}
 
 export class SimpleContextPacker implements ContextPacker {
   pack(
@@ -19,13 +94,15 @@ export class SimpleContextPacker implements ContextPacker {
     const minFiles = options.minFiles || 0;
     const maxItemsPerFile = options.maxItemsPerFile || Infinity;
 
+    const errorPathCache = new WeakMap<ContextSignal, string[]>();
+
     // 1. Adjust scores based on signals
     const scoredCandidates = candidateSnippets.map((snippet) => {
       let score = snippet.score;
       let reason = snippet.reason;
 
       for (const signal of signals) {
-        if (this.matchesSignal(snippet, signal)) {
+        if (this.matchesSignal(snippet, signal, errorPathCache)) {
           const weight = signal.weight || 1.5;
           score *= weight;
           reason += ` (Boosted by ${signal.type})`;
@@ -121,7 +198,11 @@ export class SimpleContextPacker implements ContextPacker {
     };
   }
 
-  private matchesSignal(snippet: Snippet, signal: ContextSignal): boolean {
+  private matchesSignal(
+    snippet: Snippet,
+    signal: ContextSignal,
+    errorPathCache: WeakMap<ContextSignal, string[]>,
+  ): boolean {
     if (signal.type === 'file_change' || signal.type === 'package_focus') {
       // Simple string containment for path
       // Assuming signal.data is a string (filepath or package name)
@@ -129,7 +210,17 @@ export class SimpleContextPacker implements ContextPacker {
         return true;
       }
     }
-    // TODO: Handle 'error' stack trace matching if structured data is provided
+
+    if (signal.type === 'error') {
+      if (!errorPathCache.has(signal)) {
+        errorPathCache.set(signal, extractPathHintsFromSignalData(signal.data));
+      }
+      const hints = errorPathCache.get(signal) ?? [];
+      for (const hint of hints) {
+        if (matchesPathHint(snippet.path, hint)) return true;
+      }
+    }
+
     return false;
   }
 }

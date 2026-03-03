@@ -144,6 +144,33 @@ describe('SimpleContextPacker', () => {
     expect(itemB?.reason).toContain('Boosted by file_change');
   });
 
+  it('should boost snippets referenced by error signals (stack traces)', () => {
+    const snippets = [
+      createSnippet('src/foo.ts', 'foo', 10, 'FOO'),
+      createSnippet('src/bar.ts', 'bar', 10, 'BAR'),
+    ];
+
+    const signals: ContextSignal[] = [
+      {
+        type: 'error',
+        data: { stack: 'TypeError: boom\n  at fn (/abs/repo/src/foo.ts:12:3)\n' },
+        weight: 3,
+      },
+    ];
+
+    const options: ContextPackerOptions = { tokenBudget: 100, charsPerToken: 1 };
+    const result = packer.pack('goal', signals, snippets, options);
+
+    const itemFoo = result.items.find((i) => i.path === 'src/foo.ts');
+    const itemBar = result.items.find((i) => i.path === 'src/bar.ts');
+
+    expect(itemFoo).toBeDefined();
+    expect(itemBar).toBeDefined();
+    expect(itemFoo?.score).toBe(30);
+    expect(itemFoo?.reason).toContain('Boosted by error');
+    expect(itemBar?.score).toBe(10);
+  });
+
   it('should handle large items exceeding budget', () => {
     const snippets = [
       createSnippet('a.ts', 'small', 10, 'A'),
