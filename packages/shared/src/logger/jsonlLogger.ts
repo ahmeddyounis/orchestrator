@@ -7,6 +7,7 @@ import type { Logger } from './types';
 export class JsonlLogger implements Logger {
   private filePath: string;
   private readonly bindings: Record<string, unknown>;
+  private ensureDirPromise?: Promise<void>;
 
   constructor(filePath: string, bindings: Record<string, unknown> = {}) {
     this.filePath = filePath;
@@ -17,9 +18,22 @@ export class JsonlLogger implements Logger {
     const redactedEvent = redactForLogs(event);
     const line = JSON.stringify(redactedEvent) + '\n';
     try {
-      await fs.mkdir(path.dirname(this.filePath), { recursive: true });
+      await this.ensureParentDir();
       await fs.appendFile(this.filePath, line, 'utf8');
     } catch (error) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'ENOENT') {
+        try {
+          // Directory may have been deleted after initial creation; retry once.
+          this.ensureDirPromise = undefined;
+          await this.ensureParentDir();
+          await fs.appendFile(this.filePath, line, 'utf8');
+          return;
+        } catch (retryError) {
+          console.error(`Failed to write to log file at ${this.filePath}`, retryError);
+          return;
+        }
+      }
       console.error(`Failed to write to log file at ${this.filePath}`, error);
       // Depending on requirements, we might want to throw or just log to stderr
     }
@@ -52,6 +66,16 @@ export class JsonlLogger implements Logger {
 
   child(bindings: Record<string, unknown>): Logger {
     return new JsonlLogger(this.filePath, { ...this.bindings, ...bindings });
+  }
+
+  private ensureParentDir(): Promise<void> {
+    if (this.ensureDirPromise) return this.ensureDirPromise;
+
+    const promise = fs
+      .mkdir(path.dirname(this.filePath), { recursive: true })
+      .then(() => undefined);
+    this.ensureDirPromise = promise;
+    return promise;
   }
 
   private withPrefix(message: string): string {
