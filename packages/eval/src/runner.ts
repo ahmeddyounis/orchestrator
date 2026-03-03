@@ -13,7 +13,6 @@ import {
   type EvalComparison,
   type CriterionResult,
   type Config,
-  type ProviderConfig,
   ConfigError,
   UsageError,
   VerificationError,
@@ -26,15 +25,7 @@ import {
   allowAllToolPolicy,
   CostTracker,
 } from '@orchestrator/core';
-import {
-  OpenAIAdapter,
-  AnthropicAdapter,
-  ClaudeCodeAdapter,
-  CodexCliAdapter,
-  GeminiCliAdapter,
-  FakeAdapter,
-  SubprocessProviderAdapter,
-} from '@orchestrator/adapters';
+import { registerBuiltInProviderFactories } from '@orchestrator/adapters';
 import { file_contains, script_exit, verification_pass } from './criteria';
 import { SimpleRenderer } from './renderer';
 
@@ -414,23 +405,7 @@ export class EvalRunner {
   ): Promise<{ runId: string; runDir: string; summary: RunSummary }> {
     const costTracker = new CostTracker(config);
     const registry = new ProviderRegistry(config, costTracker);
-
-    registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
-    registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
-    registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
-    registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
-    registry.registerFactory('codex_cli', (cfg: ProviderConfig) => new CodexCliAdapter(cfg));
-    registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
-    registry.registerFactory('subprocess', (cfg: ProviderConfig) => {
-      if (!cfg.command) {
-        throw new ConfigError(`Provider type 'subprocess' requires 'command' in config.`);
-      }
-      return new SubprocessProviderAdapter({
-        command: [cfg.command, ...(cfg.args ?? [])],
-        cwdMode: cfg.cwdMode,
-        envAllowlist: cfg.env,
-      });
-    });
+    registerBuiltInProviderFactories(registry, { includeFake: true, includeSubprocess: true });
 
     const git = new GitService({ repoRoot: workDir });
 

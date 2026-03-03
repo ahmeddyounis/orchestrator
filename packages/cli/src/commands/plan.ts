@@ -22,13 +22,7 @@ import {
   renderContextStackForPrompt,
   redactObject,
 } from '@orchestrator/shared';
-import {
-  OpenAIAdapter,
-  AnthropicAdapter,
-  ClaudeCodeAdapter,
-  GeminiCliAdapter,
-  CodexCliAdapter,
-} from '@orchestrator/adapters';
+import { registerBuiltInProviderFactories } from '@orchestrator/adapters';
 import type { ProviderAdapter } from '@orchestrator/adapters';
 import { OutputRenderer, type OutputResult } from '../output/renderer';
 import * as fs from 'fs/promises';
@@ -227,12 +221,7 @@ export function registerPlanCommand(program: Command) {
       const costTracker = new CostTracker(config);
       const registry = new ProviderRegistry(config, costTracker);
 
-      // Register adapters
-      registry.registerFactory('openai', (cfg) => new OpenAIAdapter(cfg));
-      registry.registerFactory('anthropic', (cfg) => new AnthropicAdapter(cfg));
-      registry.registerFactory('claude_code', (cfg) => new ClaudeCodeAdapter(cfg));
-      registry.registerFactory('gemini_cli', (cfg) => new GeminiCliAdapter(cfg));
-      registry.registerFactory('codex_cli', (cfg) => new CodexCliAdapter(cfg));
+      registerBuiltInProviderFactories(registry);
 
       const baseEventBus = {
         emit: async (event: OrchestratorEvent) => {

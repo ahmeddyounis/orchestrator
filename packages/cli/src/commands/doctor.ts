@@ -2,24 +2,9 @@ import { Command } from 'commander';
 import { promises as fs } from 'fs';
 import path from 'path';
 import which from 'which';
-import {
-  isWindows,
-  isWSL,
-  Config,
-  ConfigError,
-  ProviderConfig,
-  type Logger,
-} from '@orchestrator/shared';
+import { isWindows, isWSL, Config, type Logger } from '@orchestrator/shared';
 import { ConfigLoader, PluginLoader, PluginManager, ProviderRegistry } from '@orchestrator/core';
-import {
-  AnthropicAdapter,
-  ClaudeCodeAdapter,
-  CodexCliAdapter,
-  FakeAdapter,
-  GeminiCliAdapter,
-  OpenAIAdapter,
-  SubprocessProviderAdapter,
-} from '@orchestrator/adapters';
+import { registerBuiltInProviderFactories } from '@orchestrator/adapters';
 import chalk from 'chalk';
 import { findRepoRoot } from '@orchestrator/repo';
 
@@ -107,25 +92,6 @@ async function checkLocalProviderExecutables(config: Config): Promise<[string, s
   return await Promise.all([...commandsToCheck].map((cmd) => checkExecutable(cmd)));
 }
 
-function registerBuiltInProviderFactories(registry: ProviderRegistry): void {
-  registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
-  registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
-  registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
-  registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
-  registry.registerFactory('codex_cli', (cfg: ProviderConfig) => new CodexCliAdapter(cfg));
-  registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
-  registry.registerFactory('subprocess', (cfg: ProviderConfig) => {
-    if (!cfg.command) {
-      throw new ConfigError(`Provider type 'subprocess' requires 'command' in config.`);
-    }
-    return new SubprocessProviderAdapter({
-      command: [cfg.command, ...(cfg.args ?? [])],
-      cwdMode: cfg.cwdMode,
-      envAllowlist: cfg.env,
-    });
-  });
-}
-
 async function checkProviderAdapters(config: Config, repoRoot: string): Promise<CheckResult[]> {
   const providers = config.providers;
   if (!providers || Object.keys(providers).length === 0) {
@@ -134,7 +100,7 @@ async function checkProviderAdapters(config: Config, repoRoot: string): Promise<
 
   const { logger } = createBufferedLogger();
   const registry = new ProviderRegistry(config);
-  registerBuiltInProviderFactories(registry);
+  registerBuiltInProviderFactories(registry, { includeFake: true, includeSubprocess: true });
 
   const pluginManager = new PluginManager(config, logger, repoRoot);
   await pluginManager.load();

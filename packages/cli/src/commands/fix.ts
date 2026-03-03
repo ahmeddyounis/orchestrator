@@ -8,21 +8,8 @@ import {
   type DeepPartial,
 } from '@orchestrator/core';
 import { findRepoRoot, GitService } from '@orchestrator/repo';
-import {
-  AnthropicAdapter,
-  ClaudeCodeAdapter,
-  CodexCliAdapter,
-  FakeAdapter,
-  GeminiCliAdapter,
-  OpenAIAdapter,
-} from '@orchestrator/adapters';
-import {
-  ProviderConfig,
-  ToolPolicy,
-  getRunArtifactPaths,
-  type Config,
-  UsageError,
-} from '@orchestrator/shared';
+import { registerBuiltInProviderFactories } from '@orchestrator/adapters';
+import { ToolPolicy, getRunArtifactPaths, type Config, UsageError } from '@orchestrator/shared';
 import { OutputRenderer, type OutputResult } from '../output/renderer';
 import { ConsoleUI } from '../ui/console';
 
@@ -185,12 +172,7 @@ export function registerFixCommand(program: Command) {
       const costTracker = new CostTracker(config);
       const registry = new ProviderRegistry(config, costTracker);
 
-      registry.registerFactory('openai', (cfg: ProviderConfig) => new OpenAIAdapter(cfg));
-      registry.registerFactory('anthropic', (cfg: ProviderConfig) => new AnthropicAdapter(cfg));
-      registry.registerFactory('claude_code', (cfg: ProviderConfig) => new ClaudeCodeAdapter(cfg));
-      registry.registerFactory('gemini_cli', (cfg: ProviderConfig) => new GeminiCliAdapter(cfg));
-      registry.registerFactory('codex_cli', (cfg: ProviderConfig) => new CodexCliAdapter(cfg));
-      registry.registerFactory('fake', (cfg: ProviderConfig) => new FakeAdapter(cfg));
+      registerBuiltInProviderFactories(registry, { includeFake: true });
 
       const ui = new ConsoleUI();
       const defaultToolPolicy: ToolPolicy = {

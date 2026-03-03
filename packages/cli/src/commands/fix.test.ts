@@ -66,6 +66,19 @@ vi.mock('@orchestrator/adapters', () => ({
   FakeAdapter: class {
     constructor(_cfg: unknown) {}
   },
+  registerBuiltInProviderFactories: (
+    registry: { registerFactory: (type: string, factory: unknown) => void },
+    options?: { includeFake?: boolean },
+  ) => {
+    registry.registerFactory('openai', () => ({}));
+    registry.registerFactory('anthropic', () => ({}));
+    registry.registerFactory('claude_code', () => ({}));
+    registry.registerFactory('gemini_cli', () => ({}));
+    registry.registerFactory('codex_cli', () => ({}));
+    if (options?.includeFake) {
+      registry.registerFactory('fake', () => ({}));
+    }
+  },
 }));
 
 vi.mock('@orchestrator/core', () => ({

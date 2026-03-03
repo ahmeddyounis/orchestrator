@@ -17,3 +17,4 @@ export * from './claude_code';
 export * from './gemini_cli';
 export * from './codex_cli';
 export * from './fake/adapter';
+export * from './factories';
