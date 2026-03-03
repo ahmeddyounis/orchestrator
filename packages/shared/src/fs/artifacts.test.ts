@@ -162,14 +162,17 @@ describe('createArtifactCrypto', () => {
      *   [iv (12 bytes), authTag (16 bytes), ciphertext]
      * Key derivation uses the static salt 'orchestrator-artifact-salt'.
      */
-    function encryptLegacy(key: string, data: Buffer): Buffer {
+    function encryptLegacy(key: string, data: Buffer, iv?: Buffer): Buffer {
       const LEGACY_SALT = Buffer.from('orchestrator-artifact-salt');
       const derivedKey = scryptSync(key, LEGACY_SALT, 32);
-      const iv = randomBytes(12);
-      const cipher = createCipheriv('aes-256-gcm', derivedKey, iv);
+      const ivBuf = iv ?? randomBytes(12);
+      if (ivBuf.length !== 12) {
+        throw new Error(`Expected 12-byte IV, got ${ivBuf.length}`);
+      }
+      const cipher = createCipheriv('aes-256-gcm', derivedKey, ivBuf);
       const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
       const authTag = cipher.getAuthTag();
-      return Buffer.concat([iv, authTag, encrypted]);
+      return Buffer.concat([ivBuf, authTag, encrypted]);
     }
 
     it('decrypts a legacy-format buffer', () => {
@@ -191,9 +194,13 @@ describe('createArtifactCrypto', () => {
     it('legacy-format decryption works regardless of first byte value', () => {
       const crypto = createArtifactCrypto(TEST_KEY);
       const original = Buffer.from('compat check');
-      const legacyBuf = encryptLegacy(TEST_KEY, original);
-      const decrypted = crypto.decryptBuffer(legacyBuf);
-      expect(decrypted).toEqual(original);
+
+      for (const firstByte of [0x00, 0x01, 0xff]) {
+        const iv = Buffer.concat([Buffer.from([firstByte]), randomBytes(11)]);
+        const legacyBuf = encryptLegacy(TEST_KEY, original, iv);
+        const decrypted = crypto.decryptBuffer(legacyBuf);
+        expect(decrypted).toEqual(original);
+      }
     });
 
     it('backward-compatibility contract: decrypts a blob keyed with the old static salt', () => {

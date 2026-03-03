@@ -86,6 +86,40 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
   /** Minimum byte length for legacy format: IV + authTag (+ optional ciphertext) */
   const MIN_LEGACY_LENGTH = ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH;
 
+  const decryptLegacy = (legacyData: Buffer): Buffer => {
+    // Legacy format – derive key using the old static salt
+    const legacyKey = scryptSync(key, LEGACY_ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
+    const iv = legacyData.subarray(0, ARTIFACT_IV_LENGTH);
+    const authTag = legacyData.subarray(
+      ARTIFACT_IV_LENGTH,
+      ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH,
+    );
+    const encrypted = legacyData.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
+    const decipher = createDecipheriv(ARTIFACT_ALGORITHM, legacyKey, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  };
+
+  const decryptV1 = (v1Data: Buffer): Buffer => {
+    if (v1Data.length < MIN_V1_LENGTH) {
+      throw new Error(
+        `Encrypted artifact buffer too short for v1 format (${v1Data.length} bytes, minimum ${MIN_V1_LENGTH})`,
+      );
+    }
+    let offset = 1; // skip version byte
+    const salt = v1Data.subarray(offset, offset + SALT_LENGTH);
+    offset += SALT_LENGTH;
+    const iv = v1Data.subarray(offset, offset + ARTIFACT_IV_LENGTH);
+    offset += ARTIFACT_IV_LENGTH;
+    const authTag = v1Data.subarray(offset, offset + ARTIFACT_AUTH_TAG_LENGTH);
+    offset += ARTIFACT_AUTH_TAG_LENGTH;
+    const encrypted = v1Data.subarray(offset);
+    const derivedKey = scryptSync(key, salt, ARTIFACT_KEY_LENGTH);
+    const decipher = createDecipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  };
+
   const decryptBuffer = (data: Buffer): Buffer => {
     if (data.length < MIN_LEGACY_LENGTH) {
       throw new Error(
@@ -98,37 +132,30 @@ export function createArtifactCrypto(key: string): ArtifactCrypto {
     // New v1 layout: [FORMAT_VERSION (1 byte), salt (16 bytes), iv, authTag, ciphertext]
     const version = data[0];
     if (version !== FORMAT_VERSION) {
-      // Legacy format – derive key using the old static salt
-      const legacyKey = scryptSync(key, LEGACY_ARTIFACT_SALT, ARTIFACT_KEY_LENGTH);
-      const iv = data.subarray(0, ARTIFACT_IV_LENGTH);
-      const authTag = data.subarray(
-        ARTIFACT_IV_LENGTH,
-        ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH,
-      );
-      const encrypted = data.subarray(ARTIFACT_IV_LENGTH + ARTIFACT_AUTH_TAG_LENGTH);
-      const decipher = createDecipheriv(ARTIFACT_ALGORITHM, legacyKey, iv);
-      decipher.setAuthTag(authTag);
-      return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+      return decryptLegacy(data);
     }
 
-    // V1 format
+    // Ambiguous case: legacy IV is random and can start with FORMAT_VERSION by chance.
+    // Try v1 first when the buffer is long enough; otherwise try legacy first.
     if (data.length < MIN_V1_LENGTH) {
-      throw new Error(
-        `Encrypted artifact buffer too short for v1 format (${data.length} bytes, minimum ${MIN_V1_LENGTH})`,
-      );
+      try {
+        return decryptLegacy(data);
+      } catch {
+        throw new Error(
+          `Encrypted artifact buffer too short for v1 format (${data.length} bytes, minimum ${MIN_V1_LENGTH})`,
+        );
+      }
     }
-    let offset = 1; // skip version byte
-    const salt = data.subarray(offset, offset + SALT_LENGTH);
-    offset += SALT_LENGTH;
-    const iv = data.subarray(offset, offset + ARTIFACT_IV_LENGTH);
-    offset += ARTIFACT_IV_LENGTH;
-    const authTag = data.subarray(offset, offset + ARTIFACT_AUTH_TAG_LENGTH);
-    offset += ARTIFACT_AUTH_TAG_LENGTH;
-    const encrypted = data.subarray(offset);
-    const derivedKey = scryptSync(key, salt, ARTIFACT_KEY_LENGTH);
-    const decipher = createDecipheriv(ARTIFACT_ALGORITHM, derivedKey, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+
+    try {
+      return decryptV1(data);
+    } catch (v1Error) {
+      try {
+        return decryptLegacy(data);
+      } catch {
+        throw v1Error;
+      }
+    }
   };
 
   return {
