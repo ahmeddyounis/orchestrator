@@ -34,7 +34,6 @@ import fs from 'fs/promises';
 import { CostTracker } from './cost/tracker';
 import type { LoadedPlugin } from './plugins/loader';
 import { PluginManager } from './plugins/manager';
-import { SimpleContextFuser } from './context';
 import { IndexAutoUpdateService } from './indexing/auto_update';
 import {
   RunInitializationService,
@@ -1038,23 +1037,14 @@ END_DIFF
         // Non-fatal; repairs should still proceed with memory + logs.
       }
 
-      const fuser = new SimpleContextFuser(this.config.security);
-      const fusedContext = fuser.fuse({
-        goal: `Goal: ${goal}\nTask: Fix verification errors.`,
-        repoPack: contextPack,
+      const fusedContext = this.contextBuilder.fuseContext({
+        goalText: `Goal: ${goal}\nTask: Fix verification errors.`,
+        contextPack,
         memoryHits,
         signals,
         contextStack: contextStack.store?.getAllFrames(),
         budgets: {
-          maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
           maxMemoryChars: 4000,
-          maxSignalsChars: 1000,
-          maxContextStackChars: this.config.contextStack?.enabled
-            ? this.config.contextStack.promptBudgetChars
-            : 0,
-          maxContextStackFrames: this.config.contextStack?.enabled
-            ? this.config.contextStack.promptMaxFrames
-            : 0,
         },
       });
 

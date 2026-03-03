@@ -24,6 +24,14 @@ export interface ContextBuildResult {
   contextPaths: string[];
 }
 
+export interface ContextFusionBudgets {
+  maxRepoContextChars: number;
+  maxMemoryChars: number;
+  maxSignalsChars: number;
+  maxContextStackChars: number;
+  maxContextStackFrames: number;
+}
+
 /**
  * Service for building context from repo, memory, and signals
  */
@@ -39,17 +47,19 @@ export class ContextBuilderService {
     memoryHits: MemoryEntry[];
     signals: ContextSignal[];
     contextStack?: ContextStackFrame[];
+    budgets?: Partial<ContextFusionBudgets>;
   }): FusedContext {
     const fuser = new SimpleContextFuser(this.config.security);
 
     const stackEnabled = this.config.contextStack?.enabled ?? false;
-    const fusionBudgets = {
+    const fusionBudgets: ContextFusionBudgets = {
       maxRepoContextChars: (this.config.context?.tokenBudget || 8000) * 4,
       maxMemoryChars: this.config.memory?.maxChars ?? 2000,
       maxSignalsChars: 1000,
       maxContextStackChars: stackEnabled ? this.config.contextStack.promptBudgetChars : 0,
       maxContextStackFrames: stackEnabled ? this.config.contextStack.promptMaxFrames : 0,
     };
+    const mergedBudgets = { ...fusionBudgets, ...(options.budgets ?? {}) };
 
     return fuser.fuse({
       goal: options.goalText,
@@ -57,7 +67,7 @@ export class ContextBuilderService {
       memoryHits: options.memoryHits,
       signals: options.signals,
       contextStack: options.contextStack,
-      budgets: fusionBudgets,
+      budgets: mergedBudgets,
     });
   }
 
