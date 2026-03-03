@@ -143,6 +143,26 @@ The command writes plan artifacts under `.orchestrator/runs/<runId>/` (including
 
 ---
 
+### `search`
+
+Search the current repository.
+
+**Usage:**
+
+```bash
+orchestrator search "<query>" [options]
+```
+
+**Options:**
+
+- `--topk <k>`: Number of results to return (default: 5).
+- `--semantic`: Perform semantic search (requires semantic indexing enabled and built).
+
+By default, the command performs a lexical (keyword) search using `rg` (ripgrep) and falls back to a JS search if `rg` is unavailable.
+To use semantic search, enable semantic indexing in your config and run `orchestrator index build --semantic`.
+
+---
+
 ### `index`
 
 This command manages the orchestrator's index of your codebase. The index is used to provide context for the `run` command.
