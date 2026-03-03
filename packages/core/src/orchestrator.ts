@@ -1,7 +1,6 @@
 import {
   Config,
   OrchestratorEvent,
-  createRunDir,
   updateManifest,
   JsonlLogger,
   ToolPolicy,
@@ -9,7 +8,6 @@ import {
   RunSummary,
   SummaryWriter,
   ConfigError,
-  redactObject,
   escapeRegExp,
 } from '@orchestrator/shared';
 import {
@@ -39,13 +37,15 @@ import {
   RunInitializationService,
   ContextBuilderService,
   ContextStackService,
+  createRunSession,
   RunMemoryService,
   RunFinalizerService,
   RunSummaryService,
+  type RunSession,
   VerificationService,
 } from './orchestrator/services';
-import { runL1 as runL1Runner } from './orchestrator/runners/l1';
-import { runL3 as runL3Runner } from './orchestrator/runners/l3';
+import { runL1 as runL1Runner, type RunL1Options } from './orchestrator/runners/l1';
+import { runL3 as runL3Runner, type RunL3Options } from './orchestrator/runners/l3';
 
 export interface OrchestratorOptions {
   config: Config;
@@ -154,30 +154,29 @@ export class Orchestrator {
   async run(goal: string, options: RunOptions): Promise<RunResult> {
     const runId = options.runId || Date.now().toString();
 
-    // L1+ features below
-    if (options.thinkLevel !== 'L0') {
-      const artifacts = await createRunDir(this.repoRoot, runId);
-      const logger = new JsonlLogger(artifacts.trace);
-      const eventBus: EventBus = {
-        emit: async (e) => {
-          const redactedEvent = this.config.security?.redaction?.enabled
-            ? (redactObject(e) as OrchestratorEvent)
-            : e;
-          await logger.log(redactedEvent);
-        },
-      };
-      await this.indexAutoUpdate.maybeAutoUpdateIndex({ eventBus, runId });
-    }
-
     if (options.thinkLevel === 'L0') {
       return this.runL0(goal, runId);
-    } else if (options.thinkLevel === 'L3') {
-      return this.runL3(goal, runId);
-    } else if (options.thinkLevel === 'L2') {
-      return this.runL2(goal, runId);
-    } else {
-      return this.runL1(goal, runId);
     }
+
+    const session = await createRunSession({
+      runId,
+      goal,
+      initService: this.initService,
+      contextStackService: this.contextStackService,
+    });
+    const eventBus = session.contextStack.eventBus;
+    this.registry.bindEventBus?.(eventBus, runId);
+
+    await this.indexAutoUpdate.maybeAutoUpdateIndex({ eventBus, runId });
+
+    if (options.thinkLevel === 'L3') {
+      return this.runL3(goal, runId, { session });
+    }
+    if (options.thinkLevel === 'L2') {
+      return this.runL2(goal, runId, session);
+    }
+
+    return this.runL1(goal, runId, { session });
   }
 
   private async writeEpisodicMemory(
@@ -619,22 +618,27 @@ END_DIFF
     return runResult;
   }
 
-  async runL1(goal: string, runId: string): Promise<RunResult> {
-    return runL1Runner(goal, runId, {
-      config: this.config,
-      git: this.git,
-      registry: this.registry,
-      repoRoot: this.repoRoot,
-      costTracker: this.costTracker,
-      initService: this.initService,
-      contextStackService: this.contextStackService,
-      contextBuilder: this.contextBuilder,
-      runMemoryService: this.runMemoryService,
-      runSummaryService: this.runSummaryService,
-      runFinalizerService: this.runFinalizerService,
-      escalationCount: this.escalationCount,
-      suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
-    });
+  async runL1(goal: string, runId: string, runnerOptions: RunL1Options = {}): Promise<RunResult> {
+    return runL1Runner(
+      goal,
+      runId,
+      {
+        config: this.config,
+        git: this.git,
+        registry: this.registry,
+        repoRoot: this.repoRoot,
+        costTracker: this.costTracker,
+        initService: this.initService,
+        contextStackService: this.contextStackService,
+        contextBuilder: this.contextBuilder,
+        runMemoryService: this.runMemoryService,
+        runSummaryService: this.runSummaryService,
+        runFinalizerService: this.runFinalizerService,
+        escalationCount: this.escalationCount,
+        suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
+      },
+      runnerOptions,
+    );
   }
 
   private async searchMemoryHits(
@@ -651,74 +655,127 @@ END_DIFF
     return this.runMemoryService.searchMemoryHits(args, eventBus);
   }
 
-  async runL2(goal: string, runId: string): Promise<RunResult> {
-    const startTime = Date.now();
-
-    const runContext = await this.initService.initializeRun(runId, goal);
-    const { artifacts, logger, eventBus: eventBusObj } = runContext;
-    const contextStack = await this.contextStackService.setupForRun({
-      runId,
-      artifactsRoot: artifacts.root,
-      eventBus: eventBusObj,
-    });
+  async runL2(goal: string, runId: string, session?: RunSession): Promise<RunResult> {
+    const runSession =
+      session ??
+      (await createRunSession({
+        runId,
+        goal,
+        initService: this.initService,
+        contextStackService: this.contextStackService,
+      }));
+    const { runContext, contextStack } = runSession;
+    const { artifacts, logger } = runContext;
     const eventBus = contextStack.eventBus;
     this.registry.bindEventBus?.(eventBus, runId);
 
-    // 1. Initial Plan & Execute (L1)
-    this.suppressEpisodicMemoryWrite = true;
-    let l1Result: RunResult;
-    try {
-      l1Result = await this.runL1(goal, runId);
-    } finally {
-      this.suppressEpisodicMemoryWrite = false;
-    }
+    const startTime = runContext.startTime;
+    const baseRef = await this.git.getHeadSha();
 
-    if (l1Result.stopReason === 'budget_exceeded') {
+    await this.initService.emitRunStarted(eventBus, runId, goal);
+    await this.initService.initializeManifest(artifacts, runId, goal, true);
+
+    // 1. Initial Plan & Execute (L1)
+    const l1Result = await this.runL1(goal, runId, {
+      session: runSession,
+      emitRunStarted: false,
+      initializeManifest: false,
+      finalizeRun: false,
+    });
+
+    const patchPaths = l1Result.patchPaths ?? [];
+    const touchedFiles = new Set(l1Result.filesChanged ?? []);
+
+    const finalize = async (
+      runResult: RunResult,
+      args?: { reportPaths?: string[]; verification?: VerificationReport },
+    ): Promise<RunResult> => {
+      runResult.patchPaths = patchPaths;
+      runResult.filesChanged = Array.from(touchedFiles);
+
+      const summaryMsg = runResult.summary ?? '';
+
+      if (runResult.stopReason) {
+        await eventBus.emit({
+          type: 'RunStopped',
+          schemaVersion: 1,
+          timestamp: new Date().toISOString(),
+          runId,
+          payload: { reason: runResult.stopReason, details: summaryMsg },
+        });
+      }
+
+      await eventBus.emit({
+        type: 'RunFinished',
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId,
+        payload: { status: runResult.status, summary: summaryMsg },
+      });
+
+      try {
+        const finalDiff = await this.git.diff(baseRef);
+        if (finalDiff.trim().length > 0) {
+          const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
+          const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
+          if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
+        }
+      } catch {
+        // Non-fatal: final diff generation should not fail the run.
+      }
+
+      const finishedAt = new Date().toISOString();
+      try {
+        await updateManifest(artifacts.manifest, (manifest) => {
+          manifest.finishedAt = finishedAt;
+          manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
+          if (args?.reportPaths && args.reportPaths.length > 0) {
+            manifest.verificationPaths = [
+              ...(manifest.verificationPaths ?? []),
+              ...args.reportPaths,
+            ];
+          }
+        });
+      } catch {
+        // Non-fatal: artifact updates should not fail the run.
+      }
+
       const summary = this.runSummaryService.build({
         runId,
         goal,
         startTime,
-        status: l1Result.status,
+        status: runResult.status,
         thinkLevel: 'L2',
-        runResult: l1Result,
+        runResult,
         artifacts,
         escalationCount: this.escalationCount,
       });
+      await SummaryWriter.write(summary, artifacts.root);
+
       await this.writeEpisodicMemory(
         summary,
         {
           artifactsRoot: artifacts.root,
-          patchPaths: l1Result.patchPaths,
+          patchPaths: runResult.patchPaths,
+          extraArtifactPaths: args?.reportPaths,
+          verificationReport: args?.verification,
         },
         eventBus,
       );
-      return l1Result;
+
+      return runResult;
+    };
+
+    if (l1Result.stopReason === 'budget_exceeded') {
+      return finalize(l1Result);
     }
 
     // 2. Setup Verification
     if (!this.ui || !this.toolPolicy) {
-      const summary = this.runSummaryService.build({
-        runId,
-        goal,
-        startTime,
-        status: l1Result.status,
-        thinkLevel: 'L2',
-        runResult: l1Result,
-        artifacts,
-        escalationCount: this.escalationCount,
-      });
-      await this.writeEpisodicMemory(
-        summary,
-        {
-          artifactsRoot: artifacts.root,
-          patchPaths: l1Result.patchPaths,
-        },
-        eventBus,
-      );
-      return {
+      return finalize({
         ...l1Result,
-        summary: l1Result.summary + ' (L2 skipped: missing UI/Policy)',
-      };
+        summary: (l1Result.summary ?? '') + ' (L2 skipped: missing UI/Policy)',
+      });
     }
 
     const verificationService = new VerificationService(
@@ -739,50 +796,20 @@ END_DIFF
     const reportPaths = [initialReportPath];
 
     if (verification.passed) {
-      await eventBus.emit({
-        type: 'RunFinished',
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId,
-        payload: { status: 'success', summary: 'L2 Verified Success' },
-      });
-
-      const runResult: RunResult = {
-        ...l1Result,
-        status: 'success',
-        summary: 'L2 Verified Success',
-        memory: this.config.memory,
-        verification: {
-          enabled: profile.enabled,
-          reportPaths,
-          ...verification,
-        },
-      };
-
-      const summary = this.runSummaryService.build({
-        runId,
-        goal,
-        startTime,
-        status: 'success',
-        thinkLevel: 'L2',
-        runResult,
-        artifacts,
-        escalationCount: this.escalationCount,
-      });
-      await SummaryWriter.write(summary, artifacts.root);
-
-      await this.writeEpisodicMemory(
-        summary,
+      return finalize(
         {
-          artifactsRoot: artifacts.root,
-          patchPaths: runResult.patchPaths,
-          extraArtifactPaths: reportPaths,
-          verificationReport: verification,
+          ...l1Result,
+          status: 'success',
+          summary: 'L2 Verified Success',
+          memory: this.config.memory,
+          verification: {
+            enabled: profile.enabled,
+            reportPaths,
+            ...verification,
+          },
         },
-        eventBus,
+        { reportPaths, verification },
       );
-
-      return runResult;
     }
 
     // 4. Repair Loop
@@ -792,8 +819,6 @@ END_DIFF
     let consecutiveSameSignature = 0;
     let consecutivePatchApplyFailures = 0;
 
-    const patchPaths = l1Result.patchPaths || [];
-    const touchedFiles = new Set(l1Result.filesChanged);
     const executorId = this.config.defaults?.executor || 'openai';
     const executor = this.registry.getAdapter(executorId);
     const reviewerId = this.config.defaults?.reviewer || executorId;
@@ -827,7 +852,14 @@ END_DIFF
             },
           });
           this.escalationCount++;
-          return this.runL3(goal, runId);
+          return this.runL3(goal, runId, {
+            session: runSession,
+            emitRunStarted: false,
+            initializeManifest: false,
+            baseRef,
+            initialPatchPaths: patchPaths,
+            initialTouchedFiles: touchedFiles,
+          });
         }
       }
 
@@ -843,59 +875,23 @@ END_DIFF
       if (failureSignature && verification.failureSignature === failureSignature) {
         consecutiveSameSignature++;
         if (consecutiveSameSignature >= 2) {
-          // Non-improving -> Stop
-          await eventBus.emit({
-            type: 'RunStopped',
-            schemaVersion: 1,
-            timestamp: new Date().toISOString(),
-            runId,
-            payload: {
-              reason: 'non_improving',
-              details: 'Verification failure signature unchanged for 2 iterations',
-            },
-          });
-
-          const runResult: RunResult = {
-            ...l1Result,
-            status: 'failure',
-            stopReason: 'non_improving',
-            summary: 'Verification failure signature unchanged for 2 iterations',
-            filesChanged: Array.from(touchedFiles),
-            patchPaths,
-            memory: this.config.memory,
-            verification: {
-              enabled: profile.enabled,
-              failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
-              reportPaths,
-              ...verification,
-            },
-            lastFailureSignature: verification.failureSignature,
-          };
-
-          const summary = this.runSummaryService.build({
-            runId,
-            goal,
-            startTime,
-            status: 'failure',
-            thinkLevel: 'L2',
-            runResult,
-            artifacts,
-            escalationCount: this.escalationCount,
-          });
-          await SummaryWriter.write(summary, artifacts.root);
-
-          await this.writeEpisodicMemory(
-            summary,
+          return finalize(
             {
-              artifactsRoot: artifacts.root,
-              patchPaths: runResult.patchPaths,
-              extraArtifactPaths: reportPaths,
-              verificationReport: verification,
+              ...l1Result,
+              status: 'failure',
+              stopReason: 'non_improving',
+              summary: 'Verification failure signature unchanged for 2 iterations',
+              memory: this.config.memory,
+              verification: {
+                enabled: profile.enabled,
+                failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
+                reportPaths,
+                ...verification,
+              },
+              lastFailureSignature: verification.failureSignature,
             },
-            eventBus,
+            { reportPaths, verification },
           );
-
-          return runResult;
         }
       } else {
         consecutiveSameSignature = 0;
@@ -1209,56 +1205,20 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
           payload: { iteration: iterations, result: 'success' },
         });
 
-        await eventBus.emit({
-          type: 'RunFinished',
-          schemaVersion: 1,
-          timestamp: new Date().toISOString(),
-          runId,
-          payload: {
-            status: 'success',
-            summary: `L2 Verified Success after ${iterations} iterations`,
-          },
-        });
-
-        // Save Summary
-        const runResult: RunResult = {
-          status: 'success',
-          runId,
-          summary: `L2 Verified Success after ${iterations} iterations`,
-          filesChanged: Array.from(touchedFiles),
-          patchPaths,
-          memory: this.config.memory,
-          verification: {
-            enabled: profile.enabled,
-            reportPaths,
-            ...verification,
-          },
-        };
-
-        const summary = this.runSummaryService.build({
-          runId,
-          goal,
-          startTime,
-          status: 'success',
-          thinkLevel: 'L2',
-          runResult,
-          artifacts,
-          escalationCount: this.escalationCount,
-        });
-        await SummaryWriter.write(summary, artifacts.root);
-
-        await this.writeEpisodicMemory(
-          summary,
+        return finalize(
           {
-            artifactsRoot: artifacts.root,
-            patchPaths: runResult.patchPaths,
-            extraArtifactPaths: reportPaths,
-            verificationReport: verification,
+            status: 'success',
+            runId,
+            summary: `L2 Verified Success after ${iterations} iterations`,
+            memory: this.config.memory,
+            verification: {
+              enabled: profile.enabled,
+              reportPaths,
+              ...verification,
+            },
           },
-          eventBus,
+          { reportPaths, verification },
         );
-
-        return runResult;
       }
 
       await eventBus.emit({
@@ -1272,74 +1232,47 @@ Output ONLY the unified diff between BEGIN_DIFF and END_DIFF markers.
 
     // Budget exceeded
     const failureSummary = `L2 failed to converge after ${iterations} iterations`;
-    await eventBus.emit({
-      type: 'RunFinished',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { status: 'failure', summary: failureSummary },
-    });
-
-    const runResult: RunResult = {
-      status: 'failure',
-      runId,
-      summary: failureSummary,
-      filesChanged: Array.from(touchedFiles),
-      patchPaths,
-      stopReason: 'budget_exceeded',
-      memory: this.config.memory,
-      verification: {
-        enabled: profile.enabled,
-        failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
-        reportPaths,
-        ...verification,
-      },
-      lastFailureSignature: verification.failureSignature,
-    };
-
-    const summary = this.runSummaryService.build({
-      runId,
-      goal,
-      startTime,
-      status: 'failure',
-      thinkLevel: 'L2',
-      runResult,
-      artifacts,
-      escalationCount: this.escalationCount,
-    });
-    await SummaryWriter.write(summary, artifacts.root);
-
-    await this.writeEpisodicMemory(
-      summary,
+    return finalize(
       {
-        artifactsRoot: artifacts.root,
-        patchPaths: runResult.patchPaths,
-        extraArtifactPaths: reportPaths,
-        verificationReport: verification,
+        status: 'failure',
+        runId,
+        summary: failureSummary,
+        stopReason: 'budget_exceeded',
+        memory: this.config.memory,
+        verification: {
+          enabled: profile.enabled,
+          failedChecks: verification.checks.filter((c) => !c.passed).map((c) => c.name),
+          reportPaths,
+          ...verification,
+        },
+        lastFailureSignature: verification.failureSignature,
       },
-      eventBus,
+      { reportPaths, verification },
     );
-
-    return runResult;
   }
 
-  async runL3(goal: string, runId: string): Promise<RunResult> {
-    return runL3Runner(goal, runId, {
-      config: this.config,
-      git: this.git,
-      registry: this.registry,
-      repoRoot: this.repoRoot,
-      costTracker: this.costTracker,
-      toolPolicy: this.toolPolicy,
-      ui: this.ui,
-      initService: this.initService,
-      contextStackService: this.contextStackService,
-      contextBuilder: this.contextBuilder,
-      runMemoryService: this.runMemoryService,
-      runSummaryService: this.runSummaryService,
-      runFinalizerService: this.runFinalizerService,
-      escalationCount: this.escalationCount,
-      suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
-    });
+  async runL3(goal: string, runId: string, runnerOptions: RunL3Options = {}): Promise<RunResult> {
+    return runL3Runner(
+      goal,
+      runId,
+      {
+        config: this.config,
+        git: this.git,
+        registry: this.registry,
+        repoRoot: this.repoRoot,
+        costTracker: this.costTracker,
+        toolPolicy: this.toolPolicy,
+        ui: this.ui,
+        initService: this.initService,
+        contextStackService: this.contextStackService,
+        contextBuilder: this.contextBuilder,
+        runMemoryService: this.runMemoryService,
+        runSummaryService: this.runSummaryService,
+        runFinalizerService: this.runFinalizerService,
+        escalationCount: this.escalationCount,
+        suppressEpisodicMemoryWrite: this.suppressEpisodicMemoryWrite,
+      },
+      runnerOptions,
+    );
   }
 }

@@ -60,6 +60,10 @@ export interface RunL3Options {
   session?: RunSession;
   emitRunStarted?: boolean;
   initializeManifest?: boolean;
+  baseRef?: string;
+  initialPatchPaths?: string[];
+  initialContextPaths?: string[];
+  initialTouchedFiles?: Iterable<string>;
 }
 
 export async function runL3(
@@ -81,7 +85,7 @@ export async function runL3(
   const { artifacts, logger } = runContext;
   const eventBus = contextStack.eventBus;
   deps.registry.bindEventBus?.(eventBus, runId);
-  const baseRef = await deps.git.getHeadSha();
+  const baseRef = options.baseRef ?? (await deps.git.getHeadSha());
 
   const startTime = runContext.startTime;
 
@@ -107,9 +111,9 @@ export async function runL3(
     selectionRankingPath: undefined as string | undefined,
   };
 
-  const patchPaths: string[] = [];
-  const contextPaths: string[] = [];
-  const touchedFiles = new Set<string>();
+  const patchPaths: string[] = [...(options.initialPatchPaths ?? [])];
+  const contextPaths: string[] = [...(options.initialContextPaths ?? [])];
+  const touchedFiles = new Set<string>(options.initialTouchedFiles ?? []);
 
   const finish = async (
     status: 'success' | 'failure',
