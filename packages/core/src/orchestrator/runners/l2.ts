@@ -1,7 +1,6 @@
 import type { ContextSignal, GitService } from '@orchestrator/repo';
 import { PatchApplier, SimpleContextPacker, SnippetExtractor } from '@orchestrator/repo';
 import type { Config, ToolPolicy } from '@orchestrator/shared';
-import { SummaryWriter, updateManifest } from '@orchestrator/shared';
 import type { UserInterface } from '@orchestrator/exec';
 import fs from 'fs/promises';
 import path from 'path';
@@ -108,80 +107,35 @@ export async function runL2(
       verification?: import('../../verify/types').VerificationReport;
     },
   ): Promise<RunResult> => {
-    runResult.patchPaths = patchPaths;
-    runResult.filesChanged = Array.from(touchedFiles);
-
     const summaryMsg = runResult.summary ?? '';
-
-    if (runResult.stopReason) {
-      await eventBus.emit({
-        type: 'RunStopped',
-        schemaVersion: 1,
-        timestamp: new Date().toISOString(),
-        runId,
-        payload: { reason: runResult.stopReason, details: summaryMsg },
-      });
-    }
-
-    await eventBus.emit({
-      type: 'RunFinished',
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId,
-      payload: { status: runResult.status, summary: summaryMsg },
-    });
-
-    try {
-      const finalDiff = await deps.git.diff(baseRef);
-      if (finalDiff.trim().length > 0) {
-        const patchStore = new PatchStore(artifacts.patchesDir, artifacts.manifest);
-        const finalDiffPath = await patchStore.saveFinalDiff(finalDiff);
-        if (!patchPaths.includes(finalDiffPath)) patchPaths.push(finalDiffPath);
-      }
-    } catch {
-      // Non-fatal: final diff generation should not fail the run.
-    }
-
-    const finishedAt = new Date().toISOString();
-    try {
-      await updateManifest(artifacts.manifest, (manifest) => {
-        manifest.finishedAt = finishedAt;
-        manifest.patchPaths = [...manifest.patchPaths, ...patchPaths];
-        if (args?.reportPaths && args.reportPaths.length > 0) {
-          manifest.verificationPaths = [...(manifest.verificationPaths ?? []), ...args.reportPaths];
-        }
-      });
-    } catch {
-      // Non-fatal: artifact updates should not fail the run.
-    }
-
-    const summary = deps.runSummaryService.build({
+    const finalized = await deps.runFinalizerService.finalize({
       runId,
       goal,
       startTime,
       status: runResult.status,
       thinkLevel: 'L2',
-      runResult,
+      stopReason: runResult.stopReason,
+      summaryMsg,
       artifacts,
+      baseRef,
+      patchPaths,
+      contextPaths: [],
+      touchedFiles,
+      eventBus,
       escalationCount,
+      verification: runResult.verification,
+      verificationPaths: args?.reportPaths,
+      verificationReport: args?.verification,
+      extraArtifactPaths: args?.reportPaths,
+      suppressEpisodicMemoryWrite: deps.suppressEpisodicMemoryWrite,
     });
-    await SummaryWriter.write(summary, artifacts.root);
 
-    await deps.runMemoryService.writeEpisodicMemory(
-      summary,
-      {
-        artifactsRoot: artifacts.root,
-        patchPaths: runResult.patchPaths,
-        extraArtifactPaths: args?.reportPaths,
-        verificationReport: args?.verification,
-      },
-      {
-        eventBus,
-        suppress: deps.suppressEpisodicMemoryWrite,
-      },
-    );
-
-    return runResult;
+    return {
+      ...finalized,
+      recommendations: runResult.recommendations ?? finalized.recommendations,
+      lastFailureSignature: runResult.lastFailureSignature,
+      verification: runResult.verification ?? finalized.verification,
+    };
   };
 
   if (l1Result.stopReason === 'budget_exceeded') {

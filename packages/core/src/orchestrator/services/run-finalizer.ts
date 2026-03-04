@@ -6,6 +6,7 @@ import { PatchStore } from '../../exec/patch_store';
 import { RunMemoryService } from './run-memory';
 import { RunSummaryService } from './run-summary';
 import type { RunArtifacts } from './types';
+import type { VerificationReport } from '../../verify/types';
 
 export type RunStopReason =
   | 'success'
@@ -38,7 +39,7 @@ export interface RunFinalizerInput {
   goal: string;
   startTime: number;
   status: 'success' | 'failure';
-  thinkLevel: 'L1' | 'L3';
+  thinkLevel: 'L1' | 'L2' | 'L3';
   stopReason: RunStopReason | undefined;
   summaryMsg: string;
   artifacts: Pick<RunArtifacts, 'root' | 'trace' | 'summary' | 'patchesDir' | 'manifest'>;
@@ -49,6 +50,10 @@ export interface RunFinalizerInput {
   eventBus: EventBus;
   escalationCount?: number;
   l3Metadata?: RunSummary['l3'];
+  verification?: FinalizedRunResult['verification'];
+  verificationPaths?: string[];
+  verificationReport?: VerificationReport;
+  extraArtifactPaths?: string[];
   suppressEpisodicMemoryWrite?: boolean;
 }
 
@@ -98,10 +103,22 @@ export class RunFinalizerService {
         manifest.finishedAt = finishedAt;
         manifest.patchPaths = [...manifest.patchPaths, ...input.patchPaths];
         manifest.contextPaths = [...(manifest.contextPaths ?? []), ...input.contextPaths];
+        if (input.verificationPaths && input.verificationPaths.length > 0) {
+          manifest.verificationPaths = [
+            ...(manifest.verificationPaths ?? []),
+            ...input.verificationPaths,
+          ];
+        }
       });
     } catch {
       // Non-fatal: artifact updates should not fail the run.
     }
+
+    const verification = input.verification ?? {
+      enabled: false,
+      passed: false,
+      summary: 'Not run',
+    };
 
     const runResult: FinalizedRunResult = {
       status: input.status,
@@ -111,11 +128,7 @@ export class RunFinalizerService {
       patchPaths: input.patchPaths,
       stopReason: input.stopReason,
       memory: this.config.memory,
-      verification: {
-        enabled: false,
-        passed: false,
-        summary: 'Not run',
-      },
+      verification,
     };
 
     const summary = this.runSummaryService.build({
@@ -136,7 +149,8 @@ export class RunFinalizerService {
       {
         artifactsRoot: input.artifacts.root,
         patchPaths: input.patchPaths,
-        extraArtifactPaths: input.contextPaths,
+        extraArtifactPaths: [...input.contextPaths, ...(input.extraArtifactPaths ?? [])],
+        verificationReport: input.verificationReport,
       },
       {
         eventBus,
