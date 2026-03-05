@@ -58,7 +58,7 @@ jobs:
         run: pnpm pack:cli
 
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cli-package
           path: packages/cli/*.tgz
