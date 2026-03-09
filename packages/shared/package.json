@@ -21,7 +21,7 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.1.0",
-    "fs-extra": "^11.2.0",
+    "fs-extra": "^11.3.4",
     "tmp-promise": "^3.0.3",
     "typescript": "^5.3.3"
   },
